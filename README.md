@@ -58,7 +58,10 @@ Feel free to open an issue or a pull (merge) request if
 you would like to see a particular feature implemented.
 
 The only thing that's required right now to get your code merged is signing your commits off with the `-s` flag during `git commit`
-after reading the project's [DCO](DCO)
+after reading the project's [DCO](DCO).
+
+It would also be greatly appreciated if you tried using
+[Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for the commit style, but that's a detail :)
 
 #### How it works
 This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).

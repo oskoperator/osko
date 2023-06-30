@@ -34,9 +34,24 @@ spec:
           spec:
             description: DatasourceSpec defines the desired state of Datasource
             properties:
-              foo:
-                description: Foo is an example field of Datasource. Edit datasource_types.go
-                  to remove/update
+              connectionDetails:
+                description: ConnectionDetails specify how to connect to your metrics
+                  data provider
+                properties:
+                  address:
+                    type: string
+                  rulerAPI:
+                    description: HTTP API subpath, for example `/prometheus/api/v1/rules`
+                      for Mimir
+                    type: string
+                  tenant:
+                    description: If you are running Mimir or Cortex in multi-tenant
+                      mode.
+                    type: string
+                type: object
+              description:
+                type: string
+              type:
                 type: string
             type: object
           status:

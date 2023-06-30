@@ -4,16 +4,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// ConnectionDetails specify how to connect to your metrics data provider
+type ConnectionDetails struct {
+	Address string `json:"address,omitempty"`
+	// HTTP API subpath, for example `/prometheus/api/v1/rules` for Mimir
+	RulerAPI string `json:"rulerAPI,omitempty"`
+	// If you are running Mimir or Cortex in multi-tenant mode.
+	Tenant string `json:"tenant,omitempty"`
+}
 
 // DatasourceSpec defines the desired state of Datasource
 type DatasourceSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of Datasource. Edit datasource_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Description       string            `json:"description,omitempty"`
+	Type              string            `json:"type,omitempty"`
+	ConnectionDetails ConnectionDetails `json:"connectionDetails,omitempty"`
 }
 
 // DatasourceStatus defines the observed state of Datasource

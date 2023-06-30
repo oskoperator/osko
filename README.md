@@ -10,7 +10,8 @@ The current goals of the SLO Kubernetes Operator are:
     - [ ] Cortex
 - [ ] Understand required (baseline) of the [kind: SLI](https://github.com/OpenSLO/OpenSLO#sli) and [kind: SLO](https://github.com/OpenSLO/OpenSLO#slo)
         specs. There is not yet a clear definition of which ones.
-- [ ] Be able to set up recording rules according to the data received through the [kind: SLI](https://github.com/OpenSLO/OpenSLO#sli) resources
+- [ ] Be able to set up recording rules according to the data received through the [kind: SLI](https://github.com/OpenSLO/OpenSLO#sli) resources, either
+        in the Mimir or Cortex ruler
 - [ ] Set up alerts in Alertmanager based on kinds [kind: AlertPolicy](https://github.com/OpenSLO/OpenSLO#alertpolicy) and
         [kind: AlertCondition](https://github.com/OpenSLO/OpenSLO#alertcondition)
 

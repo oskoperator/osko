@@ -1,14 +1,24 @@
 # slo-kubernetes-operator
-// TODO(user): Add simple overview of use/purpose
+This operator aims to provide it's users with simple management and setting of SLIs, SLOs, alerting rules and alerts routing according to the
+[OpenSLO](https://github.com/OpenSLO/OpenSLO) specification.
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+The current goals of the SLO Kubernetes Operator are:
 
-## Getting Started
+- [ ] To connect to and work with the following metrics datasources using [kind: Datasource](https://github.com/OpenSLO/OpenSLO#datasource)
+    - [ ] Mimir
+    - [ ] Cortex
+- [ ] Understand required (baseline) of the [kind: SLI](https://github.com/OpenSLO/OpenSLO#sli) and [kind: SLO](https://github.com/OpenSLO/OpenSLO#slo)
+        specs. There is not yet a clear definition of which ones.
+- [ ] Be able to set up recording rules according to the data received through the [kind: SLI](https://github.com/OpenSLO/OpenSLO#sli) resources
+- [ ] Set up alerts in Alertmanager based on kinds [kind: AlertPolicy](https://github.com/OpenSLO/OpenSLO#alertpolicy) and
+        [kind: AlertCondition](https://github.com/OpenSLO/OpenSLO#alertcondition)
+
+### Getting Started
 You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
 
-### Running on the cluster
+#### Running on the cluster
 1. Install Instances of Custom Resources:
 
 ```sh
@@ -27,14 +37,14 @@ make docker-build docker-push IMG=<some-registry>/slo-kubernetes-operator:tag
 make deploy IMG=<some-registry>/slo-kubernetes-operator:tag
 ```
 
-### Uninstall CRDs
+#### Uninstall CRDs
 To delete the CRDs from the cluster:
 
 ```sh
 make uninstall
 ```
 
-### Undeploy controller
+#### Undeploy controller
 UnDeploy the controller from the cluster:
 
 ```sh
@@ -42,15 +52,21 @@ make undeploy
 ```
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
+As of right now, we don't have any specific guidelines for contributors.
 
-### How it works
+Feel free to open an issue or a pull (merge) request if
+you would like to see a particular feature implemented.
+
+The only thing that's required right now to get your code merged is signing your commits off with the `-s` flag during `git commit`
+after reading the project's [DCO](DCO)
+
+#### How it works
 This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
 
 It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/),
 which provide a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster.
 
-### Test It Out
+#### Test It Out
 1. Install the CRDs into the cluster:
 
 ```sh
@@ -65,7 +81,7 @@ make run
 
 **NOTE:** You can also run this in one step by running: `make install run`
 
-### Modifying the API definitions
+#### Modifying the API definitions
 If you are editing the API definitions, generate the manifests such as CRs or CRDs using:
 
 ```sh
@@ -78,3 +94,4 @@ More information can be found via the [Kubebuilder Documentation](https://book.k
 
 ## License
 
+For license, see the LICENSE file in the root of this repository.

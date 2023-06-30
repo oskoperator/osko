@@ -1,4 +1,4 @@
-# slo-kubernetes-operator
+# SLO Kubernetes Operator
 This operator aims to provide it's users with simple management and setting of SLIs, SLOs, alerting rules and alerts routing according to the
 [OpenSLO](https://github.com/OpenSLO/OpenSLO) specification.
 

@@ -12,7 +12,7 @@ spec:
     listKind: DatasourceList
     plural: datasources
     singular: datasource
-  scope: Cluster
+  scope: Namespaced
   versions:
   - name: v1
     schema:

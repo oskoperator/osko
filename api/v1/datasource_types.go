@@ -28,7 +28,7 @@ type DatasourceStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:resource:scope=Cluster
+//+kubebuilder:resource:scope=Namespaced
 
 // Datasource is the Schema for the datasources API
 type Datasource struct {

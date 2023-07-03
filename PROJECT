@@ -10,6 +10,7 @@ repo: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator
 resources:
 - api:
     crdVersion: v1
+    namespaced: true
   controller: true
   domain: openslo
   group: openslo

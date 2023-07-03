@@ -4,13 +4,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type Ruler struct {
+	Enabled bool   `json:"enabled,omitempty"`
+	Subpath string `json:"subpath,omitempty"`
+}
+
+type Tenant struct {
+	Enabled bool   `json:"enabled,omitempty"`
+	ID      string `json:"ID,omitempty"`
+}
+
 // ConnectionDetails specify how to connect to your metrics data provider
 type ConnectionDetails struct {
 	Address string `json:"address,omitempty"`
-	// HTTP API subpath, for example `/prometheus/api/v1/rules` for Mimir
-	RulerAPI string `json:"rulerAPI,omitempty"`
-	// If you are running Mimir or Cortex in multi-tenant mode.
-	Tenant string `json:"tenant,omitempty"`
+	Ruler   Ruler  `json:"ruler,omitempty"`
+	Tenant  Tenant `json:"tenant,omitempty"`
 }
 
 // DatasourceSpec defines the desired state of Datasource

@@ -9,4 +9,13 @@ metadata:
     app.kubernetes.io/created-by: slo-kubernetes-operator
   name: datasource-sample
 spec:
-  # TODO(user): Add fields here
+  description: Mimir Example Datasource
+  type: mimir
+  connectionDetails:
+    address: https://mimir.example.com
+    tenant:
+      enabled: true
+      ID: billing
+    ruler:
+      enabled: true
+      subpath: /prometheus/api/v1/rules

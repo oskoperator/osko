@@ -40,14 +40,20 @@ spec:
                 properties:
                   address:
                     type: string
-                  rulerAPI:
-                    description: HTTP API subpath, for example `/prometheus/api/v1/rules`
-                      for Mimir
-                    type: string
+                  ruler:
+                    properties:
+                      enabled:
+                        type: boolean
+                      subpath:
+                        type: string
+                    type: object
                   tenant:
-                    description: If you are running Mimir or Cortex in multi-tenant
-                      mode.
-                    type: string
+                    properties:
+                      ID:
+                        type: string
+                      enabled:
+                        type: boolean
+                    type: object
                 type: object
               description:
                 type: string

@@ -5,11 +5,13 @@ import (
 )
 
 type Ruler struct {
+	// +kubebuilder:default=false
 	Enabled bool   `json:"enabled,omitempty"`
 	Subpath string `json:"subpath,omitempty"`
 }
 
 type Tenant struct {
+	// +kubebuilder:default=false
 	Enabled bool   `json:"enabled,omitempty"`
 	ID      string `json:"ID,omitempty"`
 }

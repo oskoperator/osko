@@ -43,6 +43,7 @@ spec:
                   ruler:
                     properties:
                       enabled:
+                        default: false
                         type: boolean
                       subpath:
                         type: string
@@ -52,6 +53,7 @@ spec:
                       ID:
                         type: string
                       enabled:
+                        default: false
                         type: boolean
                     type: object
                 type: object

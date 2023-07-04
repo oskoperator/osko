@@ -42,8 +42,7 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Error(err, errGetDS)
 		return ctrl.Result{}, nil
 	}
-
-	log.Info("Datasource created")
+	log.Info("Datasource reconciled")
 
 	return ctrl.Result{}, nil
 }

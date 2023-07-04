@@ -1,0 +1,27 @@
+# permissions for end users to view slis.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: sli-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: slo-kubernetes-operator
+    app.kubernetes.io/part-of: slo-kubernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: sli-viewer-role
+rules:
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - slis
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - slis/status
+  verbs:
+  - get

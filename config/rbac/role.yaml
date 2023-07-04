@@ -30,3 +30,55 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - slis
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - slis/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - slis/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - slos
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - slos/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - slos/status
+  verbs:
+  - get
+  - patch
+  - update

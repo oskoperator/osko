@@ -1,4 +1,6 @@
 ## Append samples of your project ##
 resources:
 - openslo_v1_datasource.yaml
+- openslo_v1_slo.yaml
+- openslo_v1_sli.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

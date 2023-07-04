@@ -1,0 +1,12 @@
+apiVersion: openslo.openslo/v1
+kind: SLO
+metadata:
+  labels:
+    app.kubernetes.io/name: slo
+    app.kubernetes.io/instance: slo-sample
+    app.kubernetes.io/part-of: slo-kubernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: slo-kubernetes-operator
+  name: slo-sample
+spec:
+  # TODO(user): Add fields here

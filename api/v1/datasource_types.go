@@ -1,6 +1,7 @@
 package v1
 
 import (
+	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,9 +26,9 @@ type ConnectionDetails struct {
 
 // DatasourceSpec defines the desired state of Datasource
 type DatasourceSpec struct {
-	Description       string            `json:"description,omitempty"`
-	Type              string            `json:"type,omitempty"`
-	ConnectionDetails ConnectionDetails `json:"connectionDetails,omitempty"`
+	Description       common.Description `json:"description,omitempty"`
+	Type              string             `json:"type,omitempty"`
+	ConnectionDetails ConnectionDetails  `json:"connectionDetails,omitempty"`
 }
 
 // DatasourceStatus defines the observed state of Datasource

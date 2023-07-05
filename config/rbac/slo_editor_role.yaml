@@ -1,0 +1,31 @@
+# permissions for end users to edit slos.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: slo-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: slo-kubernetes-operator
+    app.kubernetes.io/part-of: slo-kubernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: slo-editor-role
+rules:
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - slos
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - slos/status
+  verbs:
+  - get

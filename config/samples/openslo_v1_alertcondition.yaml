@@ -1,0 +1,19 @@
+apiVersion: openslo.openslo/v1
+kind: AlertCondition
+metadata:
+  labels:
+    app.kubernetes.io/name: alertcondition
+    app.kubernetes.io/instance: alertcondition-sample
+    app.kubernetes.io/part-of: slo-kubernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: slo-kubernetes-operator
+  name: alertcondition-sample
+spec:
+  description: testing AlertCondition
+  severity: P1
+  condition:
+    kind: Burnrate
+    op: lte
+    threshold: "0.99"
+    lookbackWindow: 14d
+    alertAfter: 60s

@@ -1,0 +1,45 @@
+apiVersion: openslo.openslo/v1
+kind: SLI
+metadata:
+  labels:
+    app.kubernetes.io/name: sli
+    app.kubernetes.io/instance: sli-sample
+    app.kubernetes.io/part-of: slo-kubernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: slo-kubernetes-operator
+  name: sli-sample
+spec:
+  description: testing SLI
+  thresholdMetric:
+    metricSource:
+      metricSourceRef: datasource-sample
+      type: Prometheus
+      spec: |
+        testquery
+  ratioMetric:
+    counter: true
+    good:
+      metricSource:
+        metricSourceRef: datasource-sample
+        type: Prometheus
+        spec: |
+          testquery
+    bad:
+      metricSource:
+        metricSourceRef: datasource-sample
+        type: Prometheus
+        spec: |
+          testquery
+    total:
+      metricSource:
+        metricSourceRef: datasource-sample
+        type: Prometheus
+        spec: |
+          testquery
+    rawType: success
+    raw:
+      metricSource:
+        metricSourceRef: datasource-sample
+        type: Prometheus
+        spec: |
+          testquery

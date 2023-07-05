@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.12.0
-  name: datasources.openslo.openslo
+  name: services.openslo.openslo
 spec:
   group: openslo.openslo
   names:
-    kind: Datasource
-    listKind: DatasourceList
-    plural: datasources
-    singular: datasource
+    kind: Service
+    listKind: ServiceList
+    plural: services
+    singular: service
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: Datasource is the Schema for the datasources API
+        description: Service is the Schema for the services API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -32,43 +32,13 @@ spec:
           metadata:
             type: object
           spec:
-            description: DatasourceSpec defines the desired state of Datasource
+            description: ServiceSpec defines the desired state of Service
             properties:
-              connectionDetails:
-                description: ConnectionDetails specify how to connect to your metrics
-                  data provider
-                properties:
-                  address:
-                    type: string
-                  multitenancy:
-                    properties:
-                      enabled:
-                        default: false
-                        type: boolean
-                      sourceTenants:
-                        items:
-                          type: string
-                        type: array
-                      targetTenant:
-                        type: string
-                    type: object
-                  ruler:
-                    properties:
-                      enabled:
-                        default: false
-                        type: boolean
-                      subpath:
-                        type: string
-                    type: object
-                type: object
               description:
                 maxLength: 1050
                 type: string
-              type:
-                type: string
             type: object
           status:
-            description: DatasourceStatus defines the observed state of Datasource
             type: object
         type: object
     served: true

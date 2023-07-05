@@ -1,0 +1,39 @@
+apiVersion: openslo.openslo/v1
+kind: SLO
+metadata:
+  labels:
+    app.kubernetes.io/name: slo
+    app.kubernetes.io/instance: slo-sample
+    app.kubernetes.io/part-of: slo-kubernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: slo-kubernetes-operator
+  name: slo-sample
+spec:
+  description: string
+  service: string
+  indicator:
+  indicatorRef: string
+  timeWindow:
+    - duration: 14d
+      isRolling: true
+  budgetingMethod: Occurrences
+  objectives:
+    - displayName: string
+      op: lte
+      value: "0.99"
+      target: "0.5"
+      targetPercent: "50"
+      timeSliceTarget: "0.5"
+      timeSliceWindow: 14d
+      indicator:
+      indicatorRef: string
+      compositeWeight: "50"
+  alertPolicies:
+    # ref
+    - alertPolicyRef: "alertpolicy-sample"
+    # inline
+    - kind: AlertPolicy
+      spec:
+        description: test
+      metadata:
+        name: test

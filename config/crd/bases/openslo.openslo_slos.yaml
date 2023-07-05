@@ -239,7 +239,7 @@ spec:
                           type: object
                         type: object
                     type: object
-                  thresholdMetrics:
+                  thresholdMetric:
                     properties:
                       metricSource:
                         properties:
@@ -329,7 +329,7 @@ spec:
                                     type: object
                                   type: object
                               type: object
-                            thresholdMetrics:
+                            thresholdMetric:
                               properties:
                                 metricSource:
                                   properties:

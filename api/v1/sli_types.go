@@ -22,7 +22,7 @@ type ThresholdMetricSpec struct {
 // SLISpec defines the desired state of SLI
 type SLISpec struct {
 	Description     common.Description  `json:"description,omitempty"`
-	ThresholdMetric ThresholdMetricSpec `json:"thresholdMetrics,omitempty"`
+	ThresholdMetric ThresholdMetricSpec `json:"thresholdMetric,omitempty"`
 	RatioMetric     RatioMetricSpec     `json:"ratioMetric,omitempty"`
 }
 

@@ -9,7 +9,8 @@ metadata:
     app.kubernetes.io/created-by: slo-kubernetes-operator
   name: alertpolicy-sample
 spec:
-  description: Alert policy for cpu usage breaches, notifies on-call devops via email
+  description: testing AlertPolicy
+  alertWhenNoData: true
   alertWhenBreaching: true
   alertWhenResolved: false
   # TODO(fourstepper): test for inline and Ref

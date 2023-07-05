@@ -13,9 +13,12 @@ spec:
   type: mimir
   connectionDetails:
     address: https://mimir.example.com
-    tenant:
+    multitenancy:
       enabled: true
-      ID: billing
+      sourceTenants:
+        - billing
+        - infra
+      targetTenant: billing
     ruler:
       enabled: true
       subpath: /prometheus/api/v1/rules

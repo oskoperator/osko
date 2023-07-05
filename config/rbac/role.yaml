@@ -7,6 +7,84 @@ rules:
 - apiGroups:
   - openslo.openslo
   resources:
+  - alertconditions
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - alertconditions/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - alertconditions/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - alertnotificationtargets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - alertnotificationtargets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - alertnotificationtargets/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - alertpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - alertpolicies/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - openslo.openslo
+  resources:
+  - alertpolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - openslo.openslo
+  resources:
   - datasources
   verbs:
   - create

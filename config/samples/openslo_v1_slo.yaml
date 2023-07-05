@@ -9,4 +9,26 @@ metadata:
     app.kubernetes.io/created-by: slo-kubernetes-operator
   name: slo-sample
 spec:
-  # TODO(user): Add fields here
+  description: string # optional up to 1050 characters
+  service: string # name of the service to associate this SLO with, may refer (depends on implementation) to existing object Kind: Service
+  indicator: # see SLI below for details
+  indicatorRef: string # name of the SLI. Required if indicator is not given.
+  timeWindow:
+    # exactly one item; one of possible: rolling or calendar–aligned time window
+    ## rolling time window
+    - duration: 14d # duration of the window eg 1d, 4w
+      isRolling: true
+    # or
+  budgetingMethod: Occurrences
+  objectives:
+    - displayName: string # optional
+      op: lte
+      value: "0.99" # optional, value used to compare threshold metrics. Only needed when using a thresholdMetric
+      target: "0.5" # budget target for given objective of the SLO, can't be used with targetPercent
+      targetPercent: "50" # budget target for given objective of the SLO, can't be used with target
+      timeSliceTarget: "0.5" # required only when budgetingMethod is set to TimeSlices
+      timeSliceWindow: 14d # required only when budgetingMethod is set to TimeSlices or RatioTimeslices
+      indicator: # required only when creating composite SLO, see SLI below for more details
+      indicatorRef: string # required only when creating composite SLO, required if indicator is not given.
+      compositeWeight: "50" # optional, supported only when declaring multiple objectives, default value 1.
+  alertPolicies: # see alert policies below for details

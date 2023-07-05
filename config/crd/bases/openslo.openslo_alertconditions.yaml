@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.12.0
-  name: datasources.openslo.openslo
+  name: alertconditions.openslo.openslo
 spec:
   group: openslo.openslo
   names:
-    kind: Datasource
-    listKind: DatasourceList
-    plural: datasources
-    singular: datasource
+    kind: AlertCondition
+    listKind: AlertConditionList
+    plural: alertconditions
+    singular: alertcondition
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: Datasource is the Schema for the datasources API
+        description: AlertCondition is the Schema for the alertconditions API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -32,43 +32,38 @@ spec:
           metadata:
             type: object
           spec:
-            description: DatasourceSpec defines the desired state of Datasource
+            description: AlertConditionSpec defines the desired state of AlertCondition
             properties:
-              connectionDetails:
-                description: ConnectionDetails specify how to connect to your metrics
-                  data provider
+              condition:
                 properties:
-                  address:
+                  alertAfter:
+                    pattern: ^[1-9]\d*[s m h d]$
                     type: string
-                  multitenancy:
-                    properties:
-                      enabled:
-                        default: false
-                        type: boolean
-                      sourceTenants:
-                        items:
-                          type: string
-                        type: array
-                      targetTenant:
-                        type: string
-                    type: object
-                  ruler:
-                    properties:
-                      enabled:
-                        default: false
-                        type: boolean
-                      subpath:
-                        type: string
-                    type: object
+                  kind:
+                    enum:
+                    - Burnrate
+                    type: string
+                  lookbackWindow:
+                    pattern: ^[1-9]\d*[s m h d]$
+                    type: string
+                  op:
+                    enum:
+                    - lte
+                    - gte
+                    - lt
+                    - gt
+                    type: string
+                  threshold:
+                    type: string
                 type: object
               description:
                 maxLength: 1050
                 type: string
-              type:
+              severity:
                 type: string
             type: object
           status:
-            description: DatasourceStatus defines the observed state of Datasource
+            description: AlertConditionStatus defines the observed state of AlertCondition
             type: object
         type: object
     served: true

@@ -11,17 +11,19 @@ type Ruler struct {
 	Subpath string `json:"subpath,omitempty"`
 }
 
-type Tenant struct {
+type Multitenancy struct {
 	// +kubebuilder:default=false
-	Enabled bool   `json:"enabled,omitempty"`
-	ID      string `json:"ID,omitempty"`
+	Enabled bool `json:"enabled,omitempty"`
+	// +kubebuilder:MinItems=1
+	SourceTenants []string `json:"sourceTenants,omitempty"`
+	TargetTenant  string   `json:"targetTenant,omitempty"`
 }
 
 // ConnectionDetails specify how to connect to your metrics data provider
 type ConnectionDetails struct {
-	Address string `json:"address,omitempty"`
-	Ruler   Ruler  `json:"ruler,omitempty"`
-	Tenant  Tenant `json:"tenant,omitempty"`
+	Address      string       `json:"address,omitempty"`
+	Ruler        Ruler        `json:"ruler,omitempty"`
+	Multitenancy Multitenancy `json:"multitenancy,omitempty"`
 }
 
 // DatasourceSpec defines the desired state of Datasource

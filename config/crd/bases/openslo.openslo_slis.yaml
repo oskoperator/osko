@@ -34,10 +34,75 @@ spec:
           spec:
             description: SLISpec defines the desired state of SLI
             properties:
-              foo:
-                description: Foo is an example field of SLI. Edit sli_types.go to
-                  remove/update
+              description:
+                maxLength: 1050
                 type: string
+              ratioMetric:
+                properties:
+                  bad:
+                    additionalProperties:
+                      properties:
+                        metricSourceRef:
+                          type: string
+                        spec:
+                          type: string
+                        type:
+                          type: string
+                      type: object
+                    type: object
+                  counter:
+                    type: boolean
+                  good:
+                    additionalProperties:
+                      properties:
+                        metricSourceRef:
+                          type: string
+                        spec:
+                          type: string
+                        type:
+                          type: string
+                      type: object
+                    type: object
+                  raw:
+                    additionalProperties:
+                      properties:
+                        metricSourceRef:
+                          type: string
+                        spec:
+                          type: string
+                        type:
+                          type: string
+                      type: object
+                    type: object
+                  rawType:
+                    enum:
+                    - success
+                    - failure
+                    type: string
+                  total:
+                    additionalProperties:
+                      properties:
+                        metricSourceRef:
+                          type: string
+                        spec:
+                          type: string
+                        type:
+                          type: string
+                      type: object
+                    type: object
+                type: object
+              thresholdMetrics:
+                properties:
+                  metricSource:
+                    properties:
+                      metricSourceRef:
+                        type: string
+                      spec:
+                        type: string
+                      type:
+                        type: string
+                    type: object
+                type: object
             type: object
           status:
             description: SLIStatus defines the observed state of SLI

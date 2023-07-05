@@ -1,19 +1,29 @@
 package v1
 
 import (
+	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+type RatioMetricSpec struct {
+	Raw map[string]common.MetricSourceSpec `json:"raw,omitempty"`
+	// +kubebuilder:validation:Enum=success;failure
+	RawType string                             `json:"rawType,omitempty"`
+	Good    map[string]common.MetricSourceSpec `json:"good,omitempty"`
+	Bad     map[string]common.MetricSourceSpec `json:"bad,omitempty"`
+	Total   map[string]common.MetricSourceSpec `json:"total,omitempty"`
+	Counter bool                               `json:"counter,omitempty"`
+}
+
+type ThresholdMetricSpec struct {
+	MetricSource common.MetricSourceSpec `json:"metricSource,omitempty"`
+}
 
 // SLISpec defines the desired state of SLI
 type SLISpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of SLI. Edit sli_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Description     common.Description  `json:"description,omitempty"`
+	ThresholdMetric ThresholdMetricSpec `json:"thresholdMetrics,omitempty"`
+	RatioMetric     RatioMetricSpec     `json:"ratioMetric,omitempty"`
 }
 
 // SLIStatus defines the observed state of SLI

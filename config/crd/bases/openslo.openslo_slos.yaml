@@ -34,6 +34,142 @@ spec:
           spec:
             description: SLOSpec defines the desired state of SLO
             properties:
+              alertPolicies:
+                description: 'TODO(fourstepper): handle both alertPolicyRef and inline
+                  AlertPolicy (also applies to AlertPolicySpec.Conditions and AlertPolicySpec.NotificationTargets)'
+                items:
+                  description: AlertPolicy is the Schema for the alertpolicies API
+                  properties:
+                    apiVersion:
+                      description: 'APIVersion defines the versioned schema of this
+                        representation of an object. Servers should convert recognized
+                        schemas to the latest internal value, and may reject unrecognized
+                        values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                      type: string
+                    kind:
+                      description: 'Kind is a string value representing the REST resource
+                        this object represents. Servers may infer this from the endpoint
+                        the client submits requests to. Cannot be updated. In CamelCase.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                      type: string
+                    metadata:
+                      type: object
+                    spec:
+                      description: AlertPolicySpec defines the desired state of AlertPolicy
+                      properties:
+                        alertWhenBreaching:
+                          type: boolean
+                        alertWhenNoData:
+                          type: boolean
+                        alertWhenResolved:
+                          type: boolean
+                        conditions:
+                          items:
+                            description: AlertCondition is the Schema for the alertconditions
+                              API
+                            properties:
+                              apiVersion:
+                                description: 'APIVersion defines the versioned schema
+                                  of this representation of an object. Servers should
+                                  convert recognized schemas to the latest internal
+                                  value, and may reject unrecognized values. More
+                                  info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                                type: string
+                              kind:
+                                description: 'Kind is a string value representing
+                                  the REST resource this object represents. Servers
+                                  may infer this from the endpoint the client submits
+                                  requests to. Cannot be updated. In CamelCase. More
+                                  info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                                type: string
+                              metadata:
+                                type: object
+                              spec:
+                                description: AlertConditionSpec defines the desired
+                                  state of AlertCondition
+                                properties:
+                                  condition:
+                                    properties:
+                                      alertAfter:
+                                        pattern: ^[1-9]\d*[s m h d]$
+                                        type: string
+                                      kind:
+                                        enum:
+                                        - Burnrate
+                                        type: string
+                                      lookbackWindow:
+                                        pattern: ^[1-9]\d*[s m h d]$
+                                        type: string
+                                      op:
+                                        enum:
+                                        - lte
+                                        - gte
+                                        - lt
+                                        - gt
+                                        type: string
+                                      threshold:
+                                        type: string
+                                    type: object
+                                  description:
+                                    maxLength: 1050
+                                    type: string
+                                  severity:
+                                    type: string
+                                type: object
+                              status:
+                                description: AlertConditionStatus defines the observed
+                                  state of AlertCondition
+                                type: object
+                            type: object
+                          maxItems: 1
+                          type: array
+                        description:
+                          maxLength: 1050
+                          type: string
+                        notificationTargets:
+                          items:
+                            description: AlertNotificationTarget is the Schema for
+                              the alertnotificationtargets API
+                            properties:
+                              apiVersion:
+                                description: 'APIVersion defines the versioned schema
+                                  of this representation of an object. Servers should
+                                  convert recognized schemas to the latest internal
+                                  value, and may reject unrecognized values. More
+                                  info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                                type: string
+                              kind:
+                                description: 'Kind is a string value representing
+                                  the REST resource this object represents. Servers
+                                  may infer this from the endpoint the client submits
+                                  requests to. Cannot be updated. In CamelCase. More
+                                  info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                                type: string
+                              metadata:
+                                type: object
+                              spec:
+                                description: AlertNotificationTargetSpec defines the
+                                  desired state of AlertNotificationTarget
+                                properties:
+                                  description:
+                                    maxLength: 1050
+                                    type: string
+                                  target:
+                                    type: string
+                                type: object
+                              status:
+                                description: AlertNotificationTargetStatus defines
+                                  the observed state of AlertNotificationTarget
+                                type: object
+                            type: object
+                          type: array
+                      type: object
+                    status:
+                      description: AlertPolicyStatus defines the observed state of
+                        AlertPolicy
+                      type: object
+                  type: object
+                type: array
               budgetingMethod:
                 enum:
                 - Occurrences
@@ -41,16 +177,195 @@ spec:
                 - RatioTimeslices
                 type: string
               description:
+                maxLength: 1050
                 type: string
               indicator:
                 description: SLISpec defines the desired state of SLI
                 properties:
-                  foo:
-                    description: Foo is an example field of SLI. Edit sli_types.go
-                      to remove/update
+                  description:
+                    maxLength: 1050
                     type: string
+                  ratioMetric:
+                    properties:
+                      bad:
+                        additionalProperties:
+                          properties:
+                            metricSourceRef:
+                              type: string
+                            spec:
+                              type: string
+                            type:
+                              type: string
+                          type: object
+                        type: object
+                      counter:
+                        type: boolean
+                      good:
+                        additionalProperties:
+                          properties:
+                            metricSourceRef:
+                              type: string
+                            spec:
+                              type: string
+                            type:
+                              type: string
+                          type: object
+                        type: object
+                      raw:
+                        additionalProperties:
+                          properties:
+                            metricSourceRef:
+                              type: string
+                            spec:
+                              type: string
+                            type:
+                              type: string
+                          type: object
+                        type: object
+                      rawType:
+                        enum:
+                        - success
+                        - failure
+                        type: string
+                      total:
+                        additionalProperties:
+                          properties:
+                            metricSourceRef:
+                              type: string
+                            spec:
+                              type: string
+                            type:
+                              type: string
+                          type: object
+                        type: object
+                    type: object
+                  thresholdMetrics:
+                    properties:
+                      metricSource:
+                        properties:
+                          metricSourceRef:
+                            type: string
+                          spec:
+                            type: string
+                          type:
+                            type: string
+                        type: object
+                    type: object
                 type: object
               indicatorRef:
+                type: string
+              objectives:
+                items:
+                  properties:
+                    compositeWeight:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    displayName:
+                      type: string
+                    indicator:
+                      properties:
+                        metadata:
+                          type: object
+                        spec:
+                          description: SLISpec defines the desired state of SLI
+                          properties:
+                            description:
+                              maxLength: 1050
+                              type: string
+                            ratioMetric:
+                              properties:
+                                bad:
+                                  additionalProperties:
+                                    properties:
+                                      metricSourceRef:
+                                        type: string
+                                      spec:
+                                        type: string
+                                      type:
+                                        type: string
+                                    type: object
+                                  type: object
+                                counter:
+                                  type: boolean
+                                good:
+                                  additionalProperties:
+                                    properties:
+                                      metricSourceRef:
+                                        type: string
+                                      spec:
+                                        type: string
+                                      type:
+                                        type: string
+                                    type: object
+                                  type: object
+                                raw:
+                                  additionalProperties:
+                                    properties:
+                                      metricSourceRef:
+                                        type: string
+                                      spec:
+                                        type: string
+                                      type:
+                                        type: string
+                                    type: object
+                                  type: object
+                                rawType:
+                                  enum:
+                                  - success
+                                  - failure
+                                  type: string
+                                total:
+                                  additionalProperties:
+                                    properties:
+                                      metricSourceRef:
+                                        type: string
+                                      spec:
+                                        type: string
+                                      type:
+                                        type: string
+                                    type: object
+                                  type: object
+                              type: object
+                            thresholdMetrics:
+                              properties:
+                                metricSource:
+                                  properties:
+                                    metricSourceRef:
+                                      type: string
+                                    spec:
+                                      type: string
+                                    type:
+                                      type: string
+                                  type: object
+                              type: object
+                          type: object
+                      type: object
+                    indicatorRef:
+                      type: string
+                    op:
+                      enum:
+                      - lte
+                      - gte
+                      - lt
+                      - gt
+                      type: string
+                    target:
+                      type: string
+                    targetPercent:
+                      type: string
+                    timeSliceTarget:
+                      type: string
+                    timeSliceWindow:
+                      pattern: ^[1-9]\d*[s m h d]$
+                      type: string
+                    value:
+                      type: string
+                  type: object
+                type: array
+              service:
                 type: string
               timeWindow:
                 items:
@@ -62,13 +377,13 @@ spec:
                             time zone
                           example: "2020-01-21 12:30:00"
                           type: string
-                        timezone:
+                        timeZone:
                           description: Name as in IANA Time Zone Database
                           example: America/New_York
                           type: string
                       type: object
                     duration:
-                      pattern: ^[1-9]\d*[m h d]
+                      pattern: ^[1-9]\d*[s m h d]$
                       type: string
                     isRolling:
                       type: boolean

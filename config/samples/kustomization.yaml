@@ -3,4 +3,8 @@ resources:
 - openslo_v1_datasource.yaml
 - openslo_v1_slo.yaml
 - openslo_v1_sli.yaml
+- openslo_v1_alertpolicy.yaml
+- openslo_v1_alertcondition.yaml
+- openslo_v1_alertnotificationtarget.yaml
+- openslo_v1_service.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

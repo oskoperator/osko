@@ -1,0 +1,12 @@
+apiVersion: openslo.openslo/v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: service
+    app.kubernetes.io/instance: service-sample
+    app.kubernetes.io/part-of: slo-kubernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: slo-kubernetes-operator
+  name: service-sample
+spec:
+  description: testing Service

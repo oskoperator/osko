@@ -92,6 +92,27 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SLI")
 		os.Exit(1)
 	}
+	if err = (&controller.AlertPolicyReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AlertPolicy")
+		os.Exit(1)
+	}
+	if err = (&controller.AlertConditionReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AlertCondition")
+		os.Exit(1)
+	}
+	if err = (&controller.AlertNotificationTargetReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AlertNotificationTarget")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

@@ -5,6 +5,22 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type AlertPolicyNotificationTarget struct {
+	// +kubebuilder:validation:Enum=AlertNotificationTarget
+	Kind      string                      `json:"kind,omitempty"`
+	Metadata  metav1.ObjectMeta           `json:"metadata,omitempty"`
+	Spec      AlertNotificationTargetSpec `json:"spec,omitempty"`
+	TargetRef string                      `json:"targetRef,omitempty"`
+}
+
+type AlertPolicyCondition struct {
+	// +kubebuilder:validation:Enum=AlertCondition
+	Kind         string             `json:"kind,omitempty"`
+	Metadata     metav1.ObjectMeta  `json:"metadata,omitempty"`
+	Spec         AlertConditionSpec `json:"spec,omitempty"`
+	ConditionRef string             `json:"conditionRef,omitempty"`
+}
+
 // AlertPolicySpec defines the desired state of AlertPolicy
 type AlertPolicySpec struct {
 	Description        common.Description `json:"description,omitempty"`
@@ -12,8 +28,8 @@ type AlertPolicySpec struct {
 	AlertWhenResolved  bool               `json:"alertWhenResolved,omitempty"`
 	AlertWhenBreaching bool               `json:"alertWhenBreaching,omitempty"`
 	// +kubebuilder:validation:MaxItems=1
-	Conditions          []AlertCondition          `json:"conditions,omitempty"`
-	NotificationTargets []AlertNotificationTarget `json:"notificationTargets,omitempty"`
+	Conditions          []AlertPolicyCondition          `json:"conditions,omitempty"`
+	NotificationTargets []AlertPolicyNotificationTarget `json:"notificationTargets,omitempty"`
 }
 
 // AlertPolicyStatus defines the observed state of AlertPolicy

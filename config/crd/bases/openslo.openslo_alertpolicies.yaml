@@ -42,22 +42,31 @@ spec:
                 type: boolean
               conditions:
                 items:
-                  description: AlertCondition is the Schema for the alertconditions
-                    API
                   properties:
-                    apiVersion:
-                      description: 'APIVersion defines the versioned schema of this
-                        representation of an object. Servers should convert recognized
-                        schemas to the latest internal value, and may reject unrecognized
-                        values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                    conditionRef:
                       type: string
                     kind:
-                      description: 'Kind is a string value representing the REST resource
-                        this object represents. Servers may infer this from the endpoint
-                        the client submits requests to. Cannot be updated. In CamelCase.
-                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                      enum:
+                      - AlertCondition
                       type: string
                     metadata:
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        finalizers:
+                          items:
+                            type: string
+                          type: array
+                        labels:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        name:
+                          type: string
+                        namespace:
+                          type: string
                       type: object
                     spec:
                       description: AlertConditionSpec defines the desired state of
@@ -91,10 +100,6 @@ spec:
                         severity:
                           type: string
                       type: object
-                    status:
-                      description: AlertConditionStatus defines the observed state
-                        of AlertCondition
-                      type: object
                   type: object
                 maxItems: 1
                 type: array
@@ -103,22 +108,29 @@ spec:
                 type: string
               notificationTargets:
                 items:
-                  description: AlertNotificationTarget is the Schema for the alertnotificationtargets
-                    API
                   properties:
-                    apiVersion:
-                      description: 'APIVersion defines the versioned schema of this
-                        representation of an object. Servers should convert recognized
-                        schemas to the latest internal value, and may reject unrecognized
-                        values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-                      type: string
                     kind:
-                      description: 'Kind is a string value representing the REST resource
-                        this object represents. Servers may infer this from the endpoint
-                        the client submits requests to. Cannot be updated. In CamelCase.
-                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                      enum:
+                      - AlertNotificationTarget
                       type: string
                     metadata:
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        finalizers:
+                          items:
+                            type: string
+                          type: array
+                        labels:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        name:
+                          type: string
+                        namespace:
+                          type: string
                       type: object
                     spec:
                       description: AlertNotificationTargetSpec defines the desired
@@ -130,10 +142,8 @@ spec:
                         target:
                           type: string
                       type: object
-                    status:
-                      description: AlertNotificationTargetStatus defines the observed
-                        state of AlertNotificationTarget
-                      type: object
+                    targetRef:
+                      type: string
                   type: object
                 type: array
             type: object

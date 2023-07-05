@@ -13,7 +13,10 @@ spec:
   alertWhenNoData: true
   alertWhenBreaching: true
   alertWhenResolved: false
-  # TODO(fourstepper): test for inline and Ref
-  conditions: []
-  # TODO(fourstepper): test for inline and Ref
-  notificationTargets: []
+  conditions:
+    - kind: AlertCondition
+      spec:
+        description: test description
+  # notificationTargets:
+  #   - kind: AlertNotificationTarget
+  #     name: inline-AlertNotificationTarget

@@ -6,10 +6,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type Indicator struct {
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+type SLOAlertPolicy struct {
+	// +kubebuilder:validation:Enum=AlertPolicy
+	Kind string `json:"kind,omitempty"`
+	// +kubebuilder:crd:generateEmbeddedObjectMeta=true
+	Metadata       metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec           AlertPolicySpec   `json:"spec,omitempty"`
+	AlertPolicyRef string            `json:"alertPolicyRef,omitempty"`
+}
 
-	Spec SLISpec `json:"spec,omitempty"`
+type Indicator struct {
+	Metadata metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec     SLISpec           `json:"spec,omitempty"`
 }
 
 type ObjectivesSpec struct {
@@ -54,8 +62,7 @@ type SLOSpec struct {
 	// +kubebuilder:validation:Enum=Occurrences;Timeslices;RatioTimeslices
 	BudgetingMethod string           `json:"budgetingMethod,omitempty"`
 	Objectives      []ObjectivesSpec `json:"objectives,omitempty"`
-	// TODO(fourstepper): handle both alertPolicyRef and inline AlertPolicy (also applies to AlertPolicySpec.Conditions and AlertPolicySpec.NotificationTargets)
-	AlertPolicies []AlertPolicy `json:"alertPolicies,omitempty"`
+	AlertPolicies   []SLOAlertPolicy `json:"alertPolicies,omitempty"`
 }
 
 // SLOStatus defines the observed state of SLO

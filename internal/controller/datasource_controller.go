@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,6 +44,26 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Error(err, errGetDS)
 		return ctrl.Result{}, nil
 	}
+
+	// check if we can connect to the ruler if it's enabled
+	if ds.Spec.ConnectionDetails.Ruler.Enabled {
+		client := &http.Client{}
+		req, err := http.NewRequest("GET", fmt.Sprintf("%v%v", ds.Spec.ConnectionDetails.Address, ds.Spec.ConnectionDetails.Ruler.Subpath), nil)
+		if ds.Spec.ConnectionDetails.Multitenancy.Enabled {
+			req.Header.Add("X-Org-ID", ds.Spec.ConnectionDetails.Multitenancy.SourceTenants[0])
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Error(err, "Couldn't connect to the ruler")
+			return ctrl.Result{}, nil
+		}
+		if resp.StatusCode > 299 {
+			log.Info("There was an error connecting to the Ruler", "Status code", resp.StatusCode)
+			return ctrl.Result{}, nil
+		}
+	}
+
 	log.Info("Datasource reconciled")
 
 	return ctrl.Result{}, nil

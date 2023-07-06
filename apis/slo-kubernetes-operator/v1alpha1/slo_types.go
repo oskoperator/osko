@@ -1,19 +1,14 @@
 package v1alpha1
 
 import (
+	openslov1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // SLOSpec defines the desired state of SLO
 type SLOSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of SLO. Edit slo_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Spec     openslov1.SLOSpec `json:"spec,omitempty"`
+	DataSink string            `json:"dataSink,omitempty"`
 }
 
 // SLOStatus defines the observed state of SLO

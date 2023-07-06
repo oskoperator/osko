@@ -1,7 +1,7 @@
 package v1
 
 import (
-	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1/common"
+	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1/common"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

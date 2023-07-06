@@ -6,7 +6,7 @@
 package v1
 
 import (
-	"github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1/common"
+	"github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1/common"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 

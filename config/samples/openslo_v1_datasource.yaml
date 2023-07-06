@@ -12,13 +12,14 @@ spec:
   description: Mimir Example Datasource
   type: mimir
   connectionDetails:
-    address: https://mimir.example.com
-    multitenancy:
-      enabled: true
-      sourceTenants:
-        - billing
-        - infra
-      targetTenant: billing
-    ruler:
-      enabled: true
-      subpath: /prometheus/api/v1/rules
+    mimir:
+      address: https://mimir.example.com
+      multitenancy:
+        enabled: true
+        sourceTenants:
+          - billing
+          - infra
+        targetTenant: billing
+      ruler:
+        enabled: true
+        subpath: /prometheus/api/v1/rules

@@ -1,29 +1,17 @@
 package v1
 
 import (
+	datasources "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/datasources"
 	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type Ruler struct {
-	// +kubebuilder:default=false
-	Enabled bool   `json:"enabled,omitempty"`
-	Subpath string `json:"subpath,omitempty"`
-}
-
-type Multitenancy struct {
-	// +kubebuilder:default=false
-	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:MinItems=1
-	SourceTenants []string `json:"sourceTenants,omitempty"`
-	TargetTenant  string   `json:"targetTenant,omitempty"`
-}
-
 // ConnectionDetails specify how to connect to your metrics data provider
+// +kubebuilder:validation:MinProperties=1
+// +kubebuilder:validation:MaxProperties=1
 type ConnectionDetails struct {
-	Address      string       `json:"address,omitempty"`
-	Ruler        Ruler        `json:"ruler,omitempty"`
-	Multitenancy Multitenancy `json:"multitenancy,omitempty"`
+	Mimir  datasources.Mimir  `json:"mimir,omitempty"`
+	Cortex datasources.Cortex `json:"cortex,omitempty"`
 }
 
 // DatasourceSpec defines the desired state of Datasource

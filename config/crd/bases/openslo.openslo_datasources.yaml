@@ -37,28 +37,58 @@ spec:
               connectionDetails:
                 description: ConnectionDetails specify how to connect to your metrics
                   data provider
+                maxProperties: 1
+                minProperties: 1
                 properties:
-                  address:
-                    type: string
-                  multitenancy:
+                  cortex:
                     properties:
-                      enabled:
-                        default: false
-                        type: boolean
-                      sourceTenants:
-                        items:
-                          type: string
-                        type: array
-                      targetTenant:
+                      address:
                         type: string
+                      multitenancy:
+                        properties:
+                          enabled:
+                            default: false
+                            type: boolean
+                          sourceTenants:
+                            items:
+                              type: string
+                            type: array
+                          targetTenant:
+                            type: string
+                        type: object
+                      ruler:
+                        properties:
+                          enabled:
+                            default: false
+                            type: boolean
+                          subpath:
+                            type: string
+                        type: object
                     type: object
-                  ruler:
+                  mimir:
                     properties:
-                      enabled:
-                        default: false
-                        type: boolean
-                      subpath:
+                      address:
                         type: string
+                      multitenancy:
+                        properties:
+                          enabled:
+                            default: false
+                            type: boolean
+                          sourceTenants:
+                            items:
+                              type: string
+                            type: array
+                          targetTenant:
+                            type: string
+                        type: object
+                      ruler:
+                        properties:
+                          enabled:
+                            default: false
+                            type: boolean
+                          subpath:
+                            type: string
+                        type: object
                     type: object
                 type: object
               description:

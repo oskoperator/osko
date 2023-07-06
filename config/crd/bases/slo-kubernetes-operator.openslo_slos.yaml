@@ -1,0 +1,49 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.12.0
+  name: slos.slo-kubernetes-operator.openslo
+spec:
+  group: slo-kubernetes-operator.openslo
+  names:
+    kind: SLO
+    listKind: SLOList
+    plural: slos
+    singular: slo
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: SLO is the Schema for the slos API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: SLOSpec defines the desired state of SLO
+            properties:
+              foo:
+                description: Foo is an example field of SLO. Edit slo_types.go to
+                  remove/update
+                type: string
+            type: object
+          status:
+            description: SLOStatus defines the observed state of SLO
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

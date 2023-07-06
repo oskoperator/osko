@@ -15,8 +15,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	openslov1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1"
-	"github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/internal/controller"
+	openslov1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1"
+	slokubernetesoperatorv1alpha1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/slo-kubernetes-operator/v1alpha1"
+
+	openslov1controller "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/internal/controller/openslo"
+	slokubernetesoperatorcontroller "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/internal/controller/slo-kubernetes-operator"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -29,6 +32,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(openslov1.AddToScheme(scheme))
+	utilruntime.Must(slokubernetesoperatorv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -71,46 +75,53 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.DatasourceReconciler{
+	if err = (&openslov1controller.DatasourceReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Datasource")
 		os.Exit(1)
 	}
-	if err = (&controller.SLOReconciler{
+	if err = (&openslov1controller.SLOReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SLO")
 		os.Exit(1)
 	}
-	if err = (&controller.SLIReconciler{
+	if err = (&openslov1controller.SLIReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SLI")
 		os.Exit(1)
 	}
-	if err = (&controller.AlertPolicyReconciler{
+	if err = (&openslov1controller.AlertPolicyReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AlertPolicy")
 		os.Exit(1)
 	}
-	if err = (&controller.AlertConditionReconciler{
+	if err = (&openslov1controller.AlertConditionReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AlertCondition")
 		os.Exit(1)
 	}
-	if err = (&controller.AlertNotificationTargetReconciler{
+	if err = (&openslov1controller.AlertNotificationTargetReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AlertNotificationTarget")
+		os.Exit(1)
+	}
+	if err = (&slokubernetesoperatorcontroller.SLOReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SLO")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

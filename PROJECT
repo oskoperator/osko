@@ -5,6 +5,7 @@
 domain: openslo
 layout:
 - go.kubebuilder.io/v4
+multigroup: true
 projectName: slo-kubernetes-operator
 repo: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator
 resources:
@@ -15,7 +16,7 @@ resources:
   domain: openslo
   group: openslo
   kind: Datasource
-  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1
+  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1
   version: v1
 - api:
     crdVersion: v1
@@ -24,7 +25,7 @@ resources:
   domain: openslo
   group: openslo
   kind: SLO
-  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1
+  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1
   version: v1
 - api:
     crdVersion: v1
@@ -33,7 +34,7 @@ resources:
   domain: openslo
   group: openslo
   kind: SLI
-  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1
+  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1
   version: v1
 - api:
     crdVersion: v1
@@ -42,7 +43,7 @@ resources:
   domain: openslo
   group: openslo
   kind: AlertPolicy
-  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1
+  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1
   version: v1
 - api:
     crdVersion: v1
@@ -51,7 +52,7 @@ resources:
   domain: openslo
   group: openslo
   kind: AlertCondition
-  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1
+  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1
   version: v1
 - api:
     crdVersion: v1
@@ -60,7 +61,7 @@ resources:
   domain: openslo
   group: openslo
   kind: AlertNotificationTarget
-  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1
+  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1
   version: v1
 - api:
     crdVersion: v1
@@ -68,6 +69,15 @@ resources:
   domain: openslo
   group: openslo
   kind: Service
-  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1
+  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openslo
+  group: slo-kubernetes-operator
+  kind: SLO
+  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/slo-kubernetes-operator/v1alpha1
+  version: v1alpha1
 version: "3"

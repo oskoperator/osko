@@ -1,4 +1,4 @@
-package controller
+package slokubernetesoperator
 
 import (
 	"path/filepath"
@@ -14,7 +14,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	openslov1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1"
+	slokubernetesoperatorv1alpha1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/slo-kubernetes-operator/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -36,7 +36,7 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
 
@@ -46,7 +46,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	err = openslov1.AddToScheme(scheme.Scheme)
+	err = slokubernetesoperatorv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme

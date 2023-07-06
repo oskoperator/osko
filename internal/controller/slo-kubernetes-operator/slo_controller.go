@@ -1,4 +1,4 @@
-package controller
+package slokubernetesoperator
 
 import (
 	"context"
@@ -8,29 +8,29 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	openslov1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/v1"
+	slokubernetesoperatorv1alpha1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/slo-kubernetes-operator/v1alpha1"
 )
 
-// AlertPolicyReconciler reconciles a AlertPolicy object
-type AlertPolicyReconciler struct {
+// SLOReconciler reconciles a SLO object
+type SLOReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=openslo.openslo,resources=alertpolicies,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=openslo.openslo,resources=alertpolicies/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=openslo.openslo,resources=alertpolicies/finalizers,verbs=update
+//+kubebuilder:rbac:groups=slo-kubernetes-operator.openslo,resources=slos,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=slo-kubernetes-operator.openslo,resources=slos/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=slo-kubernetes-operator.openslo,resources=slos/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
-// the AlertPolicy object against the actual cluster state, and then
+// the SLO object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.15.0/pkg/reconcile
-func (r *AlertPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
 	// TODO(user): your logic here
@@ -39,8 +39,8 @@ func (r *AlertPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *AlertPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *SLOReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&openslov1.AlertPolicy{}).
+		For(&slokubernetesoperatorv1alpha1.SLO{}).
 		Complete(r)
 }

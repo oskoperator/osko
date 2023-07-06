@@ -9,6 +9,7 @@ resources:
 - bases/openslo.openslo_alertconditions.yaml
 - bases/openslo.openslo_alertnotificationtargets.yaml
 - bases/openslo.openslo_services.yaml
+- bases/slo-kubernetes-operator.openslo_slos.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patches: []

@@ -9,13 +9,13 @@ type SLOAlertPolicy struct {
 	// +kubebuilder:validation:Enum=AlertPolicy
 	Kind string `json:"kind,omitempty"`
 	// +kubebuilder:crd:generateEmbeddedObjectMeta=true
-	Metadata       metav1.ObjectMeta `json:"metadata,omitempty"`
+	Metadata       ObjectMetaOpenSLO `json:"metadata,omitempty"`
 	Spec           AlertPolicySpec   `json:"spec,omitempty"`
 	AlertPolicyRef string            `json:"alertPolicyRef,omitempty"`
 }
 
 type Indicator struct {
-	Metadata metav1.ObjectMeta `json:"metadata,omitempty"`
+	Metadata ObjectMetaOpenSLO `json:"metadata,omitempty"`
 	Spec     SLISpec           `json:"spec,omitempty"`
 }
 
@@ -76,7 +76,7 @@ type SLOStatus struct {
 // SLO is the Schema for the slos API
 type SLO struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	ObjectMetaOpenSLO `json:"metadata,omitempty"`
 
 	Spec   SLOSpec   `json:"spec,omitempty"`
 	Status SLOStatus `json:"status,omitempty"`

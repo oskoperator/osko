@@ -33,7 +33,7 @@ type DatasourceStatus struct {
 // Datasource is the Schema for the datasources API
 type Datasource struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	ObjectMetaOpenSLO `json:"metadata,omitempty"`
 
 	Spec   DatasourceSpec   `json:"spec,omitempty"`
 	Status DatasourceStatus `json:"status,omitempty"`

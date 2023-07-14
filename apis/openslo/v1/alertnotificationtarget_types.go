@@ -22,7 +22,7 @@ type AlertNotificationTargetStatus struct {
 // AlertNotificationTarget is the Schema for the alertnotificationtargets API
 type AlertNotificationTarget struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	ObjectMetaOpenSLO `json:"metadata,omitempty"`
 
 	Spec   AlertNotificationTargetSpec   `json:"spec,omitempty"`
 	Status AlertNotificationTargetStatus `json:"status,omitempty"`

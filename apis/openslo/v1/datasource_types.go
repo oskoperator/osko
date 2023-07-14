@@ -1,7 +1,7 @@
 package v1
 
 import (
-	osko "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/osko/v1alpha1"
+	osko "github.com/oskoperator/osko/apis/osko/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

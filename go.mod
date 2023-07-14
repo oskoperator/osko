@@ -1,4 +1,4 @@
-module github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator
+module github.com/oskoperator/osko
 
 go 1.20
 

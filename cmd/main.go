@@ -15,10 +15,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	openslov1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1"
-	oskov1alpha1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/osko/v1alpha1"
+	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
+	oskov1alpha1 "github.com/oskoperator/osko/apis/osko/v1alpha1"
 
-	openslov1controller "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/internal/controller/openslo"
+	openslov1controller "github.com/oskoperator/osko/internal/controller/openslo"
 	//+kubebuilder:scaffold:imports
 )
 

@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	openslov1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1"
+	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
 )
 
 // AlertNotificationTargetReconciler reconciles a AlertNotificationTarget object

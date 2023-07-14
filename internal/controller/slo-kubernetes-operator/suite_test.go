@@ -14,7 +14,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	oskov1alpha1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/osko/v1alpha1"
+	oskov1alpha1 "github.com/oskoperator/osko/apis/osko/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 

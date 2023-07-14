@@ -1,9 +1,10 @@
-# SLO Kubernetes Operator
+# osko - the OpenSLO Kubernetes Operator
+
 This operator aims to provide it's users with simple management and setting of SLIs, SLOs, alerting rules and alerts routing according to the
 [OpenSLO](https://github.com/OpenSLO/OpenSLO) specification.
 
 ## Description
-The current goals of the SLO Kubernetes Operator are:
+The current goals of `osko` are:
 
 - [ ] To connect to and work with the following metrics datasources using [kind: Datasource](https://github.com/OpenSLO/OpenSLO#datasource)
     - [ ] Mimir
@@ -29,13 +30,13 @@ kubectl apply -f config/samples/
 2. Build and push your image to the location specified by `IMG`:
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/slo-kubernetes-operator:tag
+make docker-build docker-push IMG=<some-registry>/osko:tag
 ```
 
 3. Deploy the controller to the cluster with the image specified by `IMG`:
 
 ```sh
-make deploy IMG=<some-registry>/slo-kubernetes-operator:tag
+make deploy IMG=<some-registry>/osko:tag
 ```
 
 #### Uninstall CRDs

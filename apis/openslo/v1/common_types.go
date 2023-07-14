@@ -1,4 +1,4 @@
-package common
+package v1
 
 // +kubebuilder:validation:MaxLength=1050
 type Description string

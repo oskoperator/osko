@@ -1,7 +1,6 @@
 package v1
 
 import (
-	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -9,17 +8,17 @@ type ConditionSpec struct {
 	// +kubebuilder:validation:Enum=Burnrate
 	Kind string `json:"kind,omitempty"`
 	// +kubebuilder:validation:Enum=lte;gte;lt;gt
-	Op             string          `json:"op,omitempty"`
-	Threshold      string          `json:"threshold,omitempty"`
-	LookbackWindow common.Duration `json:"lookbackWindow,omitempty"`
-	AlertAfter     common.Duration `json:"alertAfter,omitempty"`
+	Op             string   `json:"op,omitempty"`
+	Threshold      string   `json:"threshold,omitempty"`
+	LookbackWindow Duration `json:"lookbackWindow,omitempty"`
+	AlertAfter     Duration `json:"alertAfter,omitempty"`
 }
 
 // AlertConditionSpec defines the desired state of AlertCondition
 type AlertConditionSpec struct {
-	Description common.Description `json:"description,omitempty"`
-	Severity    string             `json:"severity,omitempty"`
-	Condition   ConditionSpec      `json:"condition,omitempty"`
+	Description Description   `json:"description,omitempty"`
+	Severity    string        `json:"severity,omitempty"`
+	Condition   ConditionSpec `json:"condition,omitempty"`
 }
 
 // AlertConditionStatus defines the observed state of AlertCondition

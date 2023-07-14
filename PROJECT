@@ -71,13 +71,4 @@ resources:
   kind: Service
   path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1
   version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: openslo
-  group: slo-kubernetes-operator
-  kind: SLO
-  path: github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/api/slo-kubernetes-operator/v1alpha1
-  version: v1alpha1
 version: "3"

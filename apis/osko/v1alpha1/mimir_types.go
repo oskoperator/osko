@@ -1,6 +1,7 @@
 package v1alpha1
 
-type Cortex struct {
+// +kubebuilder:object:generate=true
+type Mimir struct {
 	Address      string       `json:"address,omitempty"`
 	Ruler        Ruler        `json:"ruler,omitempty"`
 	Multitenancy Multitenancy `json:"multitenancy,omitempty"`

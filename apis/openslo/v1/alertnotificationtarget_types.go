@@ -1,14 +1,13 @@
 package v1
 
 import (
-	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // AlertNotificationTargetSpec defines the desired state of AlertNotificationTarget
 type AlertNotificationTargetSpec struct {
-	Description common.Description `json:"description,omitempty"`
-	Target      string             `json:"target,omitempty"`
+	Description Description `json:"description,omitempty"`
+	Target      string      `json:"target,omitempty"`
 }
 
 // AlertNotificationTargetStatus defines the observed state of AlertNotificationTarget

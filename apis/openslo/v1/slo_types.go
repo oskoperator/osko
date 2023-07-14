@@ -1,7 +1,6 @@
 package v1
 
 import (
-	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1/common"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -29,7 +28,7 @@ type ObjectivesSpec struct {
 	Target          string            `json:"target,omitempty"`
 	TargetPercent   string            `json:"targetPercent,omitempty"`
 	TimeSliceTarget string            `json:"timeSliceTarget,omitempty"`
-	TimeSliceWindow common.Duration   `json:"timeSliceWindow,omitempty"`
+	TimeSliceWindow Duration          `json:"timeSliceWindow,omitempty"`
 	Indicator       Indicator         `json:"indicator,omitempty"`
 	IndicatorRef    string            `json:"indicatorRef,omitempty"`
 	CompositeWeight resource.Quantity `json:"compositeWeight,omitempty"`
@@ -46,17 +45,17 @@ type CalendarSpec struct {
 }
 
 type TimeWindowSpec struct {
-	Duration  common.Duration `json:"duration,omitempty"`
-	IsRolling bool            `json:"isRolling,omitempty"`
-	Calendar  CalendarSpec    `json:"calendar,omitempty"`
+	Duration  Duration     `json:"duration,omitempty"`
+	IsRolling bool         `json:"isRolling,omitempty"`
+	Calendar  CalendarSpec `json:"calendar,omitempty"`
 }
 
 // SLOSpec defines the desired state of SLO
 type SLOSpec struct {
-	Description  common.Description `json:"description,omitempty"`
-	Service      string             `json:"service,omitempty"`
-	Indicator    SLISpec            `json:"indicator,omitempty"`
-	IndicatorRef string             `json:"indicatorRef,omitempty"`
+	Description  Description `json:"description,omitempty"`
+	Service      string      `json:"service,omitempty"`
+	Indicator    SLISpec     `json:"indicator,omitempty"`
+	IndicatorRef string      `json:"indicatorRef,omitempty"`
 	// +kubebuilder:validation:MaxItems=1
 	TimeWindow []TimeWindowSpec `json:"timeWindow,omitempty"`
 	// +kubebuilder:validation:Enum=Occurrences;Timeslices;RatioTimeslices

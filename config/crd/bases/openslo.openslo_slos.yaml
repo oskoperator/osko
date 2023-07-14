@@ -198,39 +198,42 @@ spec:
                   ratioMetric:
                     properties:
                       bad:
-                        additionalProperties:
-                          properties:
-                            metricSourceRef:
-                              type: string
-                            spec:
-                              type: string
-                            type:
-                              type: string
-                          type: object
+                        properties:
+                          metricSource:
+                            properties:
+                              metricSourceRef:
+                                type: string
+                              spec:
+                                type: string
+                              type:
+                                type: string
+                            type: object
                         type: object
                       counter:
                         type: boolean
                       good:
-                        additionalProperties:
-                          properties:
-                            metricSourceRef:
-                              type: string
-                            spec:
-                              type: string
-                            type:
-                              type: string
-                          type: object
+                        properties:
+                          metricSource:
+                            properties:
+                              metricSourceRef:
+                                type: string
+                              spec:
+                                type: string
+                              type:
+                                type: string
+                            type: object
                         type: object
                       raw:
-                        additionalProperties:
-                          properties:
-                            metricSourceRef:
-                              type: string
-                            spec:
-                              type: string
-                            type:
-                              type: string
-                          type: object
+                        properties:
+                          metricSource:
+                            properties:
+                              metricSourceRef:
+                                type: string
+                              spec:
+                                type: string
+                              type:
+                                type: string
+                            type: object
                         type: object
                       rawType:
                         enum:
@@ -238,15 +241,16 @@ spec:
                         - failure
                         type: string
                       total:
-                        additionalProperties:
-                          properties:
-                            metricSourceRef:
-                              type: string
-                            spec:
-                              type: string
-                            type:
-                              type: string
-                          type: object
+                        properties:
+                          metricSource:
+                            properties:
+                              metricSourceRef:
+                                type: string
+                              spec:
+                                type: string
+                              type:
+                                type: string
+                            type: object
                         type: object
                     type: object
                   thresholdMetric:
@@ -305,39 +309,42 @@ spec:
                             ratioMetric:
                               properties:
                                 bad:
-                                  additionalProperties:
-                                    properties:
-                                      metricSourceRef:
-                                        type: string
-                                      spec:
-                                        type: string
-                                      type:
-                                        type: string
-                                    type: object
+                                  properties:
+                                    metricSource:
+                                      properties:
+                                        metricSourceRef:
+                                          type: string
+                                        spec:
+                                          type: string
+                                        type:
+                                          type: string
+                                      type: object
                                   type: object
                                 counter:
                                   type: boolean
                                 good:
-                                  additionalProperties:
-                                    properties:
-                                      metricSourceRef:
-                                        type: string
-                                      spec:
-                                        type: string
-                                      type:
-                                        type: string
-                                    type: object
+                                  properties:
+                                    metricSource:
+                                      properties:
+                                        metricSourceRef:
+                                          type: string
+                                        spec:
+                                          type: string
+                                        type:
+                                          type: string
+                                      type: object
                                   type: object
                                 raw:
-                                  additionalProperties:
-                                    properties:
-                                      metricSourceRef:
-                                        type: string
-                                      spec:
-                                        type: string
-                                      type:
-                                        type: string
-                                    type: object
+                                  properties:
+                                    metricSource:
+                                      properties:
+                                        metricSourceRef:
+                                          type: string
+                                        spec:
+                                          type: string
+                                        type:
+                                          type: string
+                                      type: object
                                   type: object
                                 rawType:
                                   enum:
@@ -345,15 +352,16 @@ spec:
                                   - failure
                                   type: string
                                 total:
-                                  additionalProperties:
-                                    properties:
-                                      metricSourceRef:
-                                        type: string
-                                      spec:
-                                        type: string
-                                      type:
-                                        type: string
-                                    type: object
+                                  properties:
+                                    metricSource:
+                                      properties:
+                                        metricSourceRef:
+                                          type: string
+                                        spec:
+                                          type: string
+                                        type:
+                                          type: string
+                                      type: object
                                   type: object
                               type: object
                             thresholdMetric:

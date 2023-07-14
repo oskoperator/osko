@@ -1,13 +1,12 @@
 package v1
 
 import (
-	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ServiceSpec defines the desired state of Service
 type ServiceSpec struct {
-	Description common.Description `json:"description,omitempty"`
+	Description Description `json:"description,omitempty"`
 }
 
 type ServiceStatus struct{}

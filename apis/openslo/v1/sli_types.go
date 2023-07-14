@@ -1,27 +1,30 @@
 package v1
 
 import (
-	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type MetricSpec struct {
+	MetricSource MetricSourceSpec `json:"metricSource,omitempty"`
+}
+
 type RatioMetricSpec struct {
-	Raw map[string]common.MetricSourceSpec `json:"raw,omitempty"`
+	Raw MetricSpec `json:"raw,omitempty"`
 	// +kubebuilder:validation:Enum=success;failure
-	RawType string                             `json:"rawType,omitempty"`
-	Good    map[string]common.MetricSourceSpec `json:"good,omitempty"`
-	Bad     map[string]common.MetricSourceSpec `json:"bad,omitempty"`
-	Total   map[string]common.MetricSourceSpec `json:"total,omitempty"`
-	Counter bool                               `json:"counter,omitempty"`
+	RawType string     `json:"rawType,omitempty"`
+	Good    MetricSpec `json:"good,omitempty"`
+	Bad     MetricSpec `json:"bad,omitempty"`
+	Total   MetricSpec `json:"total,omitempty"`
+	Counter bool       `json:"counter,omitempty"`
 }
 
 type ThresholdMetricSpec struct {
-	MetricSource common.MetricSourceSpec `json:"metricSource,omitempty"`
+	MetricSource MetricSourceSpec `json:"metricSource,omitempty"`
 }
 
 // SLISpec defines the desired state of SLI
 type SLISpec struct {
-	Description     common.Description  `json:"description,omitempty"`
+	Description     Description         `json:"description,omitempty"`
 	ThresholdMetric ThresholdMetricSpec `json:"thresholdMetric,omitempty"`
 	RatioMetric     RatioMetricSpec     `json:"ratioMetric,omitempty"`
 }

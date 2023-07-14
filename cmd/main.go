@@ -16,10 +16,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openslov1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1"
-	slokubernetesoperatorv1alpha1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/slo-kubernetes-operator/v1alpha1"
+	oskov1alpha1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/osko/v1alpha1"
 
 	openslov1controller "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/internal/controller/openslo"
-	slokubernetesoperatorcontroller "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/internal/controller/slo-kubernetes-operator"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -32,7 +31,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(openslov1.AddToScheme(scheme))
-	utilruntime.Must(slokubernetesoperatorv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(oskov1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -115,13 +114,6 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AlertNotificationTarget")
-		os.Exit(1)
-	}
-	if err = (&slokubernetesoperatorcontroller.SLOReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SLO")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

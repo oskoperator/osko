@@ -1,7 +1,6 @@
 package v1
 
 import (
-	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -23,10 +22,10 @@ type AlertPolicyCondition struct {
 
 // AlertPolicySpec defines the desired state of AlertPolicy
 type AlertPolicySpec struct {
-	Description        common.Description `json:"description,omitempty"`
-	AlertWhenNoData    bool               `json:"alertWhenNoData,omitempty"`
-	AlertWhenResolved  bool               `json:"alertWhenResolved,omitempty"`
-	AlertWhenBreaching bool               `json:"alertWhenBreaching,omitempty"`
+	Description        Description `json:"description,omitempty"`
+	AlertWhenNoData    bool        `json:"alertWhenNoData,omitempty"`
+	AlertWhenResolved  bool        `json:"alertWhenResolved,omitempty"`
+	AlertWhenBreaching bool        `json:"alertWhenBreaching,omitempty"`
 	// +kubebuilder:validation:MaxItems=1
 	Conditions          []AlertPolicyCondition          `json:"conditions,omitempty"`
 	NotificationTargets []AlertPolicyNotificationTarget `json:"notificationTargets,omitempty"`

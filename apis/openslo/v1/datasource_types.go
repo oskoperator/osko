@@ -1,8 +1,7 @@
 package v1
 
 import (
-	datasources "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/datasources"
-	common "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/openslo/v1/common"
+	osko "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/osko/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -10,15 +9,15 @@ import (
 // +kubebuilder:validation:MinProperties=1
 // +kubebuilder:validation:MaxProperties=1
 type ConnectionDetails struct {
-	Mimir  datasources.Mimir  `json:"mimir,omitempty"`
-	Cortex datasources.Cortex `json:"cortex,omitempty"`
+	Mimir  osko.Mimir  `json:"mimir,omitempty"`
+	Cortex osko.Cortex `json:"cortex,omitempty"`
 }
 
 // DatasourceSpec defines the desired state of Datasource
 type DatasourceSpec struct {
-	Description       common.Description `json:"description,omitempty"`
-	Type              string             `json:"type,omitempty"`
-	ConnectionDetails ConnectionDetails  `json:"connectionDetails,omitempty"`
+	Description       Description       `json:"description,omitempty"`
+	Type              string            `json:"type,omitempty"`
+	ConnectionDetails ConnectionDetails `json:"connectionDetails,omitempty"`
 }
 
 // DatasourceStatus defines the observed state of Datasource

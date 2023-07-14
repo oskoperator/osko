@@ -14,7 +14,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	slokubernetesoperatorv1alpha1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/slo-kubernetes-operator/v1alpha1"
+	oskov1alpha1 "github.com/SLO-Kubernetes-Operator/slo-kubernetes-operator/apis/osko/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -46,7 +46,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	err = slokubernetesoperatorv1alpha1.AddToScheme(scheme.Scheme)
+	err = oskov1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme

@@ -3,8 +3,7 @@
 This operator aims to provide it's users with simple management and setting of SLIs, SLOs, alerting rules and alerts routing according to the
 [OpenSLO](https://github.com/OpenSLO/OpenSLO) specification.
 
-## Description
-The current goals of `osko` are:
+## Goals
 
 - [ ] To connect to and work with the following metrics datasources using [kind: Datasource](https://github.com/OpenSLO/OpenSLO#datasource)
     - [ ] Mimir
@@ -16,69 +15,19 @@ The current goals of `osko` are:
 - [ ] Set up alerts in Alertmanager based on kinds [kind: AlertPolicy](https://github.com/OpenSLO/OpenSLO#alertpolicy) and
         [kind: AlertCondition](https://github.com/OpenSLO/OpenSLO#alertcondition)
 
-### Getting Started
-You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
+
+## Test It Out
+
+1. You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
 
-#### Running on the cluster
-1. Install Instances of Custom Resources:
-
-```sh
-kubectl apply -f config/samples/
-```
-
-2. Build and push your image to the location specified by `IMG`:
-
-```sh
-make docker-build docker-push IMG=<some-registry>/osko:tag
-```
-
-3. Deploy the controller to the cluster with the image specified by `IMG`:
-
-```sh
-make deploy IMG=<some-registry>/osko:tag
-```
-
-#### Uninstall CRDs
-To delete the CRDs from the cluster:
-
-```sh
-make uninstall
-```
-
-#### Undeploy controller
-UnDeploy the controller from the cluster:
-
-```sh
-make undeploy
-```
-
-## Contributing
-As of right now, we don't have any specific guidelines for contributors.
-
-Feel free to open an issue or a pull (merge) request if
-you would like to see a particular feature implemented.
-
-The only thing that's required right now to get your code merged is signing your commits off with the `-s` flag during `git commit`
-after reading the project's [DCO](DCO).
-
-It would also be greatly appreciated if you tried using
-[Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for the commit style, but that's a detail :)
-
-#### How it works
-This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
-
-It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/),
-which provide a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster.
-
-#### Test It Out
-1. Install the CRDs into the cluster:
+2. Install the CRDs into the cluster:
 
 ```sh
 make install
 ```
 
-2. Run your controller (this will run in the foreground, so switch to a new terminal if you want to leave it running):
+3. Run your controller (this will run in the foreground, so switch to a new terminal if you want to leave it running):
 
 ```sh
 make run
@@ -96,6 +45,19 @@ make manifests
 **NOTE:** Run `make --help` for more information on all potential `make` targets
 
 More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+
+## Contributing
+As of right now, we don't have any specific guidelines for contributors.
+
+Feel free to open an issue or a pull (merge) request if
+you would like to see a particular feature implemented.
+
+The only thing that's required right now to get your code merged is signing your commits off with the `-s` flag during `git commit`
+after reading the project's [DCO](DCO).
+
+It would also be greatly appreciated if you tried using
+[Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for the commit style, but that's a detail :)
+
 
 ## License
 

@@ -9,8 +9,8 @@ import (
 // +kubebuilder:validation:MinProperties=1
 // +kubebuilder:validation:MaxProperties=1
 type ConnectionDetails struct {
-	Mimir  osko.Mimir  `json:"mimir,omitempty"`
-	Cortex osko.Cortex `json:"cortex,omitempty"`
+	Mimir  *osko.Mimir  `json:"mimir,omitempty"`
+	Cortex *osko.Cortex `json:"cortex,omitempty"`
 }
 
 // DatasourceSpec defines the desired state of Datasource

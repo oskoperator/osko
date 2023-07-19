@@ -10,8 +10,8 @@ type SLOAlertPolicy struct {
 	Kind string `json:"kind,omitempty"`
 	// +kubebuilder:crd:generateEmbeddedObjectMeta=true
 	Metadata       ObjectMetaOpenSLO `json:"metadata,omitempty"`
-	Spec           AlertPolicySpec   `json:"spec,omitempty"`
-	AlertPolicyRef string            `json:"alertPolicyRef,omitempty"`
+	Spec           *AlertPolicySpec  `json:"spec,omitempty"`
+	AlertPolicyRef *string           `json:"alertPolicyRef,omitempty"`
 }
 
 type Indicator struct {
@@ -29,8 +29,8 @@ type ObjectivesSpec struct {
 	TargetPercent   string            `json:"targetPercent,omitempty"`
 	TimeSliceTarget string            `json:"timeSliceTarget,omitempty"`
 	TimeSliceWindow Duration          `json:"timeSliceWindow,omitempty"`
-	Indicator       Indicator         `json:"indicator,omitempty"`
-	IndicatorRef    string            `json:"indicatorRef,omitempty"`
+	Indicator       *Indicator        `json:"indicator,omitempty"`
+	IndicatorRef    *string           `json:"indicatorRef,omitempty"`
 	CompositeWeight resource.Quantity `json:"compositeWeight,omitempty"`
 }
 
@@ -54,8 +54,8 @@ type TimeWindowSpec struct {
 type SLOSpec struct {
 	Description  Description `json:"description,omitempty"`
 	Service      string      `json:"service,omitempty"`
-	Indicator    SLISpec     `json:"indicator,omitempty"`
-	IndicatorRef string      `json:"indicatorRef,omitempty"`
+	Indicator    *SLISpec    `json:"indicator,omitempty"`
+	IndicatorRef *string     `json:"indicatorRef,omitempty"`
 	// +kubebuilder:validation:MaxItems=1
 	TimeWindow []TimeWindowSpec `json:"timeWindow,omitempty"`
 	// +kubebuilder:validation:Enum=Occurrences;Timeslices;RatioTimeslices

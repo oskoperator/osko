@@ -2,7 +2,7 @@ package controller
 
 import (
 	"context"
-
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,8 +32,28 @@ type SLOReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.15.0/pkg/reconcile
 func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// TODO(user): your logic here
+
+	// TODO(user): your logic here
+	var slo openslov1.SLO
+
+	err := r.Get(ctx, req.NamespacedName, &slo)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// This is what happens when manifest is deleted??
+			logger.Info("SLO deleted")
+			return ctrl.Result{}, nil
+		}
+
+		logger.Error(err, errGetDS)
+		return ctrl.Result{}, nil
+	}
+
+	if slo.Annotations["oskoperator.com/implementation"] == "mimir" {
+		logger.Info("This is the SLO Annotations", "Annotations", "It's Mimir biatch!")
+	}
 
 	return ctrl.Result{}, nil
 }

@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: slo-kubernetes-operator
   name: slo-sample
+  annotations:
+    oskoperator.com/implementation: "mimir"
 spec:
   description: string
   service: string

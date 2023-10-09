@@ -1,4 +1,4 @@
-apiVersion: openslo.openslo/v1
+apiVersion: openslo.com/v1
 kind: Datasource
 metadata:
   labels:
@@ -13,7 +13,7 @@ spec:
   type: mimir
   connectionDetails:
     mimir:
-      address: https://mimir.example.com
+      address: https://mimir.monitoring.dev.heu.group/
       multitenancy:
         enabled: true
         sourceTenants:

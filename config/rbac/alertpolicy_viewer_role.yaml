@@ -12,7 +12,7 @@ metadata:
   name: alertpolicy-viewer-role
 rules:
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertpolicies
   verbs:
@@ -20,7 +20,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertpolicies/status
   verbs:

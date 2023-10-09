@@ -12,7 +12,7 @@ metadata:
   name: alertpolicy-editor-role
 rules:
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertpolicies
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertpolicies/status
   verbs:

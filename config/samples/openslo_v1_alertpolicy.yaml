@@ -1,4 +1,4 @@
-apiVersion: openslo.openslo/v1
+apiVersion: openslo.com/v1
 kind: AlertPolicy
 metadata:
   labels:

@@ -2,18 +2,22 @@ package controller
 
 import (
 	"context"
-
+	"github.com/prometheus/client_golang/api"
+	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"time"
 
 	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
 )
 
 const (
-	errGetDS = "could not get Datasource"
+	errGetDS     = "could not get Datasource"
+	errConnectDS = "could not connect to Datasource"
+	errQueryAPI  = "could not query API"
 )
 
 // DatasourceReconciler reconciles a Datasource object
@@ -22,9 +26,9 @@ type DatasourceReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=openslo.openslo,resources=datasources,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=openslo.openslo,resources=datasources/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=openslo.openslo,resources=datasources/finalizers,verbs=update
+//+kubebuilder:rbac:groups=openslo.com,resources=datasources,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=openslo.com,resources=datasources/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=openslo.com,resources=datasources/finalizers,verbs=update
 
 func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
@@ -42,6 +46,28 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Error(err, errGetDS)
 		return ctrl.Result{}, nil
 	}
+	if ds.Spec.Type == "mimir" {
+		log.Info("Datasource Type is Mimir", "address", ds.Spec.ConnectionDetails.Mimir.Address)
+		client, err := api.NewClient(api.Config{
+			Address: ds.Spec.ConnectionDetails.Mimir.Address + "/prometheus",
+		})
+		if err != nil {
+			log.Error(err, errConnectDS)
+			return ctrl.Result{}, nil
+		}
+		api := v1.NewAPI(client)
+		result, _, err := api.Query(ctx, "up", time.Now())
+		if err != nil {
+			log.Error(err, errQueryAPI)
+			return ctrl.Result{}, nil
+		}
+		log.Info("Datasource successfully connected", "result", result)
+	}
+
+	if ds.Spec.Type == "cortex" {
+		log.Info("Datasource Type is Cortex", "address", ds.Spec.ConnectionDetails.Cortex.Address)
+	}
+
 	log.Info("Datasource reconciled")
 
 	return ctrl.Result{}, nil

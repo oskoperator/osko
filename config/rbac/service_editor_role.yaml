@@ -12,7 +12,7 @@ metadata:
   name: service-editor-role
 rules:
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - services
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - services/status
   verbs:

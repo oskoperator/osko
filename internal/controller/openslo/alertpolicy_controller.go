@@ -17,9 +17,9 @@ type AlertPolicyReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=openslo.openslo,resources=alertpolicies,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=openslo.openslo,resources=alertpolicies/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=openslo.openslo,resources=alertpolicies/finalizers,verbs=update
+//+kubebuilder:rbac:groups=openslo.com,resources=alertpolicies,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=openslo.com,resources=alertpolicies/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=openslo.com,resources=alertpolicies/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

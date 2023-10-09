@@ -45,22 +45,27 @@ spec:
                       type: string
                     metadata:
                       properties:
-                        annotations:
-                          additionalProperties:
-                            type: string
-                          type: object
-                        finalizers:
-                          items:
-                            type: string
-                          type: array
-                        labels:
-                          additionalProperties:
-                            type: string
-                          type: object
-                        name:
+                        displayName:
                           type: string
-                        namespace:
-                          type: string
+                        metadata:
+                          properties:
+                            annotations:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            finalizers:
+                              items:
+                                type: string
+                              type: array
+                            labels:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                          type: object
                       type: object
                     spec:
                       description: AlertPolicySpec defines the desired state of AlertPolicy
@@ -82,22 +87,27 @@ spec:
                                 type: string
                               metadata:
                                 properties:
-                                  annotations:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  finalizers:
-                                    items:
-                                      type: string
-                                    type: array
-                                  labels:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  name:
+                                  displayName:
                                     type: string
-                                  namespace:
-                                    type: string
+                                  metadata:
+                                    properties:
+                                      annotations:
+                                        additionalProperties:
+                                          type: string
+                                        type: object
+                                      finalizers:
+                                        items:
+                                          type: string
+                                        type: array
+                                      labels:
+                                        additionalProperties:
+                                          type: string
+                                        type: object
+                                      name:
+                                        type: string
+                                      namespace:
+                                        type: string
+                                    type: object
                                 type: object
                               spec:
                                 description: AlertConditionSpec defines the desired
@@ -146,22 +156,27 @@ spec:
                                 type: string
                               metadata:
                                 properties:
-                                  annotations:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  finalizers:
-                                    items:
-                                      type: string
-                                    type: array
-                                  labels:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  name:
+                                  displayName:
                                     type: string
-                                  namespace:
-                                    type: string
+                                  metadata:
+                                    properties:
+                                      annotations:
+                                        additionalProperties:
+                                          type: string
+                                        type: object
+                                      finalizers:
+                                        items:
+                                          type: string
+                                        type: array
+                                      labels:
+                                        additionalProperties:
+                                          type: string
+                                        type: object
+                                      name:
+                                        type: string
+                                      namespace:
+                                        type: string
+                                    type: object
                                 type: object
                               spec:
                                 description: AlertNotificationTargetSpec defines the
@@ -283,22 +298,27 @@ spec:
                       properties:
                         metadata:
                           properties:
-                            annotations:
-                              additionalProperties:
-                                type: string
-                              type: object
-                            finalizers:
-                              items:
-                                type: string
-                              type: array
-                            labels:
-                              additionalProperties:
-                                type: string
-                              type: object
-                            name:
+                            displayName:
                               type: string
-                            namespace:
-                              type: string
+                            metadata:
+                              properties:
+                                annotations:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                finalizers:
+                                  items:
+                                    type: string
+                                  type: array
+                                labels:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                name:
+                                  type: string
+                                namespace:
+                                  type: string
+                              type: object
                           type: object
                         spec:
                           description: SLISpec defines the desired state of SLI

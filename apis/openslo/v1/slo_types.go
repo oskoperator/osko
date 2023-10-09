@@ -76,7 +76,8 @@ type SLOStatus struct {
 // SLO is the Schema for the slos API
 type SLO struct {
 	metav1.TypeMeta   `json:",inline"`
-	ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	//ObjectMetaOpenSLO `json:"metadata,omitempty"`
 
 	Spec   SLOSpec   `json:"spec,omitempty"`
 	Status SLOStatus `json:"status,omitempty"`

@@ -693,7 +693,7 @@ func (in *SLIStatus) DeepCopy() *SLIStatus {
 func (in *SLO) DeepCopyInto(out *SLO) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	in.ObjectMetaOpenSLO.DeepCopyInto(&out.ObjectMetaOpenSLO)
 	in.Spec.DeepCopyInto(&out.Spec)
 	out.Status = in.Status
 }

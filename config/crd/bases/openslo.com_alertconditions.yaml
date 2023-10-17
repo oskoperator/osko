@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.12.0
-  name: alertconditions.openslo.openslo
+  name: alertconditions.openslo.com
 spec:
-  group: openslo.openslo
+  group: openslo.com
   names:
     kind: AlertCondition
     listKind: AlertConditionList

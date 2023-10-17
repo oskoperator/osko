@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.12.0
-  name: services.openslo.openslo
+  name: services.openslo.com
 spec:
-  group: openslo.openslo
+  group: openslo.com
   names:
     kind: Service
     listKind: ServiceList

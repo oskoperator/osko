@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -14,6 +15,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/apis/osko/v1alpha1"
@@ -32,6 +34,7 @@ func init() {
 
 	utilruntime.Must(openslov1.AddToScheme(scheme))
 	utilruntime.Must(oskov1alpha1.AddToScheme(scheme))
+	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -51,9 +54,10 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "ea6aa475.openslo",

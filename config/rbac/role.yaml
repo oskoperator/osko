@@ -5,7 +5,7 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertconditions
   verbs:
@@ -17,13 +17,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertconditions/finalizers
   verbs:
   - update
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertconditions/status
   verbs:
@@ -31,7 +31,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertnotificationtargets
   verbs:
@@ -43,13 +43,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertnotificationtargets/finalizers
   verbs:
   - update
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertnotificationtargets/status
   verbs:
@@ -57,7 +57,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertpolicies
   verbs:
@@ -69,13 +69,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertpolicies/finalizers
   verbs:
   - update
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - alertpolicies/status
   verbs:
@@ -83,7 +83,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - datasources
   verbs:
@@ -95,13 +95,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - datasources/finalizers
   verbs:
   - update
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - datasources/status
   verbs:
@@ -109,7 +109,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - slis
   verbs:
@@ -121,13 +121,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - slis/finalizers
   verbs:
   - update
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - slis/status
   verbs:
@@ -135,7 +135,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - slos
   verbs:
@@ -147,13 +147,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - slos/finalizers
   verbs:
   - update
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - slos/status
   verbs:

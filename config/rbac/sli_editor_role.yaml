@@ -12,7 +12,7 @@ metadata:
   name: sli-editor-role
 rules:
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - slis
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - slis/status
   verbs:

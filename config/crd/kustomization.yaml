@@ -2,13 +2,13 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/openslo.openslo_datasources.yaml
-- bases/openslo.openslo_slos.yaml
-- bases/openslo.openslo_slis.yaml
-- bases/openslo.openslo_alertpolicies.yaml
-- bases/openslo.openslo_alertconditions.yaml
-- bases/openslo.openslo_alertnotificationtargets.yaml
-- bases/openslo.openslo_services.yaml
+- bases/openslo.com_datasources.yaml
+- bases/openslo.com_slos.yaml
+- bases/openslo.com_slis.yaml
+- bases/openslo.com_alertpolicies.yaml
+- bases/openslo.com_alertconditions.yaml
+- bases/openslo.com_alertnotificationtargets.yaml
+- bases/openslo.com_services.yaml
 - bases/slo-kubernetes-operator.openslo_slos.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 

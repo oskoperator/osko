@@ -5,7 +5,7 @@ import (
 )
 
 type ObjectMetaOpenSLO struct {
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:",inline"`
 	DisplayName       string `json:"displayName,omitempty"`
 }
 

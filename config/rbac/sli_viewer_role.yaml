@@ -12,7 +12,7 @@ metadata:
   name: sli-viewer-role
 rules:
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - slis
   verbs:
@@ -20,7 +20,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - openslo.openslo
+  - openslo.com
   resources:
   - slis/status
   verbs:

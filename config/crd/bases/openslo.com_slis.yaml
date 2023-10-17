@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.12.0
-  name: slis.openslo.openslo
+  name: slis.openslo.com
 spec:
-  group: openslo.openslo
+  group: openslo.com
   names:
     kind: SLI
     listKind: SLIList

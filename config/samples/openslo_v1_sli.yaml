@@ -10,12 +10,6 @@ metadata:
   name: sli-sample
 spec:
   description: testing SLI
-  thresholdMetric:
-    metricSource:
-      metricSourceRef: datasource-sample
-      type: Prometheus
-      spec: |
-        testquery
   ratioMetric:
     counter: true
     good:
@@ -23,23 +17,16 @@ spec:
         metricSourceRef: datasource-sample
         type: Prometheus
         spec: |
-          testquery
+          controller_runtime_reconcile_total{job="keda-operator", result="success"}
     bad:
       metricSource:
         metricSourceRef: datasource-sample
         type: Prometheus
         spec: |
-          testquery
+          controller_runtime_reconcile_total{job="keda-operator", result="error"}
     total:
       metricSource:
         metricSourceRef: datasource-sample
         type: Prometheus
         spec: |
-          testquery
-    rawType: success
-    raw:
-      metricSource:
-        metricSourceRef: datasource-sample
-        type: Prometheus
-        spec: |
-          testquery
+          controller_runtime_reconcile_total{job="keda-operator"}

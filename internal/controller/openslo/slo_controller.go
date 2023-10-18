@@ -2,14 +2,16 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 )
@@ -38,6 +40,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	log := log.FromContext(ctx)
 
 	var slo openslov1.SLO
+	var sli openslov1.SLI
 
 	err := r.Get(ctx, req.NamespacedName, &slo)
 	if err != nil {
@@ -49,41 +52,63 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		log.Error(err, errGetDS)
 		return ctrl.Result{}, nil
 	}
-
-	// Create PrometheusRule from SLO
-	rule := &monitoringv1.PrometheusRule{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      slo.Name,
-			Namespace: slo.Namespace,
-		},
-		Spec: monitoringv1.PrometheusRuleSpec{
-			Groups: []monitoringv1.RuleGroup{{
-				Name: slo.Name,
-				Rules: []monitoringv1.Rule{{
-					Alert: slo.Spec.AlertPolicies[0].Metadata.Name,
-				}}}},
-		},
+	if slo.Spec.IndicatorRef != nil {
+		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, &sli)
 	}
 
-	// Set SLO instance as the owner and controller.
-	if err := ctrl.SetControllerReference(&slo, rule, r.Scheme); err != nil {
+	log.Info("SLI", "Description", sli.Spec.Description)
+
+	// Set SLI instance as the owner and controller.
+	if err := ctrl.SetControllerReference(&slo, &sli, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Check if this PrometheusRule already exists
-	found := &monitoringv1.PrometheusRule{}
-	err = r.Get(ctx, client.ObjectKey{
-		Namespace: slo.Namespace,
+	promRule := &monitoringv1.PrometheusRule{}
+	if err := r.Get(ctx, types.NamespacedName{
 		Name:      slo.Name,
-	}, found)
+		Namespace: slo.Namespace,
+	}, promRule); err != nil && apierrors.IsNotFound(err) {
+		return ctrl.Result{}, err
+	}
 
-	if err != nil && apierrors.IsNotFound(err) {
-		err = r.Create(ctx, rule)
+	if promRule == nil {
+		promRule, err = createPrometheusRule(slo, sli)
 		if err != nil {
-			log.Error(err, "Failed to create new PrometheusRule", "PrometheusRule.Namespace", rule.Namespace, "PrometheusRule.Name", rule.Name)
+			log.Error(err, "Failed to create new PrometheusRule", "PrometheusRule.Namespace", promRule.Namespace, "PrometheusRule.Name", promRule.Name)
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, nil
+	}
+
+	for _, rule := range promRule.Spec.Groups[0].Rules {
+		if rule.Expr != intstr.Parse(fmt.Sprintf("sum(rate(%s[%s])) / sum(rate(%s[%s]))",
+			sli.Spec.RatioMetric.Good.MetricSource.Spec,
+			slo.Spec.TimeWindow[0].Duration,
+			sli.Spec.RatioMetric.Total.MetricSource.Spec,
+			slo.Spec.TimeWindow[0].Duration,
+		)) {
+			promRule.Spec.Groups[0].Rules[0].Expr = intstr.Parse(fmt.Sprintf("sum(rate(%s[%s])) / sum(rate(%s[%s]))",
+				sli.Spec.RatioMetric.Good.MetricSource.Spec,
+				slo.Spec.TimeWindow[0].Duration,
+				sli.Spec.RatioMetric.Total.MetricSource.Spec,
+				slo.Spec.TimeWindow[0].Duration,
+			))
+		}
+	}
+
+	// Set SLO instance as the owner and controller.
+	if err := ctrl.SetControllerReference(&slo, promRule, r.Scheme); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.Update(ctx, promRule); err != nil {
+		if apierrors.IsNotFound(err) {
+			if err := r.Create(ctx, promRule); err != nil {
+				return ctrl.Result{}, nil
+			}
+		} else {
+			return ctrl.Result{}, err
+		}
 	}
 
 	log.Info("SLO reconciled", "SLO Name", slo.Name, "SLO Namespace", slo.Namespace)
@@ -92,10 +117,39 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	return ctrl.Result{}, nil
 }
 
+func createPrometheusRule(slo openslov1.SLO, sli openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
+	rule := &monitoringv1.PrometheusRule{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "monitoring.coreos.com/v1",
+			Kind:       "PrometheusRule",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            slo.Name,
+			Namespace:       slo.Namespace,
+			Labels:          slo.Labels,
+			OwnerReferences: slo.OwnerReferences,
+		},
+		Spec: monitoringv1.PrometheusRuleSpec{
+			Groups: []monitoringv1.RuleGroup{{
+				Name: slo.Name,
+				Rules: []monitoringv1.Rule{{
+					Expr: intstr.Parse(fmt.Sprintf("sum(rate(%s[%s])) / sum(rate(%s[%s]))",
+						sli.Spec.RatioMetric.Good.MetricSource.Spec,
+						slo.Spec.TimeWindow[0].Duration,
+						sli.Spec.RatioMetric.Total.MetricSource.Spec,
+						slo.Spec.TimeWindow[0].Duration,
+					)),
+				}}}},
+		},
+	}
+	return rule, nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *SLOReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openslov1.SLO{}).
+		Owns(&openslov1.SLI{}).
 		Owns(&monitoringv1.PrometheusRule{}).
 		Complete(r)
 }

@@ -450,6 +450,9 @@ spec:
             status:
               description: SLOStatus defines the observed state of SLO
               type: object
+              properties:
+                prometheusRuleStatus:
+                  type: string
           type: object
       served: true
       storage: true

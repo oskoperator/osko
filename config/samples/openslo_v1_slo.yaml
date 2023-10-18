@@ -13,7 +13,7 @@ spec:
   service: string
   indicatorRef: sli-sample
   timeWindow:
-    - duration: 30d
+    - duration: 14d
       isRolling: true
   budgetingMethod: Occurrences
   objectives:

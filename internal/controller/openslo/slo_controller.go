@@ -52,27 +52,27 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		log.Error(err, errGetDS)
 		return ctrl.Result{}, nil
 	}
+
 	if slo.Spec.IndicatorRef != nil {
 		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, &sli)
 	}
 
-	log.Info("SLI", "Description", sli.Spec.Description)
+	//log.Info("SLI", "Description", sli.Spec.Description)
 
 	// Set SLI instance as the owner and controller.
 	if err := ctrl.SetControllerReference(&slo, &sli, r.Scheme); err != nil {
+		log.Error(err, "Failed to set owner reference for SLI")
 		return ctrl.Result{}, err
 	}
 
 	// Check if this PrometheusRule already exists
 	promRule := &monitoringv1.PrometheusRule{}
-	if err := r.Get(ctx, types.NamespacedName{
+	err = r.Get(ctx, types.NamespacedName{
 		Name:      slo.Name,
 		Namespace: slo.Namespace,
-	}, promRule); err != nil && apierrors.IsNotFound(err) {
-		return ctrl.Result{}, err
-	}
+	}, promRule)
 
-	if promRule == nil {
+	if err != nil && apierrors.IsNotFound(err) {
 		promRule, err = createPrometheusRule(slo, sli)
 		if err != nil {
 			log.Error(err, "Failed to create new PrometheusRule", "PrometheusRule.Namespace", promRule.Namespace, "PrometheusRule.Name", promRule.Name)
@@ -98,19 +98,33 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	// Set SLO instance as the owner and controller.
 	if err := ctrl.SetControllerReference(&slo, promRule, r.Scheme); err != nil {
+		log.Error(err, "Failed to set owner reference for PrometheusRule")
 		return ctrl.Result{}, err
 	}
 
 	if err := r.Update(ctx, promRule); err != nil {
 		if apierrors.IsNotFound(err) {
 			if err := r.Create(ctx, promRule); err != nil {
-				return ctrl.Result{}, nil
+				slo.Status.PrometheusRuleStatus = fmt.Sprintf("Failed to create PrometeusRule: %v", err)
+				if err := r.Status().Update(ctx, &slo); err != nil {
+					log.Error(err, "Failed to update SLO status")
+					return ctrl.Result{}, err
+				}
 			}
 		} else {
-			return ctrl.Result{}, err
+			slo.Status.PrometheusRuleStatus = fmt.Sprintf("Failed to update PrometeusRule: %v", err)
+			if err := r.Status().Update(ctx, &slo); err != nil {
+				log.Error(err, "Failed to update SLO status")
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
+	slo.Status.PrometheusRuleStatus = "Ready"
+	if err := r.Status().Update(ctx, &slo); err != nil {
+		log.Error(err, "Failed to update SLO status")
+		return ctrl.Result{}, err
+	}
 	log.Info("SLO reconciled", "SLO Name", slo.Name, "SLO Namespace", slo.Namespace)
 
 	//log.Info("SLO reconciled")

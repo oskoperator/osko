@@ -68,13 +68,16 @@ type SLOSpec struct {
 type SLOStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	PrometheusRuleStatus string `json:"prometheusRuleStatus,omitempty"`
+	Conditions           []metav1.Condition `json:"conditions,omitempty"`
+	CurrentSLO           string             `json:"currentSLO,omitempty"`
+	LastEvaluationTime   metav1.Time        `json:"lastEvaluationTime,omitempty"`
+	PrometheusRuleStatus string             `json:"prometheusRuleStatus,omitempty"`
 }
 
 //+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
 
 // SLO is the Schema for the slos API
+// +kubebuilder:printcolumn:name="PrometheusRuleStatus",type=string,JSONPath=`.status.prometheusRuleStatus`
 type SLO struct {
 	metav1.TypeMeta   `json:",inline"`
 	ObjectMetaOpenSLO `json:"metadata,omitempty"`

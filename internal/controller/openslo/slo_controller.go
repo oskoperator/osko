@@ -125,6 +125,14 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		log.Error(err, "Failed to update SLO status")
 		return ctrl.Result{}, err
 	}
+
+	slo.Status.Conditions = []metav1.Condition{{
+		Type:    "Ready",
+		Status:  "True",
+		Reason:  "PrometheusRuleReady",
+		Message: "PrometheusRule is ready",
+	}}
+
 	log.Info("SLO reconciled", "SLO Name", slo.Name, "SLO Namespace", slo.Namespace)
 
 	//log.Info("SLO reconciled")

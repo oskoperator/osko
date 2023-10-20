@@ -12,6 +12,10 @@ import (
 	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
 )
 
+const (
+	errGetSLI = "could not get SLI Object"
+)
+
 // SLIReconciler reconciles a SLI object
 type SLIReconciler struct {
 	client.Client

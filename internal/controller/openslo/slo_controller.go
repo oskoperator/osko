@@ -49,7 +49,6 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			log.Info("SLO deleted")
 			return ctrl.Result{}, nil
 		}
-
 		log.Error(err, errGetDS)
 		return ctrl.Result{}, nil
 	}
@@ -57,43 +56,48 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// Get SLI from SLO's ref
 	if slo.Spec.IndicatorRef != nil {
 		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, &sli)
+	} else if slo.Spec.Indicator != nil {
+		//TODO: Create SLI from SLO's indicator spec
 	}
-	if err != nil && apierrors.IsNotFound(err) {
-		log.Error(err, errGetSLI)
-		err = utils.UpdateStatus(
-			ctx,
-			&slo,
-			r.Client,
-			"Ready",
-			metav1.ConditionFalse,
-			"SLIObjectNotFound",
-			"SLI Object not found",
-		)
-		if err != nil {
-			log.Error(err, "Failed to update SLO status")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, err
-	} else {
-		// Set SLI instance as the owner and controller.
-		err = ctrl.SetControllerReference(&slo, &sli, r.Scheme)
-		if err != nil {
+
+	if err != nil {
+		apierrors.IsNotFound(err)
+		{
+			log.Error(err, errGetSLI)
 			err = utils.UpdateStatus(
 				ctx,
 				&slo,
 				r.Client,
 				"Ready",
 				metav1.ConditionFalse,
-				"FailedToSetSLIOwner",
-				"Failed to set SLI owner reference",
+				"SLIObjectNotFound",
+				"SLI Object not found",
 			)
 			if err != nil {
 				log.Error(err, "Failed to update SLO status")
 				return ctrl.Result{}, err
 			}
-			log.Error(err, "Failed to set owner reference for SLI")
 			return ctrl.Result{}, err
 		}
+	}
+
+	// Set SLI instance as the owner and controller.
+	if err := ctrl.SetControllerReference(&slo, &sli, r.Scheme); err != nil {
+		err = utils.UpdateStatus(
+			ctx,
+			&slo,
+			r.Client,
+			"Ready",
+			metav1.ConditionFalse,
+			"FailedToSetSLIOwner",
+			"Failed to set SLI owner reference",
+		)
+		if err != nil {
+			log.Error(err, "Failed to update SLO status")
+			return ctrl.Result{}, err
+		}
+		log.Error(err, "Failed to set owner reference for SLI")
+		return ctrl.Result{}, err
 	}
 
 	// Check if this PrometheusRule already exists
@@ -224,7 +228,10 @@ func (r *SLOReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&monitoringv1.PrometheusRule{}).
 		Watches(
 			&openslov1.SLI{},
-			&handler.EnqueueRequestForObject{},
+			handler.EnqueueRequestForOwner(
+				mgr.GetScheme(),
+				mgr.GetRESTMapper(),
+				&openslov1.SLO{}),
 		).
 		Complete(r)
 }

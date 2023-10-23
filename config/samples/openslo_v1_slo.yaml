@@ -11,10 +11,9 @@ metadata:
 spec:
   description: string
   service: string
-  indicator:
-  indicatorRef: string
+  indicatorRef: sli-sample
   timeWindow:
-    - duration: 14d
+    - duration: 28d
       isRolling: true
   budgetingMethod: Occurrences
   objectives:

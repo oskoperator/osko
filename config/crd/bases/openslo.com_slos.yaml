@@ -14,292 +14,78 @@ spec:
     singular: slo
   scope: Namespaced
   versions:
-    - name: v1
-      schema:
-        openAPIV3Schema:
-          description: SLO is the Schema for the slos API
-          properties:
-            apiVersion:
-              description: 'APIVersion defines the versioned schema of this representation
+  - additionalPrinterColumns:
+    - description: The reason for the current status of the SLO resource
+      jsonPath: .status.ready
+      name: Status
+      type: string
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: SLO is the Schema for the slos API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
               of an object. Servers should convert recognized schemas to the latest
               internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-              type: string
-            kind:
-              description: 'Kind is a string value representing the REST resource this
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
               object represents. Servers may infer this from the endpoint the client
               submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-              type: string
-            metadata:
-              type: object
-            name:
-              type: string
-            namespace:
-              type: string
-            spec:
-              description: SLOSpec defines the desired state of SLO
-              properties:
-                alertPolicies:
-                  items:
-                    properties:
-                      alertPolicyRef:
-                        type: string
-                      kind:
-                        enum:
-                          - AlertPolicy
-                        type: string
-                      metadata:
-                        properties:
-                          displayName:
-                            type: string
-                          annotations:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          finalizers:
-                            items:
-                              type: string
-                            type: array
-                          labels:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          name:
-                            type: string
-                          namespace:
-                            type: string
-                        type: object
-                      spec:
-                        description: AlertPolicySpec defines the desired state of AlertPolicy
-                        properties:
-                          alertWhenBreaching:
-                            type: boolean
-                          alertWhenNoData:
-                            type: boolean
-                          alertWhenResolved:
-                            type: boolean
-                          conditions:
-                            items:
-                              properties:
-                                conditionRef:
-                                  type: string
-                                kind:
-                                  enum:
-                                    - AlertCondition
-                                  type: string
-                                metadata:
-                                  properties:
-                                    displayName:
-                                      type: string
-                                    metadata:
-                                      properties:
-                                        annotations:
-                                          additionalProperties:
-                                            type: string
-                                          type: object
-                                        finalizers:
-                                          items:
-                                            type: string
-                                          type: array
-                                        labels:
-                                          additionalProperties:
-                                            type: string
-                                          type: object
-                                        name:
-                                          type: string
-                                        namespace:
-                                          type: string
-                                      type: object
-                                  type: object
-                                spec:
-                                  description: AlertConditionSpec defines the desired
-                                    state of AlertCondition
-                                  properties:
-                                    condition:
-                                      properties:
-                                        alertAfter:
-                                          pattern: ^[1-9]\d*[s m h d]$
-                                          type: string
-                                        kind:
-                                          enum:
-                                            - Burnrate
-                                          type: string
-                                        lookbackWindow:
-                                          pattern: ^[1-9]\d*[s m h d]$
-                                          type: string
-                                        op:
-                                          enum:
-                                            - lte
-                                            - gte
-                                            - lt
-                                            - gt
-                                          type: string
-                                        threshold:
-                                          type: string
-                                      type: object
-                                    description:
-                                      maxLength: 1050
-                                      type: string
-                                    severity:
-                                      type: string
-                                  type: object
-                              type: object
-                            maxItems: 1
-                            type: array
-                          description:
-                            maxLength: 1050
-                            type: string
-                          notificationTargets:
-                            items:
-                              properties:
-                                kind:
-                                  enum:
-                                    - AlertNotificationTarget
-                                  type: string
-                                metadata:
-                                  properties:
-                                    displayName:
-                                      type: string
-                                    metadata:
-                                      properties:
-                                        annotations:
-                                          additionalProperties:
-                                            type: string
-                                          type: object
-                                        finalizers:
-                                          items:
-                                            type: string
-                                          type: array
-                                        labels:
-                                          additionalProperties:
-                                            type: string
-                                          type: object
-                                        name:
-                                          type: string
-                                        namespace:
-                                          type: string
-                                      type: object
-                                  type: object
-                                spec:
-                                  description: AlertNotificationTargetSpec defines the
-                                    desired state of AlertNotificationTarget
-                                  properties:
-                                    description:
-                                      maxLength: 1050
-                                      type: string
-                                    target:
-                                      type: string
-                                  type: object
-                                targetRef:
-                                  type: string
-                              type: object
-                            type: array
-                        type: object
-                    type: object
-                  type: array
-                budgetingMethod:
-                  enum:
-                    - Occurrences
-                    - Timeslices
-                    - RatioTimeslices
-                  type: string
-                description:
-                  maxLength: 1050
-                  type: string
-                indicator:
-                  description: SLISpec defines the desired state of SLI
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: SLOSpec defines the desired state of SLO
+            properties:
+              alertPolicies:
+                items:
                   properties:
-                    description:
-                      maxLength: 1050
+                    alertPolicyRef:
                       type: string
-                    ratioMetric:
+                    kind:
+                      enum:
+                      - AlertPolicy
+                      type: string
+                    metadata:
                       properties:
-                        bad:
-                          properties:
-                            metricSource:
-                              properties:
-                                metricSourceRef:
-                                  type: string
-                                spec:
-                                  type: string
-                                type:
-                                  type: string
-                              type: object
+                        annotations:
+                          additionalProperties:
+                            type: string
                           type: object
-                        counter:
-                          type: boolean
-                        good:
-                          properties:
-                            metricSource:
-                              properties:
-                                metricSourceRef:
-                                  type: string
-                                spec:
-                                  type: string
-                                type:
-                                  type: string
-                              type: object
-                          type: object
-                        raw:
-                          properties:
-                            metricSource:
-                              properties:
-                                metricSourceRef:
-                                  type: string
-                                spec:
-                                  type: string
-                                type:
-                                  type: string
-                              type: object
-                          type: object
-                        rawType:
-                          enum:
-                            - success
-                            - failure
+                        displayName:
                           type: string
-                        total:
-                          properties:
-                            metricSource:
-                              properties:
-                                metricSourceRef:
-                                  type: string
-                                spec:
-                                  type: string
-                                type:
-                                  type: string
-                              type: object
+                        finalizers:
+                          items:
+                            type: string
+                          type: array
+                        labels:
+                          additionalProperties:
+                            type: string
                           type: object
+                        name:
+                          type: string
+                        namespace:
+                          type: string
                       type: object
-                    thresholdMetric:
+                    spec:
+                      description: AlertPolicySpec defines the desired state of AlertPolicy
                       properties:
-                        metricSource:
-                          properties:
-                            metricSourceRef:
-                              type: string
-                            spec:
-                              type: string
-                            type:
-                              type: string
-                          type: object
-                      type: object
-                  type: object
-                indicatorRef:
-                  type: string
-                objectives:
-                  items:
-                    properties:
-                      compositeWeight:
-                        anyOf:
-                          - type: integer
-                          - type: string
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                        x-kubernetes-int-or-string: true
-                      displayName:
-                        type: string
-                      indicator:
-                        properties:
-                          metadata:
+                        alertWhenBreaching:
+                          type: boolean
+                        alertWhenNoData:
+                          type: boolean
+                        alertWhenResolved:
+                          type: boolean
+                        conditions:
+                          items:
                             properties:
-                              displayName:
+                              conditionRef:
+                                type: string
+                              kind:
+                                enum:
+                                - AlertCondition
                                 type: string
                               metadata:
                                 properties:
@@ -307,6 +93,8 @@ spec:
                                     additionalProperties:
                                       type: string
                                     type: object
+                                  displayName:
+                                    type: string
                                   finalizers:
                                     items:
                                       type: string
@@ -320,138 +108,422 @@ spec:
                                   namespace:
                                     type: string
                                 type: object
-                            type: object
-                          spec:
-                            description: SLISpec defines the desired state of SLI
-                            properties:
-                              description:
-                                maxLength: 1050
-                                type: string
-                              ratioMetric:
+                              spec:
+                                description: AlertConditionSpec defines the desired
+                                  state of AlertCondition
                                 properties:
-                                  bad:
+                                  condition:
                                     properties:
-                                      metricSource:
-                                        properties:
-                                          metricSourceRef:
-                                            type: string
-                                          spec:
-                                            type: string
-                                          type:
-                                            type: string
-                                        type: object
+                                      alertAfter:
+                                        pattern: ^[1-9]\d*[s m h d]$
+                                        type: string
+                                      kind:
+                                        enum:
+                                        - Burnrate
+                                        type: string
+                                      lookbackWindow:
+                                        pattern: ^[1-9]\d*[s m h d]$
+                                        type: string
+                                      op:
+                                        enum:
+                                        - lte
+                                        - gte
+                                        - lt
+                                        - gt
+                                        type: string
+                                      threshold:
+                                        type: string
                                     type: object
-                                  counter:
-                                    type: boolean
-                                  good:
-                                    properties:
-                                      metricSource:
-                                        properties:
-                                          metricSourceRef:
-                                            type: string
-                                          spec:
-                                            type: string
-                                          type:
-                                            type: string
-                                        type: object
-                                    type: object
-                                  raw:
-                                    properties:
-                                      metricSource:
-                                        properties:
-                                          metricSourceRef:
-                                            type: string
-                                          spec:
-                                            type: string
-                                          type:
-                                            type: string
-                                        type: object
-                                    type: object
-                                  rawType:
-                                    enum:
-                                      - success
-                                      - failure
+                                  description:
+                                    maxLength: 1050
                                     type: string
-                                  total:
-                                    properties:
-                                      metricSource:
-                                        properties:
-                                          metricSourceRef:
-                                            type: string
-                                          spec:
-                                            type: string
-                                          type:
-                                            type: string
-                                        type: object
-                                    type: object
-                                type: object
-                              thresholdMetric:
-                                properties:
-                                  metricSource:
-                                    properties:
-                                      metricSourceRef:
-                                        type: string
-                                      spec:
-                                        type: string
-                                      type:
-                                        type: string
-                                    type: object
+                                  severity:
+                                    type: string
                                 type: object
                             type: object
-                        type: object
-                      indicatorRef:
-                        type: string
-                      op:
-                        enum:
-                          - lte
-                          - gte
-                          - lt
-                          - gt
-                        type: string
-                      target:
-                        type: string
-                      targetPercent:
-                        type: string
-                      timeSliceTarget:
-                        type: string
-                      timeSliceWindow:
-                        pattern: ^[1-9]\d*[s m h d]$
-                        type: string
-                      value:
-                        type: string
-                    type: object
-                  type: array
-                service:
-                  type: string
-                timeWindow:
-                  items:
+                          maxItems: 1
+                          type: array
+                        description:
+                          maxLength: 1050
+                          type: string
+                        notificationTargets:
+                          items:
+                            properties:
+                              kind:
+                                enum:
+                                - AlertNotificationTarget
+                                type: string
+                              metadata:
+                                properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  displayName:
+                                    type: string
+                                  finalizers:
+                                    items:
+                                      type: string
+                                    type: array
+                                  labels:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
+                                type: object
+                              spec:
+                                description: AlertNotificationTargetSpec defines the
+                                  desired state of AlertNotificationTarget
+                                properties:
+                                  description:
+                                    maxLength: 1050
+                                    type: string
+                                  target:
+                                    type: string
+                                type: object
+                              targetRef:
+                                type: string
+                            type: object
+                          type: array
+                      type: object
+                  type: object
+                type: array
+              budgetingMethod:
+                enum:
+                - Occurrences
+                - Timeslices
+                - RatioTimeslices
+                type: string
+              description:
+                maxLength: 1050
+                type: string
+              indicator:
+                description: SLISpec defines the desired state of SLI
+                properties:
+                  description:
+                    maxLength: 1050
+                    type: string
+                  ratioMetric:
                     properties:
-                      calendar:
+                      bad:
                         properties:
-                          startTime:
-                            description: Date with time in 24h format, format without
-                              time zone
-                            example: "2020-01-21 12:30:00"
+                          metricSource:
+                            properties:
+                              metricSourceRef:
+                                type: string
+                              spec:
+                                type: string
+                              type:
+                                type: string
+                            type: object
+                        type: object
+                      counter:
+                        type: boolean
+                      good:
+                        properties:
+                          metricSource:
+                            properties:
+                              metricSourceRef:
+                                type: string
+                              spec:
+                                type: string
+                              type:
+                                type: string
+                            type: object
+                        type: object
+                      raw:
+                        properties:
+                          metricSource:
+                            properties:
+                              metricSourceRef:
+                                type: string
+                              spec:
+                                type: string
+                              type:
+                                type: string
+                            type: object
+                        type: object
+                      rawType:
+                        enum:
+                        - success
+                        - failure
+                        type: string
+                      total:
+                        properties:
+                          metricSource:
+                            properties:
+                              metricSourceRef:
+                                type: string
+                              spec:
+                                type: string
+                              type:
+                                type: string
+                            type: object
+                        type: object
+                    type: object
+                  thresholdMetric:
+                    properties:
+                      metricSource:
+                        properties:
+                          metricSourceRef:
                             type: string
-                          timeZone:
-                            description: Name as in IANA Time Zone Database
-                            example: America/New_York
+                          spec:
+                            type: string
+                          type:
                             type: string
                         type: object
-                      duration:
-                        pattern: ^[1-9]\d*[s m h d]$
-                        type: string
-                      isRolling:
-                        type: boolean
                     type: object
-                  maxItems: 1
-                  type: array
-              type: object
-            status:
-              description: SLOStatus defines the observed state of SLO
-              type: object
-          type: object
-      served: true
-      storage: true
-      subresources:
-        status: {}
+                type: object
+              indicatorRef:
+                type: string
+              objectives:
+                items:
+                  properties:
+                    compositeWeight:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    displayName:
+                      type: string
+                    indicator:
+                      properties:
+                        metadata:
+                          properties:
+                            annotations:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            displayName:
+                              type: string
+                            finalizers:
+                              items:
+                                type: string
+                              type: array
+                            labels:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                          type: object
+                        spec:
+                          description: SLISpec defines the desired state of SLI
+                          properties:
+                            description:
+                              maxLength: 1050
+                              type: string
+                            ratioMetric:
+                              properties:
+                                bad:
+                                  properties:
+                                    metricSource:
+                                      properties:
+                                        metricSourceRef:
+                                          type: string
+                                        spec:
+                                          type: string
+                                        type:
+                                          type: string
+                                      type: object
+                                  type: object
+                                counter:
+                                  type: boolean
+                                good:
+                                  properties:
+                                    metricSource:
+                                      properties:
+                                        metricSourceRef:
+                                          type: string
+                                        spec:
+                                          type: string
+                                        type:
+                                          type: string
+                                      type: object
+                                  type: object
+                                raw:
+                                  properties:
+                                    metricSource:
+                                      properties:
+                                        metricSourceRef:
+                                          type: string
+                                        spec:
+                                          type: string
+                                        type:
+                                          type: string
+                                      type: object
+                                  type: object
+                                rawType:
+                                  enum:
+                                  - success
+                                  - failure
+                                  type: string
+                                total:
+                                  properties:
+                                    metricSource:
+                                      properties:
+                                        metricSourceRef:
+                                          type: string
+                                        spec:
+                                          type: string
+                                        type:
+                                          type: string
+                                      type: object
+                                  type: object
+                              type: object
+                            thresholdMetric:
+                              properties:
+                                metricSource:
+                                  properties:
+                                    metricSourceRef:
+                                      type: string
+                                    spec:
+                                      type: string
+                                    type:
+                                      type: string
+                                  type: object
+                              type: object
+                          type: object
+                      type: object
+                    indicatorRef:
+                      type: string
+                    op:
+                      enum:
+                      - lte
+                      - gte
+                      - lt
+                      - gt
+                      type: string
+                    target:
+                      type: string
+                    targetPercent:
+                      type: string
+                    timeSliceTarget:
+                      type: string
+                    timeSliceWindow:
+                      pattern: ^[1-9]\d*[s m h d]$
+                      type: string
+                    value:
+                      type: string
+                  type: object
+                type: array
+              service:
+                type: string
+              timeWindow:
+                items:
+                  properties:
+                    calendar:
+                      properties:
+                        startTime:
+                          description: Date with time in 24h format, format without
+                            time zone
+                          example: "2020-01-21 12:30:00"
+                          type: string
+                        timeZone:
+                          description: Name as in IANA Time Zone Database
+                          example: America/New_York
+                          type: string
+                      type: object
+                    duration:
+                      pattern: ^[1-9]\d*[s m h d]$
+                      type: string
+                    isRolling:
+                      type: boolean
+                  type: object
+                maxItems: 1
+                type: array
+            type: object
+          status:
+            description: SLOStatus defines the observed state of SLO
+            properties:
+              conditions:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file TODO: Maybe we should use something like []corev1.ObejctReference
+                  here?'
+                items:
+                  description: "Condition contains details for one aspect of the current
+                    state of this API Resource. --- This struct is intended for direct
+                    use as an array at the field path .status.conditions.  For example,
+                    \n type FooStatus struct{ // Represents the observations of a
+                    foo's current state. // Known .status.conditions.type are: \"Available\",
+                    \"Progressing\", and \"Degraded\" // +patchMergeKey=type // +patchStrategy=merge
+                    // +listType=map // +listMapKey=type Conditions []metav1.Condition
+                    `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\"
+                    protobuf:\"bytes,1,rep,name=conditions\"` \n // other fields }"
+                  properties:
+                    lastTransitionTime:
+                      description: lastTransitionTime is the last time the condition
+                        transitioned from one status to another. This should be when
+                        the underlying condition changed.  If that is not known, then
+                        using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: message is a human readable message indicating
+                        details about the transition. This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: observedGeneration represents the .metadata.generation
+                        that the condition was set based upon. For instance, if .metadata.generation
+                        is currently 12, but the .status.conditions[x].observedGeneration
+                        is 9, the condition is out of date with respect to the current
+                        state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: reason contains a programmatic identifier indicating
+                        the reason for the condition's last transition. Producers
+                        of specific condition types may define expected values and
+                        meanings for this field, and whether the values are considered
+                        a guaranteed API. The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        --- Many .condition.type values are consistent across resources
+                        like Available, but because arbitrary conditions can be useful
+                        (see .node.status.conditions), the ability to deconflict is
+                        important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              currentSLO:
+                type: string
+              lastEvaluationTime:
+                format: date-time
+                type: string
+              ready:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

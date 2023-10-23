@@ -250,7 +250,7 @@ func (r *SLOReconciler) findObjectsForSli(c client.Client) func(ctx context.Cont
 			FieldSelector: fields.OneTermEqualSelector(indicatorRef, a.GetName()),
 			Namespace:     a.GetNamespace(),
 		}
-		err := r.List(context.TODO(), attachedSLOs, listOpts)
+		err := r.List(ctx, attachedSLOs, listOpts)
 		if err != nil {
 			return []reconcile.Request{}
 		}

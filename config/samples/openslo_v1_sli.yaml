@@ -18,12 +18,12 @@ spec:
         type: Prometheus
         spec: |
           controller_runtime_reconcile_total{job="keda-operator", result="success"}
-#    bad:
-#      metricSource:
-#        metricSourceRef: datasource-sample
-#        type: Prometheus
-#        spec: |
-#          controller_runtime_reconcile_total{job="keda-operator", result="error"}
+    bad:
+      metricSource:
+        metricSourceRef: datasource-sample
+        type: Prometheus
+        spec: |
+          controller_runtime_reconcile_total{job="keda-operator", result="error"}
     total:
       metricSource:
         metricSourceRef: datasource-sample

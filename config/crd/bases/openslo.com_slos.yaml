@@ -445,7 +445,8 @@ spec:
               conditions:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying
-                  this file'
+                  this file TODO: Maybe we should use something like []corev1.ObejctReference
+                  here?'
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource. --- This struct is intended for direct

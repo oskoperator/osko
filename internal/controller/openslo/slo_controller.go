@@ -8,6 +8,7 @@ import (
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -15,6 +16,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+)
+
+const (
+	indicatorRef = ".spec.indicatorRef"
+	errGetSLO    = "could not get SLO Object"
 )
 
 // SLOReconciler reconciles a SLO object
@@ -37,25 +44,24 @@ type SLOReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.15.0/pkg/reconcile
 func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
 	log := log.FromContext(ctx)
 
-	var slo openslov1.SLO
-	var sli openslov1.SLI
+	sli := &openslov1.SLI{}
+	slo := &openslov1.SLO{}
 
-	err := r.Get(ctx, req.NamespacedName, &slo)
+	err := r.Get(ctx, req.NamespacedName, slo)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("SLO deleted")
+			log.Info("SLO resource not found. Object must be deleted.")
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, errGetDS)
+		log.Error(err, errGetSLO)
 		return ctrl.Result{}, nil
 	}
 
 	// Get SLI from SLO's ref
 	if slo.Spec.IndicatorRef != nil {
-		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, &sli)
+		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, sli)
 	} else if slo.Spec.Indicator != nil {
 		//TODO: Create SLI from SLO's indicator spec
 	}
@@ -66,7 +72,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			log.Error(err, errGetSLI)
 			err = utils.UpdateStatus(
 				ctx,
-				&slo,
+				slo,
 				r.Client,
 				"Ready",
 				metav1.ConditionFalse,
@@ -82,10 +88,10 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// Set SLI instance as the owner and controller.
-	if err := ctrl.SetControllerReference(&slo, &sli, r.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(slo, sli, r.Scheme); err != nil {
 		err = utils.UpdateStatus(
 			ctx,
-			&slo,
+			slo,
 			r.Client,
 			"Ready",
 			metav1.ConditionFalse,
@@ -109,11 +115,11 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if err != nil && apierrors.IsNotFound(err) {
 		log.Info("PrometheusRule not found. Let's make some.")
-		promRule, err = createPrometheusRule(slo, sli)
+		promRule, err = r.createPrometheusRule(slo, sli)
 		if err != nil {
 			err = utils.UpdateStatus(
 				ctx,
-				&slo,
+				slo,
 				r.Client,
 				"Ready",
 				metav1.ConditionFalse,
@@ -145,19 +151,13 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
-	// Set SLO instance as the owner and controller.
-	if err := ctrl.SetControllerReference(&slo, promRule, r.Scheme); err != nil {
-		log.Error(err, "Failed to set owner reference for PrometheusRule")
-		return ctrl.Result{}, err
-	}
-
 	if err := r.Update(ctx, promRule); err != nil {
 		if apierrors.IsNotFound(err) {
 			if err := r.Create(ctx, promRule); err != nil {
-				if err := r.Status().Update(ctx, &slo); err != nil {
+				if err := r.Status().Update(ctx, slo); err != nil {
 					log.Error(err, "Failed to update SLO status")
 					slo.Status.Ready = "Failed"
-					if err := r.Status().Update(ctx, &slo); err != nil {
+					if err := r.Status().Update(ctx, slo); err != nil {
 						log.Error(err, "Failed to update SLO ready status")
 						return ctrl.Result{}, err
 					}
@@ -165,10 +165,10 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				}
 			}
 		} else {
-			if err := r.Status().Update(ctx, &slo); err != nil {
+			if err := r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO status")
 				slo.Status.Ready = "Failed"
-				if err := r.Status().Update(ctx, &slo); err != nil {
+				if err := r.Status().Update(ctx, slo); err != nil {
 					log.Error(err, "Failed to update SLO ready status")
 					return ctrl.Result{}, err
 				}
@@ -179,7 +179,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	err = utils.UpdateStatus(
 		ctx,
-		&slo,
+		slo,
 		r.Client,
 		"Ready",
 		metav1.ConditionTrue,
@@ -193,7 +193,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	return ctrl.Result{}, nil
 }
 
-func createPrometheusRule(slo openslov1.SLO, sli openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
+func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
 	rule := &monitoringv1.PrometheusRule{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "monitoring.coreos.com/v1",
@@ -218,20 +218,67 @@ func createPrometheusRule(slo openslov1.SLO, sli openslov1.SLI) (*monitoringv1.P
 				}}}},
 		},
 	}
+
+	// Set SLO instance as the owner and controller.
+	err := ctrl.SetControllerReference(slo, rule, r.Scheme)
+	if err != nil {
+		return nil, err
+	}
+
 	return rule, nil
+}
+
+func (r *SLOReconciler) createIndices(mgr ctrl.Manager) error {
+	return mgr.GetFieldIndexer().IndexField(
+		context.TODO(),
+		&openslov1.SLO{},
+		indicatorRef,
+		func(object client.Object) []string {
+			slo := object.(*openslov1.SLO)
+			if slo.Spec.IndicatorRef == nil {
+				return nil
+			}
+
+			return []string{*slo.Spec.IndicatorRef}
+		})
+}
+
+func (r *SLOReconciler) findObjectsForSli(c client.Client) func(ctx context.Context, a client.Object) []reconcile.Request {
+	return func(ctx context.Context, a client.Object) []reconcile.Request {
+		attachedSLOs := &openslov1.SLOList{}
+		listOpts := &client.ListOptions{
+			FieldSelector: fields.OneTermEqualSelector(indicatorRef, a.GetName()),
+			Namespace:     a.GetNamespace(),
+		}
+		err := r.List(context.TODO(), attachedSLOs, listOpts)
+		if err != nil {
+			return []reconcile.Request{}
+		}
+
+		requests := make([]reconcile.Request, len(attachedSLOs.Items))
+		for i, item := range attachedSLOs.Items {
+			requests[i] = reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      item.Name,
+					Namespace: item.Namespace,
+				},
+			}
+		}
+		return requests
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SLOReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := r.createIndices(mgr); err != nil {
+		return err
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openslov1.SLO{}).
 		Owns(&monitoringv1.PrometheusRule{}).
 		Watches(
 			&openslov1.SLI{},
-			handler.EnqueueRequestForOwner(
-				mgr.GetScheme(),
-				mgr.GetRESTMapper(),
-				&openslov1.SLO{}),
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSli(mgr.GetClient())),
 		).
 		Complete(r)
 }

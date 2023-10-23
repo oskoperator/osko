@@ -52,7 +52,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	err := r.Get(ctx, req.NamespacedName, slo)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("SLO resource not found. Object must be deleted.")
+			log.Info("SLO resource not found. Object must have been deleted.")
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, errGetSLO)
@@ -238,12 +238,11 @@ func (r *SLOReconciler) createIndices(mgr ctrl.Manager) error {
 			if slo.Spec.IndicatorRef == nil {
 				return nil
 			}
-
 			return []string{*slo.Spec.IndicatorRef}
 		})
 }
 
-func (r *SLOReconciler) findObjectsForSli(c client.Client) func(ctx context.Context, a client.Object) []reconcile.Request {
+func (r *SLOReconciler) findObjectsForSli() func(ctx context.Context, a client.Object) []reconcile.Request {
 	return func(ctx context.Context, a client.Object) []reconcile.Request {
 		attachedSLOs := &openslov1.SLOList{}
 		listOpts := &client.ListOptions{
@@ -278,7 +277,7 @@ func (r *SLOReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&monitoringv1.PrometheusRule{}).
 		Watches(
 			&openslov1.SLI{},
-			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSli(mgr.GetClient())),
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSli()),
 		).
 		Complete(r)
 }

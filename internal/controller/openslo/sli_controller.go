@@ -37,16 +37,15 @@ type SLIReconciler struct {
 func (r *SLIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	var sli openslov1.SLI
-
-	err := r.Get(ctx, req.NamespacedName, &sli)
+	sli := &openslov1.SLI{}
+	err := r.Get(ctx, req.NamespacedName, sli)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("SLI deleted")
+			log.Info("SLI resource not found. Object must have been deleted.")
 			return ctrl.Result{}, nil
 		}
 
-		log.Error(err, errGetDS)
+		log.Error(err, errGetSLI)
 		return ctrl.Result{}, nil
 	}
 

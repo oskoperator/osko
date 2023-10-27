@@ -19,6 +19,14 @@ spec:
       jsonPath: .status.ready
       name: Status
       type: string
+    - description: The time window for the SLO resource
+      jsonPath: .spec.timeWindow[0].duration
+      name: Window
+      type: string
+    - description: The time when the SLO resource was created
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1
     schema:
       openAPIV3Schema:
@@ -201,57 +209,93 @@ spec:
                 maxLength: 1050
                 type: string
               indicator:
-                description: SLISpec defines the desired state of SLI
                 properties:
-                  description:
-                    maxLength: 1050
-                    type: string
-                  ratioMetric:
+                  metadata:
                     properties:
-                      bad:
-                        properties:
-                          metricSource:
-                            properties:
-                              metricSourceRef:
-                                type: string
-                              spec:
-                                type: string
-                              type:
-                                type: string
-                            type: object
+                      annotations:
+                        additionalProperties:
+                          type: string
                         type: object
-                      counter:
-                        type: boolean
-                      good:
-                        properties:
-                          metricSource:
-                            properties:
-                              metricSourceRef:
-                                type: string
-                              spec:
-                                type: string
-                              type:
-                                type: string
-                            type: object
-                        type: object
-                      raw:
-                        properties:
-                          metricSource:
-                            properties:
-                              metricSourceRef:
-                                type: string
-                              spec:
-                                type: string
-                              type:
-                                type: string
-                            type: object
-                        type: object
-                      rawType:
-                        enum:
-                        - success
-                        - failure
+                      displayName:
                         type: string
-                      total:
+                      finalizers:
+                        items:
+                          type: string
+                        type: array
+                      labels:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                    type: object
+                  spec:
+                    description: SLISpec defines the desired state of SLI
+                    properties:
+                      description:
+                        maxLength: 1050
+                        type: string
+                      ratioMetric:
+                        properties:
+                          bad:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    type: string
+                                  type:
+                                    type: string
+                                type: object
+                            type: object
+                          counter:
+                            type: boolean
+                          good:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    type: string
+                                  type:
+                                    type: string
+                                type: object
+                            type: object
+                          raw:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    type: string
+                                  type:
+                                    type: string
+                                type: object
+                            type: object
+                          rawType:
+                            enum:
+                            - success
+                            - failure
+                            type: string
+                          total:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    type: string
+                                  type:
+                                    type: string
+                                type: object
+                            type: object
+                        type: object
+                      thresholdMetric:
                         properties:
                           metricSource:
                             properties:
@@ -262,18 +306,6 @@ spec:
                               type:
                                 type: string
                             type: object
-                        type: object
-                    type: object
-                  thresholdMetric:
-                    properties:
-                      metricSource:
-                        properties:
-                          metricSourceRef:
-                            type: string
-                          spec:
-                            type: string
-                          type:
-                            type: string
                         type: object
                     type: object
                 type: object

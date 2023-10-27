@@ -780,8 +780,8 @@ func (in *SLOSpec) DeepCopyInto(out *SLOSpec) {
 	*out = *in
 	if in.Indicator != nil {
 		in, out := &in.Indicator, &out.Indicator
-		*out = new(SLISpec)
-		**out = **in
+		*out = new(Indicator)
+		(*in).DeepCopyInto(*out)
 	}
 	if in.IndicatorRef != nil {
 		in, out := &in.IndicatorRef, &out.IndicatorRef

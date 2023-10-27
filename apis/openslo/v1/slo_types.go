@@ -54,7 +54,7 @@ type TimeWindowSpec struct {
 type SLOSpec struct {
 	Description  Description `json:"description,omitempty"`
 	Service      string      `json:"service,omitempty"`
-	Indicator    *SLISpec    `json:"indicator,omitempty"`
+	Indicator    *Indicator  `json:"indicator,omitempty"`
 	IndicatorRef *string     `json:"indicatorRef,omitempty"`
 	// +kubebuilder:validation:MaxItems=1
 	TimeWindow []TimeWindowSpec `json:"timeWindow,omitempty"`
@@ -78,6 +78,8 @@ type SLOStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:printcolumn:name="Status",type=string,JSONPath=.status.ready,description="The reason for the current status of the SLO resource"
+//+kubebuilder:printcolumn:name="Window",type=string,JSONPath=.spec.timeWindow[0].duration,description="The time window for the SLO resource"
+//+kubebuilder:printcolumn:name="Age",type=date,JSONPath=.metadata.creationTimestamp,description="The time when the SLO resource was created"
 
 // SLO is the Schema for the slos API
 type SLO struct {

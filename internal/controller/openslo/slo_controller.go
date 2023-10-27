@@ -62,48 +62,53 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// Get SLI from SLO's ref
 	if slo.Spec.IndicatorRef != nil {
 		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, sli)
-	} else if slo.Spec.Indicator != nil {
-		//TODO: Create SLI from SLO's indicator spec
-	}
+		if err != nil {
+			apierrors.IsNotFound(err)
+			{
+				log.Error(err, errGetSLI)
+				err = utils.UpdateStatus(
+					ctx,
+					slo,
+					r.Client,
+					"Ready",
+					metav1.ConditionFalse,
+					"SLIObjectNotFound",
+					"SLI Object not found",
+				)
+				if err != nil {
+					log.Error(err, "Failed to update SLO status")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{}, err
+			}
+		}
 
-	if err != nil {
-		apierrors.IsNotFound(err)
-		{
-			log.Error(err, errGetSLI)
+		// Set SLI instance as the owner and controller.
+		if err := ctrl.SetControllerReference(slo, sli, r.Scheme); err != nil {
 			err = utils.UpdateStatus(
 				ctx,
 				slo,
 				r.Client,
 				"Ready",
 				metav1.ConditionFalse,
-				"SLIObjectNotFound",
-				"SLI Object not found",
+				"FailedToSetSLIOwner",
+				"Failed to set SLI owner reference",
 			)
 			if err != nil {
 				log.Error(err, "Failed to update SLO status")
 				return ctrl.Result{}, err
 			}
+			log.Error(err, "Failed to set owner reference for SLI")
 			return ctrl.Result{}, err
 		}
-	}
-
-	// Set SLI instance as the owner and controller.
-	if err := ctrl.SetControllerReference(slo, sli, r.Scheme); err != nil {
-		err = utils.UpdateStatus(
-			ctx,
-			slo,
-			r.Client,
-			"Ready",
-			metav1.ConditionFalse,
-			"FailedToSetSLIOwner",
-			"Failed to set SLI owner reference",
-		)
-		if err != nil {
-			log.Error(err, "Failed to update SLO status")
-			return ctrl.Result{}, err
+	} else if slo.Spec.Indicator != nil {
+		log.Info("SLO has an inline SLI")
+		sli.Name = slo.Spec.Indicator.Metadata.Name
+		sli.Spec.Description = slo.Spec.Indicator.Spec.Description
+		if slo.Spec.Indicator.Spec.RatioMetric != (openslov1.RatioMetricSpec{}) {
+			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
 		}
-		log.Error(err, "Failed to set owner reference for SLI")
-		return ctrl.Result{}, err
+		log.Info("SLI created", "SLI Name", sli.Name, "SLI Namespace", sli.Namespace, "SLI RatioMetric", sli.Spec.RatioMetric)
 	}
 
 	// Check if this PrometheusRule already exists

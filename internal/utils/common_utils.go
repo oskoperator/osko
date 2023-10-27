@@ -5,6 +5,7 @@ import (
 	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strings"
 	"time"
 )
 
@@ -56,4 +57,25 @@ func UpdateStatus(ctx context.Context, slo *openslov1.SLO, r client.Client, cond
 	slo.Status.Conditions = updateCondition(slo.Status.Conditions, condition)
 	slo.Status.Ready = reason
 	return r.Status().Update(ctx, slo)
+}
+
+func ExtractMetricNameFromQuery(query string) string {
+	index := strings.Index(query, "{")
+	if index == -1 {
+		return ""
+	}
+
+	subStr := query[:index]
+	return subStr
+}
+
+func MergeLabels(ms ...map[string]string) map[string]string {
+	res := map[string]string{}
+	for _, m := range ms {
+		for k, v := range m {
+			res[k] = v
+		}
+	}
+
+	return res
 }

@@ -56,7 +56,7 @@ The following labels should be present next to the metric (where applicable):
 
 ## Pros and Cons of the Options
 
-### Prometheus Recording Rule naming convention - With part of slo in nam
+### Prometheus Recording Rule naming convention - With part of slo in name
 
 `slo:loki_request_duration_seconds_count:ratio_good:28d`
 

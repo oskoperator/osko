@@ -209,31 +209,21 @@ func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.
 
 	// for now, total and good are required. bad is optional and is calculated as (total - good) if not provided
 	// TODO: validate that the SLO budgeting method is Occurrences and that the SLIs are all ratio metrics in other case throw an error
-	totalRule.Record = fmt.Sprintf("osko:ratio_indicator_total:rate%s", defaultRateWindow)
+	totalRule.Record = fmt.Sprintf("osko_sli_ratio_total")
 	totalRule.Expr = intstr.Parse(fmt.Sprintf("sum(increase(%s[%s]))",
 		sli.Spec.RatioMetric.Total.MetricSource.Spec,
 		defaultRateWindow,
 	))
-	totalRule.Labels = utils.MergeLabels(
-		map[string]string{
-			"metric": utils.ExtractMetricNameFromQuery(sli.Spec.RatioMetric.Total.MetricSource.Spec),
-		},
-		slo.Labels,
-	)
+	totalRule.Labels = utils.GenerateMetricLabels(slo, sli)
 
 	monitoringRules = append(monitoringRules, totalRule)
 
-	goodRule.Record = fmt.Sprintf("osko:ratio_indicator_good:rate%s", defaultRateWindow)
+	goodRule.Record = fmt.Sprintf("osko_sli_ratio_good")
 	goodRule.Expr = intstr.Parse(fmt.Sprintf("sum(increase(%s[%s]))",
 		sli.Spec.RatioMetric.Good.MetricSource.Spec,
 		defaultRateWindow,
 	))
-	goodRule.Labels = utils.MergeLabels(
-		map[string]string{
-			"metric": utils.ExtractMetricNameFromQuery(sli.Spec.RatioMetric.Good.MetricSource.Spec),
-		},
-		slo.Labels,
-	)
+	goodRule.Labels = utils.GenerateMetricLabels(slo, sli)
 
 	monitoringRules = append(monitoringRules, goodRule)
 
@@ -251,17 +241,12 @@ func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.
 	)
 
 	if sli.Spec.RatioMetric.Bad != (openslov1.MetricSpec{}) {
-		badRule.Record = fmt.Sprintf("osko:ratio_indicator_bad:rate%s", defaultRateWindow)
+		badRule.Record = fmt.Sprint("osko_sli_ratio_bad")
 		badRule.Expr = intstr.Parse(fmt.Sprintf("sum(increase(%s[%s]))",
 			sli.Spec.RatioMetric.Bad.MetricSource.Spec,
 			defaultRateWindow,
 		))
-		badRule.Labels = utils.MergeLabels(
-			map[string]string{
-				"metric": utils.ExtractMetricNameFromQuery(sli.Spec.RatioMetric.Bad.MetricSource.Spec),
-			},
-			slo.Labels,
-		)
+		badRule.Labels = utils.GenerateMetricLabels(slo, sli)
 		basicRuleQuery = fmt.Sprintf("(1-%s) * %s[%s:%s] - %s[%s:%s])",
 			slo.Spec.Objectives[0].Target,
 			totalRule.Record,
@@ -275,14 +260,14 @@ func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.
 	}
 
 	mRule := monitoringv1.Rule{
-		Record: fmt.Sprintf("osko:error_budget:rate%s", slo.Spec.TimeWindow[0].Duration),
+		Record: fmt.Sprint("osko_error_budget_available"),
 		Expr:   intstr.Parse(fmt.Sprint(basicRuleQuery)),
-		Labels: utils.MergeLabels(
-			slo.Labels,
-		),
+		Labels: utils.GenerateMetricLabels(slo, sli),
 	}
 
 	monitoringRules = append(monitoringRules, mRule)
+
+	// Calculate Error ratios for 1h, 6h
 
 	rule := &monitoringv1.PrometheusRule{
 		TypeMeta: metav1.TypeMeta{

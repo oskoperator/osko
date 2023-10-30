@@ -69,6 +69,15 @@ func ExtractMetricNameFromQuery(query string) string {
 	return subStr
 }
 
+func GenerateMetricLabels(slo *openslov1.SLO, sli *openslov1.SLI) map[string]string {
+	return map[string]string{
+		"sli_name": sli.Name,
+		"slo_name": slo.Name,
+		"service":  slo.Spec.Service,
+		"window":   string(slo.Spec.TimeWindow[0].Duration),
+	}
+}
+
 func MergeLabels(ms ...map[string]string) map[string]string {
 	res := map[string]string{}
 	for _, m := range ms {

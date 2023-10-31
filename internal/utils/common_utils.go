@@ -2,10 +2,13 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
+	v1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strings"
 	"time"
 )
 
@@ -20,6 +23,20 @@ type MetricLabelParams struct {
 	Sli        *openslov1.SLI
 	TimeWindow string
 	Labels     map[string]string
+}
+
+type RuleConfig struct {
+	Sli                 *openslov1.SLI
+	Slo                 *openslov1.SLO
+	BaseRule            *v1.Rule
+	RuleType            string
+	RuleName            string
+	Expr                string
+	RateWindow          string
+	TimeWindow          string
+	LabelGenerator      LabelGeneratorParams
+	SupportiveRule      *RuleConfig
+	MetricLabelCompiler *MetricLabelParams
 }
 
 // UpdateCondition checks if the condition of the given type is already in the slice
@@ -72,23 +89,20 @@ func UpdateStatus(ctx context.Context, slo *openslov1.SLO, r client.Client, cond
 	return r.Status().Update(ctx, slo)
 }
 
-func ExtractMetricNameFromQuery(query string) string {
-	index := strings.Index(query, "{")
-	if index == -1 {
-		return ""
+func (m MetricLabelParams) NewMetricLabelCompiler(rule *v1.Rule, window string) string {
+	labelString := ""
+	emptyRule := v1.Rule{}
+	if !reflect.DeepEqual(rule, emptyRule) {
+		windowVal := string(m.Slo.Spec.TimeWindow[0].Duration)
+		if window != "" {
+			windowVal = window
+		}
+		labelString = `sli_name="` + m.Sli.Name + `", slo_name="` + m.Slo.Name + `", service="` + m.Slo.Spec.Service + `", window="` + windowVal + `"`
+	} else {
+		for k, v := range rule.Labels {
+			m.Labels[k] = v
+		}
 	}
-
-	subStr := query[:index]
-	return subStr
-}
-
-func (m MetricLabelParams) NewMetricLabelCompiler() string {
-	window := string(m.Slo.Spec.TimeWindow[0].Duration)
-	if m.TimeWindow != "" {
-		window = m.TimeWindow
-	}
-
-	labelString := `sli_name="` + m.Sli.Name + `", slo_name="` + m.Slo.Name + `", service="` + m.Slo.Spec.Service + `", window="` + window + `"`
 	for k, v := range m.Labels {
 		labelString += `, ` + k + `="` + v + `"`
 	}
@@ -109,13 +123,32 @@ func (l LabelGeneratorParams) NewMetricLabelGenerator() map[string]string {
 	}
 }
 
-func MergeLabels(ms ...map[string]string) map[string]string {
-	res := map[string]string{}
-	for _, m := range ms {
-		for k, v := range m {
-			res[k] = v
-		}
+func (c RuleConfig) NewRatioRule(window string) (v1.Rule, v1.Rule) {
+	rule := v1.Rule{}
+	rule.Record = fmt.Sprintf("osko_%s", c.RuleName)
+	expr := fmt.Sprintf(c.Expr, c.Sli.Spec.RatioMetric.Total.MetricSource.Spec, window)
+	if c.RuleName != "bad" && c.Expr != "" {
+		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Total.MetricSource.Spec, window)
 	}
+	rule.Expr = intstr.Parse(expr)
+	c.TimeWindow = window
+	c.LabelGenerator.TimeWindow = c.TimeWindow
+	rule.Labels = c.LabelGenerator.NewMetricLabelGenerator()
 
-	return res
+	supportiveRule := c.NewSupportiveRule(window, rule)
+
+	return rule, supportiveRule
+}
+
+func (c RuleConfig) NewSupportiveRule(window string, baseRule v1.Rule) v1.Rule {
+	rule := v1.Rule{}
+	rule.Record = fmt.Sprintf("osko_%s", c.RuleName)
+	labels := c.SupportiveRule.MetricLabelCompiler.NewMetricLabelCompiler(&baseRule, baseRule.Labels["window"])
+	expr := fmt.Sprintf("sum(increase(%s{%s}[%s])) by (service, sli_name, slo_name)", baseRule.Record, labels, c.SupportiveRule.TimeWindow)
+	rule.Expr = intstr.Parse(expr)
+
+	c.LabelGenerator.TimeWindow = c.SupportiveRule.TimeWindow
+	rule.Labels = c.LabelGenerator.NewMetricLabelGenerator()
+
+	return rule
 }

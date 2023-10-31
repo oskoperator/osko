@@ -109,6 +109,22 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
 		}
 		log.Info("SLI created", "SLI Name", sli.Name, "SLI Namespace", sli.Namespace, "SLI RatioMetric", sli.Spec.RatioMetric)
+	} else {
+		err = utils.UpdateStatus(
+			ctx,
+			slo,
+			r.Client,
+			"Ready",
+			metav1.ConditionFalse,
+			"SLIObjectNotFound",
+			"SLI Object not found",
+		)
+		if err != nil {
+			log.Error(err, "Failed to update SLO status")
+			return ctrl.Result{}, err
+		}
+		log.Error(err, "SLO has no SLI reference")
+		return ctrl.Result{}, err
 	}
 
 	// Check if this PrometheusRule already exists
@@ -140,21 +156,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
-	for _, rule := range promRule.Spec.Groups[0].Rules {
-		if rule.Expr != intstr.Parse(fmt.Sprintf("sum(rate(%s[%s])) / sum(rate(%s[%s]))",
-			sli.Spec.RatioMetric.Good.MetricSource.Spec,
-			slo.Spec.TimeWindow[0].Duration,
-			sli.Spec.RatioMetric.Total.MetricSource.Spec,
-			slo.Spec.TimeWindow[0].Duration,
-		)) {
-			promRule.Spec.Groups[0].Rules[0].Expr = intstr.Parse(fmt.Sprintf("sum(rate(%s[%s])) / sum(rate(%s[%s]))",
-				sli.Spec.RatioMetric.Good.MetricSource.Spec,
-				slo.Spec.TimeWindow[0].Duration,
-				sli.Spec.RatioMetric.Total.MetricSource.Spec,
-				slo.Spec.TimeWindow[0].Duration,
-			))
-		}
-	}
+	//TODO: Update the PrometheusRule object and write the result back if there are any changes, possibly using reflect.DeepEqual and reflect.Copy
 
 	if err := r.Update(ctx, promRule); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -199,6 +201,95 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 }
 
 func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
+	var monitoringRules []monitoringv1.Rule
+	var totalRule monitoringv1.Rule
+	var goodRule monitoringv1.Rule
+	var badRule monitoringv1.Rule
+	var ratioRule monitoringv1.Rule
+	defaultRateWindow := "1m"
+	burnRateTimeWindows := []string{"1h", "6h", "3d"}
+	l := utils.LabelGeneratorParams{Slo: slo, Sli: sli}
+	m := utils.MetricLabelParams{Slo: slo, Sli: sli}
+
+	// for now, total and good are required. bad is optional and is calculated as (total - good) if not provided
+	// TODO: validate that the SLO budgeting method is Occurrences and that the SLIs are all ratio metrics in other case throw an error
+	totalRule.Record = fmt.Sprintf("osko_sli_ratio_total")
+	totalRule.Expr = intstr.Parse(fmt.Sprintf("sum(increase(%s[%s]))",
+		sli.Spec.RatioMetric.Total.MetricSource.Spec,
+		defaultRateWindow,
+	))
+	totalRule.Labels = l.NewMetricLabelGenerator()
+
+	monitoringRules = append(monitoringRules, totalRule)
+
+	goodRule.Record = fmt.Sprintf("osko_sli_ratio_good")
+	goodRule.Expr = intstr.Parse(fmt.Sprintf("sum(increase(%s[%s]))",
+		sli.Spec.RatioMetric.Good.MetricSource.Spec,
+		defaultRateWindow,
+	))
+	goodRule.Labels = l.NewMetricLabelGenerator()
+
+	monitoringRules = append(monitoringRules, goodRule)
+
+	basicRuleQuery := fmt.Sprintf("(1-%s) * sum(increase(%s{%s}[%s])) - (sum(increase(%s{%s}[%s])) - sum(increase(%s{%s}[%s])))",
+		slo.Spec.Objectives[0].Target,
+		totalRule.Record,
+		m.NewMetricLabelCompiler(),
+		slo.Spec.TimeWindow[0].Duration,
+		totalRule.Record,
+		m.NewMetricLabelCompiler(),
+		slo.Spec.TimeWindow[0].Duration,
+		goodRule.Record,
+		m.NewMetricLabelCompiler(),
+		slo.Spec.TimeWindow[0].Duration,
+	)
+
+	if sli.Spec.RatioMetric.Bad != (openslov1.MetricSpec{}) {
+		badRule.Record = fmt.Sprint("osko_sli_ratio_bad")
+		badRule.Expr = intstr.Parse(fmt.Sprintf("sum(increase(%s[%s]))",
+			sli.Spec.RatioMetric.Bad.MetricSource.Spec,
+			defaultRateWindow,
+		))
+		badRule.Labels = l.NewMetricLabelGenerator()
+		basicRuleQuery = fmt.Sprintf("(1-%s) * sum(increase(%s{%s}[%s])) - sum(increase(%s{%s}[%s])))",
+			slo.Spec.Objectives[0].Target,
+			totalRule.Record,
+			m.NewMetricLabelCompiler(),
+			slo.Spec.TimeWindow[0].Duration,
+			badRule.Expr.StrVal,
+			m.NewMetricLabelCompiler(),
+			slo.Spec.TimeWindow[0].Duration,
+		)
+		monitoringRules = append(monitoringRules, badRule)
+	}
+
+	mRule := monitoringv1.Rule{
+		Record: fmt.Sprint("osko_error_budget_available"),
+		Expr:   intstr.Parse(fmt.Sprint(basicRuleQuery)),
+		Labels: l.NewMetricLabelGenerator(),
+	}
+
+	monitoringRules = append(monitoringRules, mRule)
+
+	// Calculate Error ratios for 1h, 6h, 3d
+	for _, timeWindow := range burnRateTimeWindows {
+		l.TimeWindow = timeWindow
+		ratioRule.Record = fmt.Sprintf("osko_sli_ratio")
+		ratioRule.Expr = intstr.Parse(fmt.Sprintf("(sum(increase(%s{%s}[%s]))-sum(increase(%s{%s}[%s])))/sum(increase(%s{%s}[%s]))",
+			totalRule.Record,
+			m.NewMetricLabelCompiler(),
+			timeWindow,
+			goodRule.Record,
+			m.NewMetricLabelCompiler(),
+			timeWindow,
+			totalRule.Record,
+			m.NewMetricLabelCompiler(),
+			timeWindow,
+		))
+		ratioRule.Labels = l.NewMetricLabelGenerator()
+		monitoringRules = append(monitoringRules, ratioRule)
+	}
+
 	rule := &monitoringv1.PrometheusRule{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "monitoring.coreos.com/v1",
@@ -212,18 +303,11 @@ func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.
 		},
 		Spec: monitoringv1.PrometheusRuleSpec{
 			Groups: []monitoringv1.RuleGroup{{
-				Name: slo.Name,
-				Rules: []monitoringv1.Rule{{
-					Expr: intstr.Parse(fmt.Sprintf("sum(rate(%s[%s])) / sum(rate(%s[%s]))",
-						sli.Spec.RatioMetric.Good.MetricSource.Spec,
-						slo.Spec.TimeWindow[0].Duration,
-						sli.Spec.RatioMetric.Total.MetricSource.Spec,
-						slo.Spec.TimeWindow[0].Duration,
-					)),
-				}}}},
+				Name:  slo.Name,
+				Rules: monitoringRules,
+			}},
 		},
 	}
-
 	// Set SLO instance as the owner and controller.
 	err := ctrl.SetControllerReference(slo, rule, r.Scheme)
 	if err != nil {

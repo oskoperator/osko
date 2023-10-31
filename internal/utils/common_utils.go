@@ -9,6 +9,19 @@ import (
 	"time"
 )
 
+type LabelGeneratorParams struct {
+	Slo        *openslov1.SLO
+	Sli        *openslov1.SLI
+	TimeWindow string
+}
+
+type MetricLabelParams struct {
+	Slo        *openslov1.SLO
+	Sli        *openslov1.SLI
+	TimeWindow string
+	Labels     map[string]string
+}
+
 // UpdateCondition checks if the condition of the given type is already in the slice
 // if the condition already exists and has the same status, return the unmodified conditions
 // if the condition exists and has a different status, remove it and add the new one
@@ -69,12 +82,30 @@ func ExtractMetricNameFromQuery(query string) string {
 	return subStr
 }
 
-func GenerateMetricLabels(slo *openslov1.SLO, sli *openslov1.SLI) map[string]string {
+func (m MetricLabelParams) NewMetricLabelCompiler() string {
+	window := string(m.Slo.Spec.TimeWindow[0].Duration)
+	if m.TimeWindow != "" {
+		window = m.TimeWindow
+	}
+
+	labelString := `sli_name="` + m.Sli.Name + `", slo_name="` + m.Slo.Name + `", service="` + m.Slo.Spec.Service + `", window="` + window + `"`
+	for k, v := range m.Labels {
+		labelString += `, ` + k + `="` + v + `"`
+	}
+
+	return labelString
+}
+
+func (l LabelGeneratorParams) NewMetricLabelGenerator() map[string]string {
+	window := string(l.Slo.Spec.TimeWindow[0].Duration)
+	if l.TimeWindow != "" {
+		window = l.TimeWindow
+	}
 	return map[string]string{
-		"sli_name": sli.Name,
-		"slo_name": slo.Name,
-		"service":  slo.Spec.Service,
-		"window":   string(slo.Spec.TimeWindow[0].Duration),
+		"sli_name": l.Sli.Name,
+		"slo_name": l.Slo.Name,
+		"service":  l.Slo.Spec.Service,
+		"window":   window,
 	}
 }
 

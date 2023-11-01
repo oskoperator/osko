@@ -206,77 +206,88 @@ func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.
 	defaultRateWindow := "1m"
 	//burnRateTimeWindows := []string{"1h", "6h", "3d"}
 	sloTimeWindowDuration := string(slo.Spec.TimeWindow[0].Duration)
-	l := utils.LabelGeneratorParams{Slo: slo, Sli: sli}
 	m := utils.MetricLabelParams{Slo: slo, Sli: sli}
 
 	targetVector.Record = fmt.Sprintf("osko_slo_target")
 	targetVector.Expr = intstr.Parse(fmt.Sprintf("vector(%s)", slo.Spec.Objectives[0].Target))
-	l.TimeWindow = sloTimeWindowDuration
-	targetVector.Labels = l.NewMetricLabelGenerator()
+	m.TimeWindow = sloTimeWindowDuration
+	targetVector.Labels = m.NewMetricLabelGenerator()
 
 	// for now, total and good are required. bad is optional and is calculated as (total - good) if not provided
 	// TODO: validate that the SLO budgeting method is Occurrences and that the SLIs are all ratio metrics in other case throw an error
+	targetVectorConfig := utils.RuleConfig{
+		Record:              "slo_target",
+		Expr:                "",
+		TimeWindow:          sloTimeWindowDuration,
+		Slo:                 slo,
+		Sli:                 sli,
+		MetricLabelCompiler: &m,
+	}
+
 	totalRule28Config := utils.RuleConfig{
-		RuleName:            "sli_ratio_total",
+		Record:              "sli_ratio_total",
 		Expr:                "sum(increase(%s[%s]))",
 		TimeWindow:          sloTimeWindowDuration,
 		Slo:                 slo,
 		Sli:                 sli,
-		LabelGenerator:      l,
 		MetricLabelCompiler: &m,
 	}
 
 	goodRule28Config := utils.RuleConfig{
-		RuleName:            "sli_ratio_total",
+		Record:              "sli_ratio_total",
 		Expr:                "sum(increase(%s[%s]))",
 		TimeWindow:          sloTimeWindowDuration,
 		Slo:                 slo,
 		Sli:                 sli,
-		LabelGenerator:      l,
 		MetricLabelCompiler: &m,
 	}
 
 	badRule28Config := utils.RuleConfig{
-		RuleName:            "sli_ratio_total",
+		Record:              "sli_ratio_total",
 		Expr:                "sum(increase(%s[%s]))",
 		TimeWindow:          sloTimeWindowDuration,
 		Slo:                 slo,
 		Sli:                 sli,
-		LabelGenerator:      l,
 		MetricLabelCompiler: &m,
 	}
 
 	totalRuleConfig := utils.RuleConfig{
-		RuleName:            "sli_ratio_total",
+		Record:              "sli_ratio_total",
 		Expr:                "sum(increase(%s[%s]))",
 		TimeWindow:          defaultRateWindow,
 		Slo:                 slo,
 		Sli:                 sli,
 		SupportiveRule:      &totalRule28Config,
-		LabelGenerator:      l,
-		MetricLabelCompiler: nil,
+		MetricLabelCompiler: &m,
 	}
 
 	goodRuleConfig := utils.RuleConfig{
-		RuleName:            "sli_ratio_good",
+		Record:              "sli_ratio_good",
 		Expr:                "sum(increase(%s[%s]))",
 		TimeWindow:          defaultRateWindow,
 		Slo:                 slo,
 		Sli:                 sli,
 		SupportiveRule:      &goodRule28Config,
-		LabelGenerator:      l,
-		MetricLabelCompiler: nil,
+		MetricLabelCompiler: &m,
 	}
 
 	badRuleConfig := utils.RuleConfig{
-		RuleName:            "sli_ratio_bad",
+		Record:              "sli_ratio_bad",
 		Expr:                "sum(increase(%s[%s]))",
 		TimeWindow:          defaultRateWindow,
 		Slo:                 slo,
 		Sli:                 sli,
 		SupportiveRule:      &badRule28Config,
-		LabelGenerator:      l,
-		MetricLabelCompiler: nil,
+		MetricLabelCompiler: &m,
+	}
+
+	errorBudgetRuleConfig := utils.BudgetRuleConfig{
+		Record:           "error_budget_available",
+		Slo:              slo,
+		Sli:              sli,
+		TargetRuleConfig: &targetVectorConfig,
+		TotalRuleConfig:  &totalRuleConfig,
+		BadRuleConfig:    &badRuleConfig,
 	}
 
 	configs := []utils.RuleConfig{
@@ -290,6 +301,9 @@ func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.
 		monitoringRules = append(monitoringRules, rule)
 		monitoringRules = append(monitoringRules, supportiveRule)
 	}
+
+	monitoringRules = append(monitoringRules, targetVectorConfig.NewTargetRule())
+	monitoringRules = append(monitoringRules, errorBudgetRuleConfig.NewBudgetRule())
 
 	rule := &monitoringv1.PrometheusRule{
 		TypeMeta: metav1.TypeMeta{

@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -33,6 +34,8 @@ type SLOReconciler struct {
 //+kubebuilder:rbac:groups=openslo.com,resources=slos,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=openslo.com,resources=slos/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=openslo.com,resources=slos/finalizers,verbs=update
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -84,23 +87,23 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 
 		// Set SLI instance as the owner and controller.
-		if err := ctrl.SetControllerReference(slo, sli, r.Scheme); err != nil {
-			err = utils.UpdateStatus(
-				ctx,
-				slo,
-				r.Client,
-				"Ready",
-				metav1.ConditionFalse,
-				"FailedToSetSLIOwner",
-				"Failed to set SLI owner reference",
-			)
-			if err != nil {
-				log.Error(err, "Failed to update SLO status")
-				return ctrl.Result{}, err
-			}
-			log.Error(err, "Failed to set owner reference for SLI")
-			return ctrl.Result{}, err
-		}
+		//if err := ctrl.SetControllerReference(slo, sli, r.Scheme); err != nil {
+		//	err = utils.UpdateStatus(
+		//		ctx,
+		//		slo,
+		//		r.Client,
+		//		"Ready",
+		//		metav1.ConditionFalse,
+		//		"FailedToSetSLIOwner",
+		//		"Failed to set SLI owner reference",
+		//	)
+		//	if err != nil {
+		//		log.Error(err, "Failed to update SLO status")
+		//		return ctrl.Result{}, err
+		//	}
+		//	log.Error(err, "Failed to set owner reference for SLI")
+		//	return ctrl.Result{}, err
+		//}
 	} else if slo.Spec.Indicator != nil {
 		log.Info("SLO has an inline SLI")
 		sli.Name = slo.Spec.Indicator.Metadata.Name
@@ -108,7 +111,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		if slo.Spec.Indicator.Spec.RatioMetric != (openslov1.RatioMetricSpec{}) {
 			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
 		}
-		log.Info("SLI created", "SLI Name", sli.Name, "SLI Namespace", sli.Namespace, "SLI RatioMetric", sli.Spec.RatioMetric)
+		log.Info("SLI created", "SLI Name", sli.Name, "SLI Namespace", sli.Namespace)
 	} else {
 		err = utils.UpdateStatus(
 			ctx,
@@ -127,15 +130,14 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	// Check if this PrometheusRule already exists
 	promRule := &monitoringv1.PrometheusRule{}
 	err = r.Get(ctx, types.NamespacedName{
 		Name:      slo.Name,
 		Namespace: slo.Namespace,
 	}, promRule)
 
-	if err != nil && apierrors.IsNotFound(err) {
-		log.Info("PrometheusRule not found. Let's make some.")
+	if apierrors.IsNotFound(err) {
+		log.Info("PrometheusRule not found. Let's make one.")
 		promRule, err = r.createPrometheusRule(slo, sli)
 		if err != nil {
 			err = utils.UpdateStatus(
@@ -151,27 +153,10 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				log.Error(err, "Failed to update SLO status")
 				return ctrl.Result{}, err
 			}
-			log.Error(err, "Failed to create new PrometheusRule", "PrometheusRule.Namespace", promRule.Namespace, "PrometheusRule.Name", promRule.Name)
+			log.Error(err, "Failed to create new PrometheusRule")
 			return ctrl.Result{}, err
 		}
-	}
-
-	//TODO: Update the PrometheusRule object and write the result back if there are any changes, possibly using reflect.DeepEqual and reflect.Copy
-
-	if err := r.Update(ctx, promRule); err != nil {
-		if apierrors.IsNotFound(err) {
-			if err := r.Create(ctx, promRule); err != nil {
-				if err := r.Status().Update(ctx, slo); err != nil {
-					log.Error(err, "Failed to update SLO status")
-					slo.Status.Ready = "Failed"
-					if err := r.Status().Update(ctx, slo); err != nil {
-						log.Error(err, "Failed to update SLO ready status")
-						return ctrl.Result{}, err
-					}
-					return ctrl.Result{}, err
-				}
-			}
-		} else {
+		if err := r.Create(ctx, promRule); err != nil {
 			if err := r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO status")
 				slo.Status.Ready = "Failed"
@@ -181,6 +166,41 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				}
 				return ctrl.Result{}, err
 			}
+		}
+	} else {
+		//TODO: Update the PrometheusRule object and write the result back if there are any changes, possibly using reflect.DeepEqual and reflect.Copy
+
+		// This is the main logic for the PrometheusRule update
+		// Here we should take the existing PrometheusRule and update it with the new one
+		log.Info("PrometheusRule already exists, we should update it")
+		newPromRule, err := r.createPrometheusRule(slo, sli)
+		if err != nil {
+			log.Error(err, "Failed to create new PrometheusRule")
+			return ctrl.Result{}, err
+		}
+
+		compareResult := reflect.DeepEqual(promRule, newPromRule)
+		if compareResult {
+			log.Info("PrometheusRule is already up to date")
+			return ctrl.Result{}, nil
+		}
+
+		// has to be the same as for previous object, otherwise it will not be updated and throw an error
+		newPromRule.ResourceVersion = promRule.ResourceVersion
+
+		log.Info("Updating PrometheusRule", "PrometheusRule Name", newPromRule.Name, "PrometheusRule Namespace", newPromRule.Namespace)
+		if err := r.Update(ctx, newPromRule); err != nil {
+			log.Error(err, "Failed to update PrometheusRule")
+			return ctrl.Result{}, err
+		}
+		if err := r.Status().Update(ctx, slo); err != nil {
+			log.Error(err, "Failed to update SLO status")
+			slo.Status.Ready = "Failed"
+			if err := r.Status().Update(ctx, slo); err != nil {
+				log.Error(err, "Failed to update SLO ready status")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, err
 		}
 	}
 
@@ -197,97 +217,128 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	log.Info("Reconciling SLO")
+
 	return ctrl.Result{}, nil
+
 }
 
 func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
 	var monitoringRules []monitoringv1.Rule
-	var totalRule monitoringv1.Rule
-	var goodRule monitoringv1.Rule
-	var badRule monitoringv1.Rule
-	var ratioRule monitoringv1.Rule
+	var targetVector monitoringv1.Rule
 	defaultRateWindow := "1m"
-	burnRateTimeWindows := []string{"1h", "6h", "3d"}
-	l := utils.LabelGeneratorParams{Slo: slo, Sli: sli}
+	//burnRateTimeWindows := []string{"1h", "6h", "3d"}
+	sloTimeWindowDuration := string(slo.Spec.TimeWindow[0].Duration)
 	m := utils.MetricLabelParams{Slo: slo, Sli: sli}
+
+	targetVector.Record = "osko_slo_target"
+	targetVector.Expr = intstr.Parse(fmt.Sprintf("vector(%s)", slo.Spec.Objectives[0].Value))
+	m.TimeWindow = sloTimeWindowDuration
+	targetVector.Labels = m.NewMetricLabelGenerator()
 
 	// for now, total and good are required. bad is optional and is calculated as (total - good) if not provided
 	// TODO: validate that the SLO budgeting method is Occurrences and that the SLIs are all ratio metrics in other case throw an error
-	totalRule.Record = fmt.Sprintf("osko_sli_ratio_total")
-	totalRule.Expr = intstr.Parse(fmt.Sprintf("sum(increase(%s[%s]))",
-		sli.Spec.RatioMetric.Total.MetricSource.Spec,
-		defaultRateWindow,
-	))
-	totalRule.Labels = l.NewMetricLabelGenerator()
-
-	monitoringRules = append(monitoringRules, totalRule)
-
-	goodRule.Record = fmt.Sprintf("osko_sli_ratio_good")
-	goodRule.Expr = intstr.Parse(fmt.Sprintf("sum(increase(%s[%s]))",
-		sli.Spec.RatioMetric.Good.MetricSource.Spec,
-		defaultRateWindow,
-	))
-	goodRule.Labels = l.NewMetricLabelGenerator()
-
-	monitoringRules = append(monitoringRules, goodRule)
-
-	basicRuleQuery := fmt.Sprintf("(1-%s) * sum(increase(%s{%s}[%s])) - (sum(increase(%s{%s}[%s])) - sum(increase(%s{%s}[%s])))",
-		slo.Spec.Objectives[0].Target,
-		totalRule.Record,
-		m.NewMetricLabelCompiler(),
-		slo.Spec.TimeWindow[0].Duration,
-		totalRule.Record,
-		m.NewMetricLabelCompiler(),
-		slo.Spec.TimeWindow[0].Duration,
-		goodRule.Record,
-		m.NewMetricLabelCompiler(),
-		slo.Spec.TimeWindow[0].Duration,
-	)
-
-	if sli.Spec.RatioMetric.Bad != (openslov1.MetricSpec{}) {
-		badRule.Record = fmt.Sprint("osko_sli_ratio_bad")
-		badRule.Expr = intstr.Parse(fmt.Sprintf("sum(increase(%s[%s]))",
-			sli.Spec.RatioMetric.Bad.MetricSource.Spec,
-			defaultRateWindow,
-		))
-		badRule.Labels = l.NewMetricLabelGenerator()
-		basicRuleQuery = fmt.Sprintf("(1-%s) * sum(increase(%s{%s}[%s])) - sum(increase(%s{%s}[%s])))",
-			slo.Spec.Objectives[0].Target,
-			totalRule.Record,
-			m.NewMetricLabelCompiler(),
-			slo.Spec.TimeWindow[0].Duration,
-			badRule.Expr.StrVal,
-			m.NewMetricLabelCompiler(),
-			slo.Spec.TimeWindow[0].Duration,
-		)
-		monitoringRules = append(monitoringRules, badRule)
+	targetVectorConfig := utils.RuleConfig{
+		Record:              "slo_target",
+		Expr:                "",
+		TimeWindow:          sloTimeWindowDuration,
+		Slo:                 slo,
+		Sli:                 sli,
+		MetricLabelCompiler: &m,
 	}
 
-	mRule := monitoringv1.Rule{
-		Record: fmt.Sprint("osko_error_budget_available"),
-		Expr:   intstr.Parse(fmt.Sprint(basicRuleQuery)),
-		Labels: l.NewMetricLabelGenerator(),
+	totalRule28Config := utils.RuleConfig{
+		RuleType:            "total",
+		Record:              "sli_ratio_total",
+		Expr:                "sum(increase(%s[%s]))",
+		TimeWindow:          sloTimeWindowDuration,
+		Slo:                 slo,
+		Sli:                 sli,
+		MetricLabelCompiler: &m,
 	}
 
-	monitoringRules = append(monitoringRules, mRule)
+	goodRule28Config := utils.RuleConfig{
+		RuleType:            "good",
+		Record:              "sli_ratio_total",
+		Expr:                "sum(increase(%s[%s]))",
+		TimeWindow:          sloTimeWindowDuration,
+		Slo:                 slo,
+		Sli:                 sli,
+		MetricLabelCompiler: &m,
+	}
 
-	// Calculate Error ratios for 1h, 6h, 3d
-	for _, timeWindow := range burnRateTimeWindows {
-		l.TimeWindow = timeWindow
-		ratioRule.Record = fmt.Sprintf("osko_sli_ratio")
-		ratioRule.Expr = intstr.Parse(fmt.Sprintf("(sum(increase(%s{%s}[%s]))-sum(increase(%s{%s}[%s])))/sum(increase(%s{%s}[%s]))",
-			totalRule.Record,
-			m.NewMetricLabelCompiler(),
-			timeWindow,
-			goodRule.Record,
-			m.NewMetricLabelCompiler(),
-			timeWindow,
-			totalRule.Record,
-			m.NewMetricLabelCompiler(),
-			timeWindow,
-		))
-		ratioRule.Labels = l.NewMetricLabelGenerator()
-		monitoringRules = append(monitoringRules, ratioRule)
+	badRule28Config := utils.RuleConfig{
+		RuleType:            "bad",
+		Record:              "sli_ratio_total",
+		Expr:                "sum(increase(%s[%s]))",
+		TimeWindow:          sloTimeWindowDuration,
+		Slo:                 slo,
+		Sli:                 sli,
+		MetricLabelCompiler: &m,
+	}
+
+	totalRuleConfig := utils.RuleConfig{
+		RuleType:            "total",
+		Record:              "sli_ratio_total",
+		Expr:                "sum(increase(%s[%s]))",
+		TimeWindow:          defaultRateWindow,
+		Slo:                 slo,
+		Sli:                 sli,
+		SupportiveRule:      &totalRule28Config,
+		MetricLabelCompiler: &m,
+	}
+
+	goodRuleConfig := utils.RuleConfig{
+		RuleType:            "good",
+		Record:              "sli_ratio_good",
+		Expr:                "sum(increase(%s[%s]))",
+		TimeWindow:          defaultRateWindow,
+		Slo:                 slo,
+		Sli:                 sli,
+		SupportiveRule:      &goodRule28Config,
+		MetricLabelCompiler: &m,
+	}
+
+	badRuleConfig := utils.RuleConfig{
+		RuleType:            "bad",
+		Record:              "sli_ratio_bad",
+		Expr:                "sum(increase(%s[%s]))",
+		TimeWindow:          defaultRateWindow,
+		Slo:                 slo,
+		Sli:                 sli,
+		SupportiveRule:      &badRule28Config,
+		MetricLabelCompiler: &m,
+	}
+
+	errorBudgetRuleConfig := utils.BudgetRuleConfig{
+		Record:           "error_budget_available",
+		Slo:              slo,
+		Sli:              sli,
+		TargetRuleConfig: &targetVectorConfig,
+		TotalRuleConfig:  &totalRuleConfig,
+		BadRuleConfig:    &badRuleConfig,
+	}
+
+	configs := []utils.RuleConfig{
+		totalRuleConfig,
+		goodRuleConfig,
+		badRuleConfig,
+	}
+
+	for _, config := range configs {
+		rule, supportiveRule := config.NewRatioRule(config.TimeWindow)
+		monitoringRules = append(monitoringRules, rule)
+		monitoringRules = append(monitoringRules, supportiveRule)
+	}
+
+	monitoringRules = append(monitoringRules, targetVectorConfig.NewTargetRule())
+	monitoringRules = append(monitoringRules, errorBudgetRuleConfig.NewBudgetRule())
+
+	ruleGroup := []monitoringv1.RuleGroup{
+		{
+			Name:  slo.Name,
+			Rules: monitoringRules,
+		},
 	}
 
 	rule := &monitoringv1.PrometheusRule{
@@ -302,15 +353,11 @@ func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.
 			OwnerReferences: slo.OwnerReferences,
 		},
 		Spec: monitoringv1.PrometheusRuleSpec{
-			Groups: []monitoringv1.RuleGroup{{
-				Name:  slo.Name,
-				Rules: monitoringRules,
-			}},
+			Groups: ruleGroup,
 		},
 	}
 	// Set SLO instance as the owner and controller.
-	err := ctrl.SetControllerReference(slo, rule, r.Scheme)
-	if err != nil {
+	if err := ctrl.SetControllerReference(slo, rule, r.Scheme); err != nil {
 		return nil, err
 	}
 

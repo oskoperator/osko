@@ -126,12 +126,20 @@ func (m MetricLabelParams) NewMetricLabelGenerator() map[string]string {
 }
 
 func (c RuleConfig) NewRatioRule(window string) (monitoringv1.Rule, monitoringv1.Rule) {
+	var expr string
 	rule := monitoringv1.Rule{}
+
 	rule.Record = fmt.Sprintf("osko_%s", c.Record)
-	expr := fmt.Sprintf(c.Expr, c.Sli.Spec.RatioMetric.Total.MetricSource.Spec, window)
-	if c.Record != "bad" && c.Expr != "" {
+
+	switch c.RuleType {
+	case "total":
 		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Total.MetricSource.Spec, window)
+	case "bad":
+		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Bad.MetricSource.Spec, window)
+	case "good":
+		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Good.MetricSource.Spec, window)
 	}
+
 	rule.Expr = intstr.Parse(expr)
 	c.TimeWindow = window
 	c.MetricLabelCompiler.TimeWindow = c.TimeWindow

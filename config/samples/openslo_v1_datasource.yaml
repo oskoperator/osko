@@ -7,19 +7,15 @@ metadata:
     app.kubernetes.io/part-of: slo-kubernetes-operator
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: slo-kubernetes-operator
-  name: datasource-sample
+  name: datasource-main # should it have some special name/annotation?
 spec:
   description: Mimir Example Datasource
   type: mimir
   connectionDetails:
     mimir:
       address: https://mimir.monitoring.dev.heu.group/
-      multitenancy:
-        enabled: true
-        sourceTenants:
-          - billing
-          - infra
-        targetTenant: billing
-      ruler:
-        enabled: true
-        subpath: /prometheus/api/v1/rules
+      targetTenant: billing
+      sourceTenants:
+        - billing
+        - infra
+      syncPrometheusRules: true

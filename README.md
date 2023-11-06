@@ -4,9 +4,13 @@ This operator aims to provide it's users with simple management of SLIs, SLOs, a
 
 See the [design document](DESIGN.md) for more details on what `osko` aims to do.
 
+## Here be dragons!
+
+`osko` is in very active development, hardly functional and definitely not stable. Until a `v1` release comes around, use at your own risk.
+
 ## Test It Out
 
-1. You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
+1. You’ll need a Kubernetes cluster to run `osko`. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
    - refer to the [Installation and usage](https://github.com/kubernetes-sigs/kind#installation-and-usage) section of the [KIND](https://sigs.k8s.io/kind) README to use KIND.
 
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).

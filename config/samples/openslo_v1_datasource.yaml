@@ -12,10 +12,9 @@ spec:
   description: Mimir Example Datasource
   type: mimir
   connectionDetails:
-    mimir:
-      address: https://mimir.monitoring.dev.heu.group/
-      targetTenant: billing
-      sourceTenants:
-        - billing
-        - infra
-      syncPrometheusRules: true
+    address: https://mimir.monitoring.dev.heu.group/
+    targetTenant: billing
+    sourceTenants:
+      - billing
+      - infra
+    syncPrometheusRules: true

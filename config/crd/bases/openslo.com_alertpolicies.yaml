@@ -55,6 +55,8 @@ spec:
                           additionalProperties:
                             type: string
                           type: object
+                        displayName:
+                          type: string
                         finalizers:
                           items:
                             type: string

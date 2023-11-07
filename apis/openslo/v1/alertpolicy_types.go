@@ -7,7 +7,7 @@ import (
 type AlertPolicyNotificationTarget struct {
 	// +kubebuilder:validation:Enum=AlertNotificationTarget
 	Kind      string                       `json:"kind,omitempty"`
-	Metadata  ObjectMetaOpenSLO            `json:"metadata,omitempty"`
+	Metadata  metav1.ObjectMeta            `json:"metadata,omitempty"`
 	Spec      *AlertNotificationTargetSpec `json:"spec,omitempty"`
 	TargetRef *string                      `json:"targetRef,omitempty"`
 }
@@ -43,7 +43,7 @@ type AlertPolicyStatus struct {
 // AlertPolicy is the Schema for the alertpolicies API
 type AlertPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
-	ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   AlertPolicySpec   `json:"spec,omitempty"`
 	Status AlertPolicyStatus `json:"status,omitempty"`

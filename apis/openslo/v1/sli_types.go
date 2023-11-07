@@ -41,7 +41,7 @@ type SLIStatus struct {
 // SLI is the Schema for the slis API
 type SLI struct {
 	metav1.TypeMeta   `json:",inline"`
-	ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   SLISpec   `json:"spec,omitempty"`
 	Status SLIStatus `json:"status,omitempty"`

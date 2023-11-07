@@ -15,9 +15,9 @@ type ConnectionDetails struct {
 
 // DatasourceSpec defines the desired state of Datasource
 type DatasourceSpec struct {
-	Description       Description       `json:"description,omitempty"`
-	Type              string            `json:"type,omitempty"`
-	ConnectionDetails ConnectionDetails `json:"connectionDetails,omitempty"`
+	Description       Description            `json:"description,omitempty"`
+	Type              string                 `json:"type,omitempty"`
+	ConnectionDetails osko.ConnectionDetails `json:"connectionDetails,omitempty"`
 }
 
 // DatasourceStatus defines the observed state of Datasource
@@ -33,7 +33,7 @@ type DatasourceStatus struct {
 // Datasource is the Schema for the datasources API
 type Datasource struct {
 	metav1.TypeMeta   `json:",inline"`
-	ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   DatasourceSpec   `json:"spec,omitempty"`
 	Status DatasourceStatus `json:"status,omitempty"`

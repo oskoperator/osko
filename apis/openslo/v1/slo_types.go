@@ -9,13 +9,13 @@ type SLOAlertPolicy struct {
 	// +kubebuilder:validation:Enum=AlertPolicy
 	Kind string `json:"kind,omitempty"`
 	// +kubebuilder:crd:generateEmbeddedObjectMeta=true
-	Metadata       ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	Metadata       metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec           *AlertPolicySpec  `json:"spec,omitempty"`
 	AlertPolicyRef *string           `json:"alertPolicyRef,omitempty"`
 }
 
 type Indicator struct {
-	Metadata ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	Metadata metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec     SLISpec           `json:"spec,omitempty"`
 }
 

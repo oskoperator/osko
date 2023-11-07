@@ -35,61 +35,17 @@ spec:
             description: DatasourceSpec defines the desired state of Datasource
             properties:
               connectionDetails:
-                description: ConnectionDetails specify how to connect to your metrics
-                  data provider
-                maxProperties: 1
-                minProperties: 1
                 properties:
-                  cortex:
-                    properties:
-                      address:
-                        type: string
-                      multitenancy:
-                        properties:
-                          enabled:
-                            default: false
-                            type: boolean
-                          sourceTenants:
-                            items:
-                              type: string
-                            type: array
-                          targetTenant:
-                            type: string
-                        type: object
-                      ruler:
-                        properties:
-                          enabled:
-                            default: false
-                            type: boolean
-                          subpath:
-                            type: string
-                        type: object
-                    type: object
-                  mimir:
-                    properties:
-                      address:
-                        type: string
-                      multitenancy:
-                        properties:
-                          enabled:
-                            default: false
-                            type: boolean
-                          sourceTenants:
-                            items:
-                              type: string
-                            type: array
-                          targetTenant:
-                            type: string
-                        type: object
-                      ruler:
-                        properties:
-                          enabled:
-                            default: false
-                            type: boolean
-                          subpath:
-                            type: string
-                        type: object
-                    type: object
+                  address:
+                    type: string
+                  sourceTenants:
+                    items:
+                      type: string
+                    type: array
+                  syncPrometheusRules:
+                    type: boolean
+                  targetTenant:
+                    type: string
                 type: object
               description:
                 maxLength: 1050

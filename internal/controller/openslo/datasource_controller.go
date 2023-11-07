@@ -47,9 +47,9 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 	if ds.Spec.Type == "mimir" {
-		log.Info("Datasource Type is Mimir", "address", ds.Spec.ConnectionDetails.Mimir.Address)
+		log.Info("Datasource Type is Mimir", "address", ds.Spec.ConnectionDetails.Address)
 		client, err := api.NewClient(api.Config{
-			Address: ds.Spec.ConnectionDetails.Mimir.Address + "/prometheus",
+			Address: ds.Spec.ConnectionDetails.Address + "/prometheus",
 		})
 		if err != nil {
 			log.Error(err, errConnectDS)
@@ -65,7 +65,7 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	if ds.Spec.Type == "cortex" {
-		log.Info("Datasource Type is Cortex", "address", ds.Spec.ConnectionDetails.Cortex.Address)
+		log.Info("Datasource Type is Cortex", "address", ds.Spec.ConnectionDetails.Address)
 	}
 
 	log.Info("Datasource reconciled")

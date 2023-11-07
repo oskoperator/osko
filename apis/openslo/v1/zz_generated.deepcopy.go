@@ -194,7 +194,7 @@ func (in *AlertNotificationTargetStatus) DeepCopy() *AlertNotificationTargetStat
 func (in *AlertPolicy) DeepCopyInto(out *AlertPolicy) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	in.ObjectMetaOpenSLO.DeepCopyInto(&out.ObjectMetaOpenSLO)
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	in.Spec.DeepCopyInto(&out.Spec)
 	out.Status = in.Status
 }
@@ -404,7 +404,7 @@ func (in *ConnectionDetails) DeepCopy() *ConnectionDetails {
 func (in *Datasource) DeepCopyInto(out *Datasource) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	in.ObjectMetaOpenSLO.DeepCopyInto(&out.ObjectMetaOpenSLO)
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	in.Spec.DeepCopyInto(&out.Spec)
 	out.Status = in.Status
 }
@@ -603,7 +603,7 @@ func (in *RatioMetricSpec) DeepCopy() *RatioMetricSpec {
 func (in *SLI) DeepCopyInto(out *SLI) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	in.ObjectMetaOpenSLO.DeepCopyInto(&out.ObjectMetaOpenSLO)
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	out.Spec = in.Spec
 	out.Status = in.Status
 }
@@ -846,7 +846,7 @@ func (in *SLOStatus) DeepCopy() *SLOStatus {
 func (in *Service) DeepCopyInto(out *Service) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	in.ObjectMetaOpenSLO.DeepCopyInto(&out.ObjectMetaOpenSLO)
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	out.Spec = in.Spec
 	out.Status = in.Status
 }

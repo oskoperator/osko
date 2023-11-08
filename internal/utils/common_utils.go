@@ -145,13 +145,12 @@ func (c RuleConfig) NewRatioRule(window string) (monitoringv1.Rule, monitoringv1
 	c.MetricLabelCompiler.TimeWindow = c.TimeWindow
 	rule.Labels = c.MetricLabelCompiler.NewMetricLabelGenerator()
 
-	supportiveRule := c.NewSupportiveRule(window, rule)
+	supportiveRule := c.NewSupportiveRule(rule)
 
 	return rule, supportiveRule
 }
 
-func (c RuleConfig) NewSupportiveRule(window string, baseRule monitoringv1.Rule) monitoringv1.Rule {
-	rule := monitoringv1.Rule{}
+func (c RuleConfig) NewSupportiveRule(baseRule monitoringv1.Rule) (rule monitoringv1.Rule) {
 	rule.Record = fmt.Sprintf("osko_%s", c.Record)
 	labels := c.SupportiveRule.MetricLabelCompiler.NewMetricLabelCompiler(&baseRule, baseRule.Labels["window"])
 	expr := fmt.Sprintf("sum(increase(%s{%s}[%s])) by (service, sli_name, slo_name)", baseRule.Record, labels, c.SupportiveRule.TimeWindow)
@@ -163,15 +162,13 @@ func (c RuleConfig) NewSupportiveRule(window string, baseRule monitoringv1.Rule)
 	return rule
 }
 
-func (c RuleConfig) NewTargetRule() monitoringv1.Rule {
-	rule := monitoringv1.Rule{}
+func (c RuleConfig) NewTargetRule() (rule monitoringv1.Rule) {
 	rule.Record = fmt.Sprintf("osko_%s", c.Record)
 	rule.Expr = intstr.Parse(fmt.Sprintf("vector(%s)", c.Slo.Spec.Objectives[0].Target))
 	return rule
 }
 
-func (b BudgetRuleConfig) NewBudgetRule() monitoringv1.Rule {
-	rule := monitoringv1.Rule{}
+func (b BudgetRuleConfig) NewBudgetRule() (rule monitoringv1.Rule) {
 	rule.Record = fmt.Sprintf("osko_%s", b.Record)
 	expr := fmt.Sprintf("(1 - %s{%s}) * (%s{%s} - %s{%s})",
 		b.TargetRuleConfig.Record,
@@ -183,13 +180,4 @@ func (b BudgetRuleConfig) NewBudgetRule() monitoringv1.Rule {
 	)
 	rule.Expr = intstr.Parse(expr)
 	return rule
-}
-
-func GetRatioRule(ruleName string, monitoringRules []monitoringv1.Rule) monitoringv1.Rule {
-	for _, rule := range monitoringRules {
-		if rule.Record == ruleName {
-			return rule
-		}
-	}
-	return monitoringv1.Rule{}
 }

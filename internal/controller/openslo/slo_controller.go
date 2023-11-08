@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,7 +29,8 @@ const (
 // SLOReconciler reconciles a SLO object
 type SLOReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 //+kubebuilder:rbac:groups=openslo.com,resources=slos,verbs=get;list;watch;create;update;patch;delete
@@ -85,25 +87,6 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				return ctrl.Result{}, err
 			}
 		}
-
-		// Set SLI instance as the owner and controller.
-		//if err := ctrl.SetControllerReference(slo, sli, r.Scheme); err != nil {
-		//	err = utils.UpdateStatus(
-		//		ctx,
-		//		slo,
-		//		r.Client,
-		//		"Ready",
-		//		metav1.ConditionFalse,
-		//		"FailedToSetSLIOwner",
-		//		"Failed to set SLI owner reference",
-		//	)
-		//	if err != nil {
-		//		log.Error(err, "Failed to update SLO status")
-		//		return ctrl.Result{}, err
-		//	}
-		//	log.Error(err, "Failed to set owner reference for SLI")
-		//	return ctrl.Result{}, err
-		//}
 	} else if slo.Spec.Indicator != nil {
 		log.Info("SLO has an inline SLI")
 		sli.Name = slo.Spec.Indicator.Metadata.Name
@@ -112,6 +95,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
 		}
 		log.Info("SLI created", "SLI Name", sli.Name, "SLI Namespace", sli.Namespace)
+		r.Recorder.Event(slo, "Normal", "SLICreated", fmt.Sprintf("SLI %s created", sli.Name))
 	} else {
 		err = utils.UpdateStatus(
 			ctx,
@@ -124,6 +108,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		)
 		if err != nil {
 			log.Error(err, "Failed to update SLO status")
+			r.Recorder.Event(slo, "Error", "SLIObjectNotFound", "SLI Object not found")
 			return ctrl.Result{}, err
 		}
 		log.Error(err, "SLO has no SLI reference")
@@ -154,6 +139,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				return ctrl.Result{}, err
 			}
 			log.Error(err, "Failed to create new PrometheusRule")
+			r.Recorder.Event(slo, "Error", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
 			return ctrl.Result{}, err
 		}
 		if err := r.Create(ctx, promRule); err != nil {
@@ -168,14 +154,13 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			}
 		}
 	} else {
-		//TODO: Update the PrometheusRule object and write the result back if there are any changes, possibly using reflect.DeepEqual and reflect.Copy
-
 		// This is the main logic for the PrometheusRule update
 		// Here we should take the existing PrometheusRule and update it with the new one
 		log.Info("PrometheusRule already exists, we should update it")
 		newPromRule, err := r.createPrometheusRule(slo, sli)
 		if err != nil {
 			log.Error(err, "Failed to create new PrometheusRule")
+			r.Recorder.Event(slo, "Error", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
 			return ctrl.Result{}, err
 		}
 
@@ -217,6 +202,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	r.Recorder.Event(slo, "Normal", "PrometheusRuleCreated", "PrometheusRule created successfully")
 	log.Info("Reconciling SLO")
 
 	return ctrl.Result{}, nil
@@ -334,6 +320,14 @@ func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.
 	monitoringRules = append(monitoringRules, targetVectorConfig.NewTargetRule())
 	monitoringRules = append(monitoringRules, errorBudgetRuleConfig.NewBudgetRule())
 
+	objectMeta := metav1.ObjectMeta{
+		Name:            slo.Name,
+		Namespace:       slo.Namespace,
+		Labels:          slo.Labels,
+		Annotations:     slo.Annotations,
+		OwnerReferences: slo.OwnerReferences,
+	}
+
 	ruleGroup := []monitoringv1.RuleGroup{
 		{
 			Name:  slo.Name,
@@ -346,12 +340,7 @@ func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.
 			APIVersion: "monitoring.coreos.com/v1",
 			Kind:       "PrometheusRule",
 		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:            slo.Name,
-			Namespace:       slo.Namespace,
-			Labels:          slo.Labels,
-			OwnerReferences: slo.OwnerReferences,
-		},
+		ObjectMeta: objectMeta,
 		Spec: monitoringv1.PrometheusRuleSpec{
 			Groups: ruleGroup,
 		},

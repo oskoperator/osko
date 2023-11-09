@@ -3,11 +3,14 @@ module github.com/oskoperator/osko
 go 1.21
 
 require (
+	github.com/go-logr/logr v1.2.4
 	github.com/grafana/mimir v0.0.0-20231101181902-68d120862184
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.27.10
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.68.0
 	github.com/prometheus/client_golang v1.17.0
+	github.com/prometheus/prometheus v1.99.0
+	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.28.2
 	k8s.io/client-go v0.28.2
 	sigs.k8s.io/controller-runtime v0.16.2
@@ -38,7 +41,6 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
-	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.2.4 // indirect
 	github.com/go-openapi/jsonpointer v0.20.0 // indirect
@@ -100,7 +102,6 @@ require (
 	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/common/sigv4 v0.1.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
-	github.com/prometheus/prometheus v1.99.0 // indirect
 	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -139,7 +140,6 @@ require (
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.28.2 // indirect
 	k8s.io/apiextensions-apiserver v0.28.1 // indirect
 	k8s.io/component-base v0.28.1 // indirect

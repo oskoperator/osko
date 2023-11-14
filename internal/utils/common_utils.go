@@ -137,6 +137,9 @@ func (c RuleConfig) NewRatioRule(window string) (*monitoringv1.Rule, *monitoring
 
 	switch c.RuleType {
 	case "total":
+		if c.Sli.Spec.RatioMetric.Total.MetricSource.Spec == "" {
+			return nil, nil
+		}
 		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Total.MetricSource.Spec, window)
 	case "bad":
 		if c.Sli.Spec.RatioMetric.Bad.MetricSource.Spec == "" {
@@ -144,6 +147,9 @@ func (c RuleConfig) NewRatioRule(window string) (*monitoringv1.Rule, *monitoring
 		}
 		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Bad.MetricSource.Spec, window)
 	case "good":
+		if c.Sli.Spec.RatioMetric.Good.MetricSource.Spec == "" {
+			return nil, nil
+		}
 		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Good.MetricSource.Spec, window)
 	}
 

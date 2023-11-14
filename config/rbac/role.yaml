@@ -24,6 +24,20 @@ rules:
   - update
   - watch
 - apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheusrules/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheusrules/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - openslo.com
   resources:
   - alertconditions

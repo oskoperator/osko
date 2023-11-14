@@ -53,6 +53,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	sli := &openslov1.SLI{}
 	slo := &openslov1.SLO{}
+	newPromRule := &monitoringv1.PrometheusRule{}
 
 	err := r.Get(ctx, req.NamespacedName, slo)
 	if err != nil {
@@ -157,7 +158,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		// This is the main logic for the PrometheusRule update
 		// Here we should take the existing PrometheusRule and update it with the new one
 		log.Info("PrometheusRule already exists, we should update it")
-		newPromRule, err := r.createPrometheusRule(slo, sli)
+		newPromRule, err = r.createPrometheusRule(slo, sli)
 		if err != nil {
 			log.Error(err, "Failed to create new PrometheusRule")
 			r.Recorder.Event(slo, "Error", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
@@ -206,7 +207,6 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	log.Info("Reconciling SLO")
 
 	return ctrl.Result{}, nil
-
 }
 
 func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
@@ -313,8 +313,11 @@ func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.
 
 	for _, config := range configs {
 		rule, supportiveRule := config.NewRatioRule(config.TimeWindow)
-		monitoringRules = append(monitoringRules, rule)
-		monitoringRules = append(monitoringRules, supportiveRule)
+		if rule == nil || supportiveRule == nil {
+			continue
+		}
+		monitoringRules = append(monitoringRules, *rule)
+		monitoringRules = append(monitoringRules, *supportiveRule)
 	}
 
 	monitoringRules = append(monitoringRules, targetVectorConfig.NewTargetRule())

@@ -41,6 +41,17 @@ type BudgetRuleConfig struct {
 	TargetRuleConfig *RuleConfig
 }
 
+type DataSourceConfig struct {
+	DataSource *openslov1.Datasource
+}
+
+const (
+	TypeTotal = "total"
+	TypeBad   = "bad"
+	TypeGood  = "good"
+	ExprFmt   = "sum(increase(%s[%s]))"
+)
+
 // UpdateCondition checks if the condition of the given type is already in the slice
 // if the condition already exists and has the same status, return the unmodified conditions
 // if the condition exists and has a different status, remove it and add the new one
@@ -125,29 +136,40 @@ func (m MetricLabelParams) NewMetricLabelGenerator() map[string]string {
 	}
 }
 
-func (c RuleConfig) NewRatioRule(window string) (monitoringv1.Rule, monitoringv1.Rule) {
-	var expr string
-	rule := monitoringv1.Rule{}
-
-	rule.Record = fmt.Sprintf("osko_%s", c.Record)
-
+func (c RuleConfig) getFieldsByType() (string, error) {
 	switch c.RuleType {
-	case "total":
-		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Total.MetricSource.Spec, window)
-	case "bad":
-		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Bad.MetricSource.Spec, window)
-	case "good":
-		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Good.MetricSource.Spec, window)
+	case TypeTotal:
+		return c.Sli.Spec.RatioMetric.Total.MetricSource.Spec, nil
+	case TypeBad:
+		return c.Sli.Spec.RatioMetric.Bad.MetricSource.Spec, nil
+	case TypeGood:
+		return c.Sli.Spec.RatioMetric.Good.MetricSource.Spec, nil
+	default:
+		return "", fmt.Errorf("invalid RuleType: %s", c.RuleType)
+	}
+}
+
+func (c RuleConfig) NewRatioRule(window string) (*monitoringv1.Rule, *monitoringv1.Rule) {
+
+	field, err := c.getFieldsByType()
+	if err != nil || field == "" {
+		return nil, nil
 	}
 
-	rule.Expr = intstr.Parse(expr)
+	expr := fmt.Sprintf(ExprFmt, field, window)
+
+	rule := monitoringv1.Rule{
+		Record: fmt.Sprintf("osko_%s", c.Record),
+		Expr:   intstr.Parse(expr),
+	}
+
 	c.TimeWindow = window
 	c.MetricLabelCompiler.TimeWindow = c.TimeWindow
 	rule.Labels = c.MetricLabelCompiler.NewMetricLabelGenerator()
 
 	supportiveRule := c.NewSupportiveRule(rule)
 
-	return rule, supportiveRule
+	return &rule, &supportiveRule
 }
 
 func (c RuleConfig) NewSupportiveRule(baseRule monitoringv1.Rule) (rule monitoringv1.Rule) {
@@ -180,4 +202,13 @@ func (b BudgetRuleConfig) NewBudgetRule() (rule monitoringv1.Rule) {
 	)
 	rule.Expr = intstr.Parse(expr)
 	return rule
+}
+
+func (d DataSourceConfig) ParseTenantAnnotation() (tenants []string) {
+	if d.DataSource.Annotations["osko.dev/source-tenants"] != "" {
+		for _, tenant := range d.DataSource.Annotations["osko.dev/source-tenants"] {
+			tenants = append(tenants, string(tenant))
+		}
+	}
+	return tenants
 }

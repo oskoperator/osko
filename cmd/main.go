@@ -2,8 +2,9 @@ package main
 
 import (
 	"flag"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"os"
+
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -20,6 +21,7 @@ import (
 	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/apis/osko/v1alpha1"
 
+	monitoringcoreoscomcontroller "github.com/oskoperator/osko/internal/controller/monitoring.coreos.com"
 	openslov1controller "github.com/oskoperator/osko/internal/controller/openslo"
 	//+kubebuilder:scaffold:imports
 )
@@ -79,8 +81,9 @@ func main() {
 	}
 
 	if err = (&openslov1controller.DatasourceReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("datasource-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Datasource")
 		os.Exit(1)
@@ -119,6 +122,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AlertNotificationTarget")
+		os.Exit(1)
+	}
+	if err = (&monitoringcoreoscomcontroller.PrometheusRuleReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PrometheusRule")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

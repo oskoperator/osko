@@ -71,4 +71,14 @@ resources:
   kind: Service
   path: github.com/oskoperator/osko/apis/openslo/v1
   version: v1
+- controller: true
+  domain: openslo
+  group: osko
+  kind: PrometheusRule
+  version: v1alpha1
+- controller: true
+  domain: openslo
+  group: monitoring.coreos.com
+  kind: PrometheusRule
+  version: v1
 version: "3"

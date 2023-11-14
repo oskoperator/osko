@@ -2,10 +2,12 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -23,7 +25,8 @@ const (
 // DatasourceReconciler reconciles a Datasource object
 type DatasourceReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 //+kubebuilder:rbac:groups=openslo.com,resources=datasources,verbs=get;list;watch;create;update;patch;delete
@@ -33,9 +36,9 @@ type DatasourceReconciler struct {
 func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	var ds openslov1.Datasource
+	ds := &openslov1.Datasource{}
 
-	err := r.Get(ctx, req.NamespacedName, &ds)
+	err := r.Get(ctx, req.NamespacedName, ds)
 	if err != nil {
 		// ignore Datasource deletion
 		if apierrors.IsNotFound(err) {
@@ -46,31 +49,41 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Error(err, errGetDS)
 		return ctrl.Result{}, nil
 	}
-	if ds.Spec.Type == "mimir" {
+	switch ds.Spec.Type {
+	case "mimir":
 		log.Info("Datasource Type is Mimir", "address", ds.Spec.ConnectionDetails.Address)
-		client, err := api.NewClient(api.Config{
-			Address: ds.Spec.ConnectionDetails.Address + "/prometheus",
-		})
+		err = r.connectDatasource(ctx, ds)
 		if err != nil {
 			log.Error(err, errConnectDS)
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, err
 		}
-		api := v1.NewAPI(client)
-		result, _, err := api.Query(ctx, "up", time.Now())
-		if err != nil {
-			log.Error(err, errQueryAPI)
-			return ctrl.Result{}, nil
-		}
-		log.Info("Datasource successfully connected", "result", result)
-	}
-
-	if ds.Spec.Type == "cortex" {
+	case "cortex":
 		log.Info("Datasource Type is Cortex", "address", ds.Spec.ConnectionDetails.Address)
+		r.Recorder.Event(ds, "Warning", "NotImplemented", "Cortex support is not implemented yet")
 	}
 
 	log.Info("Datasource reconciled")
+	r.Recorder.Event(ds, "Normal", "DatasourceReconciled", "Datasource reconciled")
 
 	return ctrl.Result{}, nil
+}
+
+func (r *DatasourceReconciler) connectDatasource(ctx context.Context, ds *openslov1.Datasource) error {
+	client, err := api.NewClient(api.Config{
+		Address: ds.Spec.ConnectionDetails.Address + "/prometheus",
+	})
+	if err != nil {
+		r.Recorder.Event(ds, "Warning", "DatasourceConnectionFailed", "Datasource connection failed")
+		return err
+	}
+	api := v1.NewAPI(client)
+	result, _, err := api.Query(ctx, "up", time.Now())
+	if err != nil {
+		r.Recorder.Event(ds, "Warning", "DatasourceConnectionFailed", fmt.Sprintf("API query failed %s", result))
+		return err
+	}
+	r.Recorder.Event(ds, "Normal", "DatasourceConnected", "Datasource successfully connected")
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

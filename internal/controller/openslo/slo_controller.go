@@ -3,14 +3,9 @@ package controller
 import (
 	"context"
 	"fmt"
-	"github.com/go-logr/logr"
-	"github.com/grafana/mimir/pkg/mimirtool/rules/rwrulefmt"
 	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
-	"github.com/oskoperator/osko/internal/mimirtool"
 	"github.com/oskoperator/osko/internal/utils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	"github.com/prometheus/prometheus/model/rulefmt"
-	"gopkg.in/yaml.v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -58,6 +53,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	sli := &openslov1.SLI{}
 	slo := &openslov1.SLO{}
+	newPromRule := &monitoringv1.PrometheusRule{}
 
 	err := r.Get(ctx, req.NamespacedName, slo)
 	if err != nil {
@@ -162,7 +158,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		// This is the main logic for the PrometheusRule update
 		// Here we should take the existing PrometheusRule and update it with the new one
 		log.Info("PrometheusRule already exists, we should update it")
-		newPromRule, err := r.createPrometheusRule(slo, sli)
+		newPromRule, err = r.createPrometheusRule(slo, sli)
 		if err != nil {
 			log.Error(err, "Failed to create new PrometheusRule")
 			r.Recorder.Event(slo, "Error", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
@@ -211,7 +207,6 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	log.Info("Reconciling SLO")
 
 	return ctrl.Result{}, nil
-
 }
 
 func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
@@ -318,8 +313,11 @@ func (r *SLOReconciler) createPrometheusRule(slo *openslov1.SLO, sli *openslov1.
 
 	for _, config := range configs {
 		rule, supportiveRule := config.NewRatioRule(config.TimeWindow)
-		monitoringRules = append(monitoringRules, rule)
-		monitoringRules = append(monitoringRules, supportiveRule)
+		if rule == nil || supportiveRule == nil {
+			continue
+		}
+		monitoringRules = append(monitoringRules, *rule)
+		monitoringRules = append(monitoringRules, *supportiveRule)
 	}
 
 	monitoringRules = append(monitoringRules, targetVectorConfig.NewTargetRule())
@@ -395,53 +393,6 @@ func (r *SLOReconciler) findObjectsForSli() func(ctx context.Context, a client.O
 		}
 		return requests
 	}
-}
-
-func (r *SLOReconciler) createMimirRule(slo *openslov1.SLO, sli *openslov1.SLI, log logr.Logger) error {
-	mimirRuleGroup := rwrulefmt.RuleGroup{
-		RuleGroup: rulefmt.RuleGroup{
-			Name: slo.Name,
-			Rules: []rulefmt.RuleNode{
-				{
-					Record: yaml.Node{
-						Kind:  8,
-						Value: "osko_slo_target",
-					},
-					Expr: yaml.Node{
-						Kind:  8,
-						Value: "vector(0.999)",
-					},
-				},
-			},
-		},
-		RWConfigs: []rwrulefmt.RemoteWriteConfig{},
-	}
-
-	mClient := mimirtool.MimirClientConfig{
-		Address:  "https://localhost:8080",
-		TenantId: "infra",
-	}
-
-	mimirClient, err := mClient.NewMimirClient()
-	if err != nil {
-		log.Error(err, "Failed to create Mimir client")
-		return err
-	}
-
-	if err := mimirClient.CreateRuleGroup(context.Background(), "scratch_9", mimirRuleGroup); err != nil {
-		log.Error(err, "Failed to create rule group")
-		return err
-	}
-
-	rules, err := mimirClient.ListRules(context.Background(), "scratch_9")
-	if err != nil {
-		log.Error(err, "Failed to get rule group")
-		return err
-	}
-
-	log.Info(fmt.Sprintf("%+v", rules))
-
-	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

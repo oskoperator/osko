@@ -41,6 +41,10 @@ type BudgetRuleConfig struct {
 	TargetRuleConfig *RuleConfig
 }
 
+type DataSourceConfig struct {
+	DataSource *openslov1.Datasource
+}
+
 // UpdateCondition checks if the condition of the given type is already in the slice
 // if the condition already exists and has the same status, return the unmodified conditions
 // if the condition exists and has a different status, remove it and add the new one
@@ -125,7 +129,7 @@ func (m MetricLabelParams) NewMetricLabelGenerator() map[string]string {
 	}
 }
 
-func (c RuleConfig) NewRatioRule(window string) (monitoringv1.Rule, monitoringv1.Rule) {
+func (c RuleConfig) NewRatioRule(window string) (*monitoringv1.Rule, *monitoringv1.Rule) {
 	var expr string
 	rule := monitoringv1.Rule{}
 
@@ -135,6 +139,9 @@ func (c RuleConfig) NewRatioRule(window string) (monitoringv1.Rule, monitoringv1
 	case "total":
 		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Total.MetricSource.Spec, window)
 	case "bad":
+		if c.Sli.Spec.RatioMetric.Bad.MetricSource.Spec == "" {
+			return nil, nil
+		}
 		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Bad.MetricSource.Spec, window)
 	case "good":
 		expr = fmt.Sprintf("sum(increase(%s[%s]))", c.Sli.Spec.RatioMetric.Good.MetricSource.Spec, window)
@@ -147,7 +154,7 @@ func (c RuleConfig) NewRatioRule(window string) (monitoringv1.Rule, monitoringv1
 
 	supportiveRule := c.NewSupportiveRule(rule)
 
-	return rule, supportiveRule
+	return &rule, &supportiveRule
 }
 
 func (c RuleConfig) NewSupportiveRule(baseRule monitoringv1.Rule) (rule monitoringv1.Rule) {
@@ -180,4 +187,13 @@ func (b BudgetRuleConfig) NewBudgetRule() (rule monitoringv1.Rule) {
 	)
 	rule.Expr = intstr.Parse(expr)
 	return rule
+}
+
+func (d DataSourceConfig) ParseTenantAnnotation() (tenants []string) {
+	if d.DataSource.Annotations["osko.dev/source-tenants"] != "" {
+		for _, tenant := range d.DataSource.Annotations["osko.dev/source-tenants"] {
+			tenants = append(tenants, string(tenant))
+		}
+	}
+	return tenants
 }

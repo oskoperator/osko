@@ -21,6 +21,7 @@ import (
 	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/apis/osko/v1alpha1"
 
+	monitoringcoreoscomcontroller "github.com/oskoperator/osko/internal/controller/monitoring.coreos.com"
 	openslov1controller "github.com/oskoperator/osko/internal/controller/openslo"
 	//+kubebuilder:scaffold:imports
 )
@@ -121,6 +122,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AlertNotificationTarget")
+		os.Exit(1)
+	}
+	if err = (&monitoringcoreoscomcontroller.PrometheusRuleReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PrometheusRule")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

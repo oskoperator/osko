@@ -2,6 +2,7 @@ package monitoringcoreoscom
 
 import (
 	"context"
+	"fmt"
 	"github.com/go-logr/logr"
 	"github.com/grafana/mimir/pkg/mimirtool/rules/rwrulefmt"
 	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
@@ -128,6 +129,14 @@ func (r *PrometheusRuleReconciler) createMimirRule(log logr.Logger, rule *monito
 		log.Error(err, "Failed to create rule group")
 		return err
 	}
+
+	rules, err := mimirClient.ListRules(context.Background(), "osko")
+	if err != nil {
+		log.Error(err, "Failed to list rules")
+		return err
+	}
+
+	log.Info(fmt.Sprintf("%+v", rules))
 
 	return nil
 }

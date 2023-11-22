@@ -193,3 +193,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - osko.openslo
+  resources:
+  - mimirrules
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - osko.openslo
+  resources:
+  - mimirrules/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - osko.openslo
+  resources:
+  - mimirrules/status
+  verbs:
+  - get
+  - patch
+  - update

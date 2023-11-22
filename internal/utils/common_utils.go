@@ -3,7 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
-	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
+	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -205,10 +205,19 @@ func (b BudgetRuleConfig) NewBudgetRule() (rule monitoringv1.Rule) {
 }
 
 func (d DataSourceConfig) ParseTenantAnnotation() (tenants []string) {
-	if d.DataSource.Annotations["osko.dev/source-tenants"] != "" {
-		for _, tenant := range d.DataSource.Annotations["osko.dev/source-tenants"] {
-			tenants = append(tenants, string(tenant))
+	if len(d.DataSource.Spec.ConnectionDetails.SourceTenants) != 0 {
+		for _, tenant := range d.DataSource.Spec.ConnectionDetails.SourceTenants {
+			tenants = append(tenants, tenant)
 		}
 	}
 	return tenants
+}
+
+func ContainString(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }

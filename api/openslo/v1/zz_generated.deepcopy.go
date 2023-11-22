@@ -6,7 +6,7 @@
 package v1
 
 import (
-	"github.com/oskoperator/osko/apis/osko/v1alpha1"
+	"github.com/oskoperator/osko/api/osko/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )

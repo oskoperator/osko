@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	"github.com/prometheus/common/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -15,28 +16,34 @@ type MimirRuleSpec struct {
 
 // MimirRuleStatus defines the observed state of MimirRule
 type MimirRuleStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	LastEvaluationTime metav1.Time        `json:"lastEvaluationTime,omitempty"`
+	Ready              string             `json:"ready,omitempty"`
 }
 
 type RuleGroup struct {
-	Name          string   `json:"name"`
-	SourceTenants []string `json:"source_tenants,omitempty"`
-	Rules         []Rule   `json:"rules"`
+	Name                          string          `json:"name"`
+	SourceTenants                 []string        `json:"source_tenants,omitempty"`
+	Rules                         []Rule          `json:"rules"`
+	Interval                      model.Duration  `json:"interval,omitempty"`
+	EvaluationDelay               *model.Duration `json:"evaluation_delay,omitempty"`
+	Limit                         int             `json:"limit,omitempty"`
+	AlignEvaluationTimeOnInterval bool            `json:"align_evaluation_time_on_interval,omitempty"`
 }
 
 type Rule struct {
-	Record      string            `json:"record,omitempty"`
-	Alert       string            `json:"alert,omitempty"`
-	Expr        string            `json:"expr"`
-	For         string            `json:"for,omitempty"`
-	Labels      map[string]string `json:"labels,omitempty"`
-	Annotations map[string]string `json:"annotations,omitempty"`
+	Record        string            `json:"record,omitempty"`
+	Alert         string            `json:"alert,omitempty"`
+	Expr          string            `json:"expr"`
+	For           model.Duration    `json:"for,omitempty"`
+	KeepFiringFor model.Duration    `json:"keep_firing_for,omitempty"`
+	Labels        map[string]string `json:"labels,omitempty"`
+	Annotations   map[string]string `json:"annotations,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Ready",type=string,JSONPath=.status.ready,description="The reason for the current status of the MimirRule resource"
 
 // MimirRule is the Schema for the mimirrules API
 type MimirRule struct {

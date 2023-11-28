@@ -77,7 +77,7 @@ type SLOStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:printcolumn:name="Status",type=string,JSONPath=.status.ready,description="The reason for the current status of the SLO resource"
+//+kubebuilder:printcolumn:name="Ready",type=string,JSONPath=.status.ready,description="The reason for the current status of the SLO resource"
 //+kubebuilder:printcolumn:name="Window",type=string,JSONPath=.spec.timeWindow[0].duration,description="The time window for the SLO resource"
 //+kubebuilder:printcolumn:name="Age",type=date,JSONPath=.metadata.creationTimestamp,description="The time when the SLO resource was created"
 

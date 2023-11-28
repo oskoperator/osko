@@ -73,7 +73,7 @@ func updateCondition(conditions []metav1.Condition, newCondition metav1.Conditio
 	}
 
 	// Filter the existing condition (if it exists)
-	updatedConditions := []metav1.Condition{}
+	var updatedConditions []metav1.Condition
 	for _, condition := range conditions {
 		if condition.Type != newCondition.Type {
 			updatedConditions = append(updatedConditions, condition)
@@ -82,23 +82,22 @@ func updateCondition(conditions []metav1.Condition, newCondition metav1.Conditio
 
 	// Append the new condition
 	newCondition.LastTransitionTime = metav1.NewTime(time.Now())
-
 	updatedConditions = append(updatedConditions, newCondition)
 
 	return updatedConditions
 }
 
-func UpdateStatus(ctx context.Context, slo *openslov1.SLO, r client.Client, conditionType string, status metav1.ConditionStatus, reason string, message string) error {
+func UpdateStatus(ctx context.Context, slo *openslov1.SLO, r client.Client, conditionType string, status metav1.ConditionStatus, message string) error {
 	// Update the conditions based on provided arguments
 	condition := metav1.Condition{
 		Type:               conditionType,
 		Status:             status,
-		Reason:             reason,
+		Reason:             string(status),
 		Message:            message,
 		LastTransitionTime: metav1.NewTime(time.Now()),
 	}
 	slo.Status.Conditions = updateCondition(slo.Status.Conditions, condition)
-	slo.Status.Ready = reason
+	slo.Status.Ready = string(status)
 	return r.Status().Update(ctx, slo)
 }
 
@@ -187,6 +186,7 @@ func (c RuleConfig) NewSupportiveRule(baseRule monitoringv1.Rule) (rule monitori
 func (c RuleConfig) NewTargetRule() (rule monitoringv1.Rule) {
 	rule.Record = fmt.Sprintf("osko_%s", c.Record)
 	rule.Expr = intstr.Parse(fmt.Sprintf("vector(%s)", c.Slo.Spec.Objectives[0].Target))
+	rule.Labels = c.MetricLabelCompiler.NewMetricLabelGenerator()
 	return rule
 }
 

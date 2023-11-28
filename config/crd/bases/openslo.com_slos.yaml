@@ -17,7 +17,7 @@ spec:
   - additionalPrinterColumns:
     - description: The reason for the current status of the SLO resource
       jsonPath: .status.ready
-      name: Status
+      name: Ready
       type: string
     - description: The time window for the SLO resource
       jsonPath: .spec.timeWindow[0].duration

@@ -2,12 +2,8 @@ package monitoringcoreoscom
 
 import (
 	"context"
-	"github.com/go-logr/logr"
-	mimirclient "github.com/grafana/mimir/pkg/mimirtool/client"
-	"github.com/grafana/mimir/pkg/mimirtool/rules/rwrulefmt"
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/helpers"
-	"github.com/oskoperator/osko/internal/mimirtool"
 	"github.com/oskoperator/osko/internal/utils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -19,17 +15,13 @@ import (
 	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
-	mimirRuleNamespace = "osko"
-	objectiveRef       = ".metaData.ownerReferences.name"
-	datasourceRef      = ".metaData.annotations.datasource"
-	mimirRuleFinalizer = "finalizer.mimir.osko.dev"
+	objectiveRef = ".metaData.ownerReferences.name"
 )
 
 // PrometheusRuleReconciler reconciles a PrometheusRule object
@@ -60,9 +52,6 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	sli := &openslov1.SLI{}
 	prometheusRule := &monitoringv1.PrometheusRule{}
 	newPrometheusRule := &monitoringv1.PrometheusRule{}
-	mimirRuleGroup := &rwrulefmt.RuleGroup{}
-	newMimirRuleGroup := &rwrulefmt.RuleGroup{}
-	mimirClient := &mimirclient.MimirClient{}
 
 	err := r.Get(ctx, req.NamespacedName, prometheusRule)
 	if err != nil {
@@ -97,44 +86,6 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	mClient := mimirtool.MimirClientConfig{
-		Address:  ds.Spec.ConnectionDetails.Address,
-		TenantId: ds.Spec.ConnectionDetails.TargetTenant,
-	}
-
-	mimirClient, err = mClient.NewMimirClient()
-	if err != nil {
-		log.Error(err, "Failed to create Mimir client")
-		return ctrl.Result{}, err
-	}
-
-	mimirRuleGroup = r.getMimirRuleGroup(log, mimirClient, prometheusRule)
-
-	isPrometheusRuleMarkedToBeDeleted := prometheusRule.GetDeletionTimestamp() != nil
-	if isPrometheusRuleMarkedToBeDeleted {
-		log.Info("--- PrometheusRule is marked to be deleted ---")
-		if utils.ContainString(prometheusRule.GetFinalizers(), mimirRuleFinalizer) {
-			err := r.deleteMimirRuleGroup(log, mimirClient, mimirRuleGroup)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			log.Info("PrometheusRule finalizers completed")
-			controllerutil.RemoveFinalizer(prometheusRule, mimirRuleFinalizer)
-			err = r.Update(ctx, prometheusRule)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			log.Info("PrometheusRule can be deleted now")
-			return ctrl.Result{}, nil
-		}
-	}
-
-	if !utils.ContainString(prometheusRule.GetFinalizers(), mimirRuleFinalizer) {
-		if err := r.addFinalizer(log, prometheusRule); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
 	if apierrors.IsNotFound(err) {
 		log.Info("PrometheusRule not found. Let's make one.")
 		prometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
@@ -145,7 +96,6 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				r.Client,
 				"Ready",
 				metav1.ConditionFalse,
-				"FailedToCreatePrometheusRule",
 				"Failed to create Prometheus Rule",
 			)
 			if err != nil {
@@ -167,118 +117,52 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				return ctrl.Result{}, err
 			}
 		} else {
-			// This is the main logic for the PrometheusRule update
-			// Here we should take the existing PrometheusRule and update it with the new one
-			log.Info("PrometheusRule already exists, we should update it")
-			newPrometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
-			if err != nil {
-				log.Error(err, "Failed to create new PrometheusRule")
-				return ctrl.Result{}, err
-			}
-			newMimirRuleGroup, err = mimirtool.NewMimirRuleGroup(prometheusRule, ds)
-			if err != nil {
-				log.Error(err, "Failed to create new Mimir rule group")
-				return ctrl.Result{}, err
-			}
-
-			compareResult := reflect.DeepEqual(prometheusRule, newPrometheusRule)
-			if compareResult {
-				log.Info("PrometheusRule is already up to date")
-				return ctrl.Result{}, nil
-			}
-
-			// has to be the same as for previous object, otherwise it will not be updated and throw an error
-			newPrometheusRule.ResourceVersion = prometheusRule.ResourceVersion
-
-			log.Info("Updating PrometheusRule", "PrometheusRule Name", newPrometheusRule.Name, "PrometheusRule Namespace", newPrometheusRule.Namespace)
-			if err := r.Update(ctx, newPrometheusRule); err != nil {
-				log.Error(err, "Failed to update PrometheusRule")
-				return ctrl.Result{}, err
-			}
+			log.Info("PrometheusRule created successfully")
+			r.Recorder.Event(slo, "Normal", "PrometheusRuleCreated", "PrometheusRule created successfully")
+			slo.Status.Ready = "True"
 			if err := r.Status().Update(ctx, slo); err != nil {
-				log.Error(err, "Failed to update SLO status")
-				slo.Status.Ready = "Failed"
-				if err := r.Status().Update(ctx, slo); err != nil {
-					log.Error(err, "Failed to update SLO ready status")
-					return ctrl.Result{}, err
-				}
-				return ctrl.Result{}, err
-			}
-			err := r.updateMimirRuleGroup(log, mimirClient, mimirRuleGroup, newMimirRuleGroup)
-			if err != nil {
-				log.Error(err, "Failed to update Mimir rule group")
-				return ctrl.Result{}, err
+				log.Error(err, "Failed to update SLO ready status")
+				return ctrl.Result{}, nil
 			}
 		}
 	}
 
-	err = r.createMimirRuleGroup(log, mimirClient, prometheusRule, ds)
+	// Update PrometheusRule
+	// This is the main logic for the PrometheusRule update
+	// Here we should take the existing PrometheusRule and update it with the new one
+	log.Info("PrometheusRule already exists, we should update it")
+	newPrometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
 	if err != nil {
-		log.Error(err, "Failed to create Mimir rule")
+		log.Error(err, "Failed to create new PrometheusRule")
+		return ctrl.Result{}, err
+	}
+
+	compareResult := reflect.DeepEqual(prometheusRule, newPrometheusRule)
+	if compareResult {
+		log.Info("PrometheusRule is already up to date")
+		return ctrl.Result{}, nil
+	}
+
+	// has to be the same as for previous object, otherwise it will not be updated and throw an error
+	newPrometheusRule.ResourceVersion = prometheusRule.ResourceVersion
+
+	log.Info("Updating PrometheusRule", "PrometheusRule Name", newPrometheusRule.Name, "PrometheusRule Namespace", newPrometheusRule.Namespace)
+	if err := r.Update(ctx, newPrometheusRule); err != nil {
+		log.Error(err, "Failed to update PrometheusRule")
+		return ctrl.Result{}, err
+	}
+	if err := r.Status().Update(ctx, slo); err != nil {
+		log.Error(err, "Failed to update SLO status")
+		slo.Status.Ready = "Failed"
+		if err := r.Status().Update(ctx, slo); err != nil {
+			log.Error(err, "Failed to update SLO ready status")
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	log.Info("PrometheusRule reconciled")
 	return ctrl.Result{}, nil
-}
-
-func (r *PrometheusRuleReconciler) getMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, rule *monitoringv1.PrometheusRule) *rwrulefmt.RuleGroup {
-	mimirRuleGroup, err := mimirClient.GetRuleGroup(context.Background(), mimirRuleNamespace, rule.Name)
-	if err != nil {
-		log.Error(err, "Failed to get rule group")
-		return nil
-	}
-
-	return mimirRuleGroup
-}
-
-func (r *PrometheusRuleReconciler) createMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, rule *monitoringv1.PrometheusRule, ds *openslov1.Datasource) error {
-	mimirRuleGroup, err := mimirtool.NewMimirRuleGroup(rule, ds)
-	if err != nil {
-		log.Error(err, "Failed to create Mimir rule group")
-		return err
-	}
-
-	if err := mimirClient.CreateRuleGroup(context.Background(), mimirRuleNamespace, *mimirRuleGroup); err != nil {
-		log.Error(err, "Failed to create rule group")
-		return err
-	}
-
-	return nil
-}
-
-func (r *PrometheusRuleReconciler) deleteMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, ruleGroup *rwrulefmt.RuleGroup) error {
-	if err := mimirClient.DeleteRuleGroup(context.Background(), mimirRuleNamespace, ruleGroup.Name); err != nil {
-		log.Error(err, "Failed to delete rule group")
-		return err
-	}
-
-	return nil
-}
-
-func (r *PrometheusRuleReconciler) updateMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, existingGroup *rwrulefmt.RuleGroup, desiredGroup *rwrulefmt.RuleGroup) error {
-	log.Info("Updating Mimir rule group")
-	if reflect.DeepEqual(existingGroup, desiredGroup) {
-		log.Info("Mimir rule group is already up to date")
-		return nil
-	}
-	err := r.deleteMimirRuleGroup(log, mimirClient, existingGroup)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (r *PrometheusRuleReconciler) addFinalizer(log logr.Logger, rule *monitoringv1.PrometheusRule) error {
-	log.Info("Adding Finalizer for the PrometheusRule")
-	controllerutil.AddFinalizer(rule, mimirRuleFinalizer)
-
-	err := r.Update(context.Background(), rule)
-	if err != nil {
-		log.Error(err, "Failed to update PrometheusRule with finalizer")
-		return err
-	}
-	return nil
 }
 
 func (r *PrometheusRuleReconciler) createIndices(mgr ctrl.Manager) error {
@@ -330,8 +214,9 @@ func (r *PrometheusRuleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&openslov1.SLO{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSlo()),
-		).Watches(
-		&openslov1.Datasource{},
-		handler.EnqueueRequestsFromMapFunc(r.findObjectsForSlo())).
+		).
+		Watches(
+			&openslov1.Datasource{},
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSlo())).
 		Complete(r)
 }

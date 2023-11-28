@@ -2,8 +2,9 @@ package controller
 
 import (
 	"context"
-	"fmt"
+	"github.com/go-logr/logr"
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
+	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
 	"github.com/oskoperator/osko/internal/helpers"
 	"github.com/oskoperator/osko/internal/utils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -13,17 +14,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
-	indicatorRef = ".spec.indicatorRef"
-	errGetSLO    = "could not get SLO Object"
+	indicatorRef       = ".spec.indicatorRef"
+	errGetSLO          = "could not get SLO Object"
+	mimirRuleFinalizer = "finalizer.mimir.osko.dev"
 )
 
 // SLOReconciler reconciles a SLO object
@@ -49,13 +51,11 @@ type SLOReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.15.0/pkg/reconcile
 func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	log := ctrllog.FromContext(ctx)
+	log.Info("Reconciling SLO")
 
 	sli := &openslov1.SLI{}
 	slo := &openslov1.SLO{}
-	prometheusRule := &monitoringv1.PrometheusRule{}
-	newPrometheusRule := &monitoringv1.PrometheusRule{}
-
 	err := r.Get(ctx, req.NamespacedName, slo)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -79,7 +79,6 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 					r.Client,
 					"Ready",
 					metav1.ConditionFalse,
-					"SLIObjectNotFound",
 					"SLI Object not found",
 				)
 				if err != nil {
@@ -96,18 +95,8 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		if slo.Spec.Indicator.Spec.RatioMetric != (openslov1.RatioMetricSpec{}) {
 			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
 		}
-		log.Info("SLI created", "SLI Name", sli.Name, "SLI Namespace", sli.Namespace)
-		r.Recorder.Event(slo, "Normal", "SLICreated", fmt.Sprintf("SLI %s created", sli.Name))
 	} else {
-		err = utils.UpdateStatus(
-			ctx,
-			slo,
-			r.Client,
-			"Ready",
-			metav1.ConditionFalse,
-			"SLIObjectNotFound",
-			"SLI Object not found",
-		)
+		err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
 		if err != nil {
 			log.Error(err, "Failed to update SLO status")
 			r.Recorder.Event(slo, "Error", "SLIObjectNotFound", "SLI Object not found")
@@ -125,7 +114,47 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if apierrors.IsNotFound(err) {
 		log.Info("PrometheusRule not found. Let's make one.")
-		prometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
+		promRule, err = helpers.CreatePrometheusRule(slo, sli)
+		if err != nil {
+			err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule")
+			if err != nil {
+				log.Error(err, "Failed to update SLO status")
+				return ctrl.Result{}, err
+			}
+			log.Error(err, "Failed to create new PrometheusRule")
+			return ctrl.Result{}, err
+		}
+		if err := r.Create(ctx, promRule); err != nil {
+			r.Recorder.Event(slo, "Error", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
+			if err := r.Status().Update(ctx, promRule); err != nil {
+				log.Error(err, "Failed to update SLO status")
+				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule"); err != nil {
+					log.Error(err, "Failed to update SLO ready status")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{}, err
+			}
+		} else {
+			log.Info("PrometheusRule created successfully")
+			r.Recorder.Event(slo, "Normal", "PrometheusRuleCreated", "PrometheusRule created successfully")
+			slo.Status.Ready = "True"
+			if err := r.Status().Update(ctx, slo); err != nil {
+				log.Error(err, "Failed to update SLO ready status")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
+		}
+	}
+
+	mimirRule := &oskov1alpha1.MimirRule{}
+	err = r.Get(ctx, types.NamespacedName{
+		Name:      slo.Name,
+		Namespace: slo.Namespace,
+	}, mimirRule)
+
+	if apierrors.IsNotFound(err) {
+		log.Info("MimirRule not found. Let's make one.")
+		mimirRule, err = helpers.NewMimirRule(slo, promRule)
 		if err != nil {
 			err = utils.UpdateStatus(
 				ctx,
@@ -133,8 +162,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				r.Client,
 				"Ready",
 				metav1.ConditionFalse,
-				"FailedToCreatePrometheusRule",
-				"Failed to create Prometheus Rule",
+				"Failed to create Mimir Rule Object",
 			)
 			if err != nil {
 				log.Error(err, "Failed to update SLO status")
@@ -143,66 +171,36 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			log.Error(err, "Failed to create new PrometheusRule")
 			return ctrl.Result{}, err
 		}
-		if err := r.Create(ctx, prometheusRule); err != nil {
-			r.Recorder.Event(slo, "Error", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
-			if err := r.Status().Update(ctx, prometheusRule); err != nil {
+		if err = r.Create(ctx, mimirRule); err != nil {
+			r.Recorder.Event(slo, "Error", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
+			if err = r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO status")
-				slo.Status.Ready = "Failed"
-				if err := r.Status().Update(ctx, slo); err != nil {
+				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule"); err != nil {
 					log.Error(err, "Failed to update SLO ready status")
 					return ctrl.Result{}, err
 				}
 				return ctrl.Result{}, err
 			}
 		} else {
-			// This is the main logic for the PrometheusRule update
-			// Here we should take the existing PrometheusRule and update it with the new one
-			log.Info("PrometheusRule already exists, we should update it")
-			newPrometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
-			if err != nil {
-				log.Error(err, "Failed to create new PrometheusRule")
-				return ctrl.Result{}, err
-			}
-			compareResult := reflect.DeepEqual(prometheusRule, newPrometheusRule)
-			if compareResult {
-				log.Info("PrometheusRule is already up to date")
-				return ctrl.Result{}, nil
-			}
-
-			// has to be the same as for previous object, otherwise it will not be updated and throw an error
-			newPrometheusRule.ResourceVersion = prometheusRule.ResourceVersion
-
-			log.Info("Updating PrometheusRule", "PrometheusRule Name", newPrometheusRule.Name, "PrometheusRule Namespace", newPrometheusRule.Namespace)
-			if err := r.Update(ctx, newPrometheusRule); err != nil {
-				log.Error(err, "Failed to update PrometheusRule")
-				return ctrl.Result{}, err
-			}
+			log.Info("MimirRule created successfully")
+			r.Recorder.Event(slo, "Normal", "MimirRuleCreated", "MimirRule created successfully")
+			slo.Status.Ready = "True"
 			if err := r.Status().Update(ctx, slo); err != nil {
-				log.Error(err, "Failed to update SLO status")
-				slo.Status.Ready = "Failed"
-				if err := r.Status().Update(ctx, slo); err != nil {
-					log.Error(err, "Failed to update SLO ready status")
+				log.Error(err, "Failed to update SLO ready status")
+				return ctrl.Result{}, err
+			}
+			if !utils.ContainString(mimirRule.GetFinalizers(), mimirRuleFinalizer) {
+				if err := r.addFinalizer(log, mimirRule); err != nil {
 					return ctrl.Result{}, err
 				}
-				return ctrl.Result{}, err
 			}
+			return ctrl.Result{}, nil
 		}
 	}
-	err = utils.UpdateStatus(
-		ctx,
-		slo,
-		r.Client,
-		"Ready",
-		metav1.ConditionTrue,
-		"PrometheusRuleCreated",
-		"PrometheusRule created",
-	)
-	if err != nil {
+
+	if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionTrue, "PrometheusRule created"); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	r.Recorder.Event(slo, "Normal", "PrometheusRuleCreated", "PrometheusRule created successfully")
-	log.Info("Reconciling SLO")
 
 	return ctrl.Result{}, nil
 }
@@ -246,6 +244,18 @@ func (r *SLOReconciler) findObjectsForSli() func(ctx context.Context, a client.O
 	}
 }
 
+func (r *SLOReconciler) addFinalizer(log logr.Logger, rule *oskov1alpha1.MimirRule) error {
+	log.Info("Adding Finalizer for the MimirRule")
+	controllerutil.AddFinalizer(rule, mimirRuleFinalizer)
+
+	err := r.Update(context.Background(), rule)
+	if err != nil {
+		log.Error(err, "Failed to update MimirRule with finalizer")
+		return err
+	}
+	return nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *SLOReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := r.createIndices(mgr); err != nil {
@@ -254,6 +264,7 @@ func (r *SLOReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openslov1.SLO{}).
 		Owns(&monitoringv1.PrometheusRule{}).
+		Owns(&oskov1alpha1.MimirRule{}).
 		Watches(
 			&openslov1.SLI{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSli()),

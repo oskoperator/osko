@@ -14,7 +14,12 @@ spec:
     singular: mimirrule
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: The reason for the current status of the MimirRule resource
+      jsonPath: .status.ready
+      name: Ready
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: MimirRule is the Schema for the mimirrules API
@@ -39,6 +44,22 @@ spec:
                   to remove/update
                 items:
                   properties:
+                    align_evaluation_time_on_interval:
+                      type: boolean
+                    evaluation_delay:
+                      description: Duration wraps time.Duration. It is used to parse
+                        the custom duration format from YAML. This type should not
+                        propagate beyond the scope of input/output processing.
+                      format: int64
+                      type: integer
+                    interval:
+                      description: Duration wraps time.Duration. It is used to parse
+                        the custom duration format from YAML. This type should not
+                        propagate beyond the scope of input/output processing.
+                      format: int64
+                      type: integer
+                    limit:
+                      type: integer
                     name:
                       type: string
                     rules:
@@ -53,7 +74,19 @@ spec:
                           expr:
                             type: string
                           for:
-                            type: string
+                            description: Duration wraps time.Duration. It is used
+                              to parse the custom duration format from YAML. This
+                              type should not propagate beyond the scope of input/output
+                              processing.
+                            format: int64
+                            type: integer
+                          keep_firing_for:
+                            description: Duration wraps time.Duration. It is used
+                              to parse the custom duration format from YAML. This
+                              type should not propagate beyond the scope of input/output
+                              processing.
+                            format: int64
+                            type: integer
                           labels:
                             additionalProperties:
                               type: string
@@ -80,9 +113,6 @@ spec:
             description: MimirRuleStatus defines the observed state of MimirRule
             properties:
               conditions:
-                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                  of cluster Important: Run "make" to regenerate code after modifying
-                  this file'
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource. --- This struct is intended for direct
@@ -150,6 +180,11 @@ spec:
                   - type
                   type: object
                 type: array
+              lastEvaluationTime:
+                format: date-time
+                type: string
+              ready:
+                type: string
             type: object
         type: object
     served: true

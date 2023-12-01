@@ -18,11 +18,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
-	oskov1alpha1 "github.com/oskoperator/osko/apis/osko/v1alpha1"
+	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
+	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
 
-	monitoringcoreoscomcontroller "github.com/oskoperator/osko/internal/controller/monitoring.coreos.com"
 	openslov1controller "github.com/oskoperator/osko/internal/controller/openslo"
+	oskocontroller "github.com/oskoperator/osko/internal/controller/osko"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -124,11 +124,12 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "AlertNotificationTarget")
 		os.Exit(1)
 	}
-	if err = (&monitoringcoreoscomcontroller.PrometheusRuleReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+	if err = (&oskocontroller.MimirRuleReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("mimirrule-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "PrometheusRule")
+		setupLog.Error(err, "unable to create controller", "controller", "MimirRule")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

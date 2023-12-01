@@ -74,6 +74,10 @@ build: manifests generate fmt vet ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
 
+.PHONY: run-pretty-debug
+run-pretty-debug: manifests generate fmt vet ## Run a controller from your host with pretty debug output.
+	go run ./cmd/main.go --zap-log-level=debug 2>&1 | zap-pretty
+
 # If you wish built the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/

@@ -1,0 +1,12 @@
+apiVersion: osko.openslo/v1alpha1
+kind: MimirRule
+metadata:
+  labels:
+    app.kubernetes.io/name: mimirrule
+    app.kubernetes.io/instance: mimirrule-sample
+    app.kubernetes.io/part-of: osko
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: osko
+  name: mimirrule-sample
+spec:
+  # TODO(user): Add fields here

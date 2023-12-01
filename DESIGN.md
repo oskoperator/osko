@@ -31,3 +31,57 @@ If the target system is unable to reconcile the created [`PrometheusRule`](https
 - We should look into how to implement [Multiwindow, Multi-Burn-Rate Alerts](https://sre.google/workbook/alerting-on-slos/#6-multiwindow-multi-burn-rate-alerts) based on the OpenSLO spec
   <!-- TODO(fourstepper): a little bookmark here for now, move somewhere else later -->
 - [Objectives](https://github.com/OpenSLO/OpenSLO#objectives) are cool
+
+## Design
+
+```mermaid
+---
+Title: OSKO Dependency Graph
+---
+flowchart LR;
+subgraph userspace
+sloObject(SLO)
+sliObject(SLI)
+dataSourceObject(DataSource)
+end
+subgraph controllerspace
+prometheusRuleObject(PrometheusRule)
+end
+
+sloController(SLO Controller)
+mimirRuleController(Mimir Rule Controller)
+sliController(SLI Controller)
+dataSourceController(DataSource Controller)
+
+subgraph external
+mimir[Mimir]
+cortex[Cortex]
+end
+
+cortexRuleController(Optional: Cortex Rule Controller)
+cortexRuleController --> |Watch| prometheusRuleObject
+cortexRuleController --> |Updates| cortex
+
+mimirRuleController --> |Watch| prometheusRuleObject
+mimirRuleController --> |Updates| mimir
+
+sloController --> |Own| sloObject
+sloController --> |Watch| sliObject
+sloController --> |Watch| dataSourceObject
+sloController --> |Own| prometheusRuleObject
+
+sliController --> |Own| sliObject
+sliController --> |Watch| dataSourceObject
+
+dataSourceController --> |Own| dataSourceObject
+
+sloObject --> |Reference| sliObject
+sliObject --> |Reference| dataSourceObject
+%% reference slo -> datasource asi netreba, to bereme na zaklade SLIs ne? Dela to pak
+%% hnusnej graf :D, kdyztak zkus odkomentovat
+%%  sloObject --> |Reference| dataSourceObject
+%%  prometheusRuleObject --> |Reference| dataSourceObject
+
+
+
+```

@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"time"
 
-	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
+	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 )
 
 const (

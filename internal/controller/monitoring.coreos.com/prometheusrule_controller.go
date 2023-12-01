@@ -2,30 +2,39 @@ package monitoringcoreoscom
 
 import (
 	"context"
-	"github.com/go-logr/logr"
-	"github.com/grafana/mimir/pkg/mimirtool/rules/rwrulefmt"
-	openslov1 "github.com/oskoperator/osko/apis/openslo/v1"
-	"github.com/oskoperator/osko/internal/mimirtool"
+	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
+	"github.com/oskoperator/osko/internal/helpers"
 	"github.com/oskoperator/osko/internal/utils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	"github.com/prometheus/prometheus/model/rulefmt"
-	"gopkg.in/yaml.v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
+	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+)
+
+const (
+	objectiveRef = ".metaData.ownerReferences.name"
 )
 
 // PrometheusRuleReconciler reconciles a PrometheusRule object
 type PrometheusRuleReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
-//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/finalizers,verbs=update
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -37,104 +46,177 @@ type PrometheusRuleReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.0/pkg/reconcile
 func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	log := ctrllog.FromContext(ctx)
+
+	slo := &openslov1.SLO{}
+	sli := &openslov1.SLI{}
 	prometheusRule := &monitoringv1.PrometheusRule{}
+	newPrometheusRule := &monitoringv1.PrometheusRule{}
 
 	err := r.Get(ctx, req.NamespacedName, prometheusRule)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("PrometheusRule deleted")
-			log.Info("PrometheusRule deleted")
+			log.Info("PrometheusRule resource not found. Ignoring since object mus be deleted")
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, "Failed to get PrometheusRule")
 		return ctrl.Result{}, err
 	}
 
+	for _, ref := range prometheusRule.ObjectMeta.OwnerReferences {
+		if ref.Kind == "SLO" {
+			sloNamespacedName := types.NamespacedName{
+				Name:      ref.Name,
+				Namespace: req.Namespace,
+			}
+
+			if err := r.Get(ctx, sloNamespacedName, slo); err != nil {
+				log.Error(err, "Failed to get SLO")
+				return ctrl.Result{}, err
+			}
+		}
+	}
+
 	ds := &openslov1.Datasource{}
-	if err := r.Get(context.TODO(), client.ObjectKey{
+	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: prometheusRule.Namespace,
 		Name:      "logging-ds",
 	}, ds); err != nil {
 		log.Error(err, "Failed to get Datasource")
 		return ctrl.Result{}, err
 	}
-	err = r.createMimirRule(log, prometheusRule, ds)
+
+	if apierrors.IsNotFound(err) {
+		log.Info("PrometheusRule not found. Let's make one.")
+		prometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
+		if err != nil {
+			err = utils.UpdateStatus(
+				ctx,
+				slo,
+				r.Client,
+				"Ready",
+				metav1.ConditionFalse,
+				"Failed to create Prometheus Rule",
+			)
+			if err != nil {
+				log.Error(err, "Failed to update SLO status")
+				return ctrl.Result{}, err
+			}
+			log.Error(err, "Failed to create new PrometheusRule")
+			return ctrl.Result{}, err
+		}
+		if err := r.Create(ctx, prometheusRule); err != nil {
+			r.Recorder.Event(slo, "Error", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
+			if err := r.Status().Update(ctx, prometheusRule); err != nil {
+				log.Error(err, "Failed to update SLO status")
+				slo.Status.Ready = "Failed"
+				if err := r.Status().Update(ctx, slo); err != nil {
+					log.Error(err, "Failed to update SLO ready status")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{}, err
+			}
+		} else {
+			log.Info("PrometheusRule created successfully")
+			r.Recorder.Event(slo, "Normal", "PrometheusRuleCreated", "PrometheusRule created successfully")
+			slo.Status.Ready = "True"
+			if err := r.Status().Update(ctx, slo); err != nil {
+				log.Error(err, "Failed to update SLO ready status")
+				return ctrl.Result{}, nil
+			}
+		}
+	}
+
+	// Update PrometheusRule
+	// This is the main logic for the PrometheusRule update
+	// Here we should take the existing PrometheusRule and update it with the new one
+	log.Info("PrometheusRule already exists, we should update it")
+	newPrometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
 	if err != nil {
-		log.Error(err, "Failed to create Mimir rule")
+		log.Error(err, "Failed to create new PrometheusRule")
 		return ctrl.Result{}, err
 	}
-	log.Info("Mimir rule created")
+
+	compareResult := reflect.DeepEqual(prometheusRule, newPrometheusRule)
+	if compareResult {
+		log.Info("PrometheusRule is already up to date")
+		return ctrl.Result{}, nil
+	}
+
+	// has to be the same as for previous object, otherwise it will not be updated and throw an error
+	newPrometheusRule.ResourceVersion = prometheusRule.ResourceVersion
+
+	log.Info("Updating PrometheusRule", "PrometheusRule Name", newPrometheusRule.Name, "PrometheusRule Namespace", newPrometheusRule.Namespace)
+	if err := r.Update(ctx, newPrometheusRule); err != nil {
+		log.Error(err, "Failed to update PrometheusRule")
+		return ctrl.Result{}, err
+	}
+	if err := r.Status().Update(ctx, slo); err != nil {
+		log.Error(err, "Failed to update SLO status")
+		slo.Status.Ready = "Failed"
+		if err := r.Status().Update(ctx, slo); err != nil {
+			log.Error(err, "Failed to update SLO ready status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, err
+	}
 
 	log.Info("PrometheusRule reconciled")
 	return ctrl.Result{}, nil
 }
 
-func (r *PrometheusRuleReconciler) createMimirRule(log logr.Logger, rule *monitoringv1.PrometheusRule, ds *openslov1.Datasource) error {
-
-	var mimirRuleNodes []rulefmt.RuleNode
-
-	for _, group := range rule.Spec.Groups {
-		for _, r := range group.Rules {
-			mimirRuleNode := rulefmt.RuleNode{
-				Record: yaml.Node{
-					Kind:  8,
-					Value: r.Record,
-				},
-				Alert: yaml.Node{},
-				Expr: yaml.Node{
-					Kind:  8,
-					Value: r.Expr.StrVal,
-				},
-				Labels: rule.Labels,
+func (r *PrometheusRuleReconciler) createIndices(mgr ctrl.Manager) error {
+	return mgr.GetFieldIndexer().IndexField(
+		context.TODO(),
+		&monitoringv1.PrometheusRule{},
+		objectiveRef,
+		func(object client.Object) []string {
+			pr := object.(*monitoringv1.PrometheusRule)
+			if pr.ObjectMeta.OwnerReferences == nil {
+				return nil
 			}
-			mimirRuleNodes = append(mimirRuleNodes, mimirRuleNode)
+			return []string{pr.ObjectMeta.OwnerReferences[0].Name}
+		})
+}
+
+func (r *PrometheusRuleReconciler) findObjectsForSlo() func(ctx context.Context, a client.Object) []reconcile.Request {
+	return func(ctx context.Context, a client.Object) []reconcile.Request {
+		attachedSLOs := &openslov1.SLOList{}
+		listOpts := &client.ListOptions{
+			FieldSelector: fields.OneTermEqualSelector(objectiveRef, a.GetName()),
+			Namespace:     a.GetNamespace(),
 		}
+		err := r.List(ctx, attachedSLOs, listOpts)
+		if err != nil {
+			return []reconcile.Request{}
+		}
+
+		requests := make([]reconcile.Request, len(attachedSLOs.Items))
+		for i, item := range attachedSLOs.Items {
+			requests[i] = reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      item.Name,
+					Namespace: item.Namespace,
+				},
+			}
+		}
+		return requests
 	}
-
-	dsConfig := utils.DataSourceConfig{DataSource: ds}
-	sourceTenants := dsConfig.ParseTenantAnnotation()
-
-	mimirRuleGroup := rwrulefmt.RuleGroup{
-		RuleGroup: rulefmt.RuleGroup{
-			Name:          rule.Name,
-			SourceTenants: sourceTenants,
-			Rules:         mimirRuleNodes,
-		},
-		RWConfigs: []rwrulefmt.RemoteWriteConfig{},
-	}
-
-	dataSource := &openslov1.Datasource{}
-	if err := r.Get(context.TODO(), client.ObjectKey{
-		Namespace: ds.Namespace,
-		Name:      ds.Name,
-	}, dataSource); err != nil {
-		log.Error(err, "Failed to get Datasource")
-		return err
-	}
-
-	mClient := mimirtool.MimirClientConfig{
-		Address:  ds.Spec.ConnectionDetails.Address,
-		TenantId: ds.Spec.ConnectionDetails.TargetTenant,
-	}
-
-	mimirClient, err := mClient.NewMimirClient()
-	if err != nil {
-		log.Error(err, "Failed to create Mimir client")
-		return err
-	}
-
-	if err := mimirClient.CreateRuleGroup(context.Background(), "osko", mimirRuleGroup); err != nil {
-		log.Error(err, "Failed to create rule group")
-		return err
-	}
-
-	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *PrometheusRuleReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := r.createIndices(mgr); err != nil {
+		return err
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&monitoringv1.PrometheusRule{}).
+		Watches(
+			&openslov1.SLO{},
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSlo()),
+		).
+		Watches(
+			&openslov1.Datasource{},
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSlo())).
 		Complete(r)
 }

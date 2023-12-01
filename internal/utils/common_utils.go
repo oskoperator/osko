@@ -9,17 +9,18 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"time"
 )
 
-type MetricLabelParams struct {
+type MetricLabel struct {
 	Slo        *openslov1.SLO
 	Sli        *openslov1.SLI
 	TimeWindow string
 	Labels     map[string]string
 }
 
-type RuleConfig struct {
+type Rule struct {
 	Sli                 *openslov1.SLI
 	Slo                 *openslov1.SLO
 	BaseRule            *monitoringv1.Rule
@@ -28,17 +29,18 @@ type RuleConfig struct {
 	Expr                string
 	RateWindow          string
 	TimeWindow          string
-	SupportiveRule      *RuleConfig
-	MetricLabelCompiler *MetricLabelParams
+	SupportiveRule      *Rule
+	MetricLabelCompiler *MetricLabel
 }
 
-type BudgetRuleConfig struct {
+type BudgetRule struct {
 	Record           string
 	Sli              *openslov1.SLI
 	Slo              *openslov1.SLO
-	TotalRuleConfig  *RuleConfig
-	BadRuleConfig    *RuleConfig
-	TargetRuleConfig *RuleConfig
+	TotalRuleConfig  *Rule
+	BadRuleConfig    *Rule
+	GoodRuleConfig   *Rule
+	TargetRuleConfig *Rule
 }
 
 type DataSourceConfig struct {
@@ -46,10 +48,11 @@ type DataSourceConfig struct {
 }
 
 const (
-	TypeTotal = "total"
-	TypeBad   = "bad"
-	TypeGood  = "good"
-	ExprFmt   = "sum(increase(%s[%s]))"
+	RecordPrefix = "osko"
+	TypeTotal    = "total"
+	TypeBad      = "bad"
+	TypeGood     = "good"
+	ExprFmt      = "sum(increase(%s[%s]))"
 )
 
 // UpdateCondition checks if the condition of the given type is already in the slice
@@ -101,7 +104,7 @@ func UpdateStatus(ctx context.Context, slo *openslov1.SLO, r client.Client, cond
 	return r.Status().Update(ctx, slo)
 }
 
-func (m MetricLabelParams) NewMetricLabelCompiler(rule *monitoringv1.Rule, window string) string {
+func (m MetricLabel) NewMetricLabelCompiler(rule *monitoringv1.Rule, window string) string {
 	labelString := ""
 	emptyRule := monitoringv1.Rule{}
 	if !reflect.DeepEqual(rule, emptyRule) {
@@ -122,7 +125,7 @@ func (m MetricLabelParams) NewMetricLabelCompiler(rule *monitoringv1.Rule, windo
 	return labelString
 }
 
-func (m MetricLabelParams) NewMetricLabelGenerator() map[string]string {
+func (m MetricLabel) NewMetricLabelGenerator() map[string]string {
 	window := string(m.Slo.Spec.TimeWindow[0].Duration)
 	if m.TimeWindow != "" {
 		window = m.TimeWindow
@@ -135,7 +138,7 @@ func (m MetricLabelParams) NewMetricLabelGenerator() map[string]string {
 	}
 }
 
-func (c RuleConfig) getFieldsByType() (string, error) {
+func (c Rule) getFieldsByType() (string, error) {
 	switch c.RuleType {
 	case TypeTotal:
 		return c.Sli.Spec.RatioMetric.Total.MetricSource.Spec, nil
@@ -148,8 +151,8 @@ func (c RuleConfig) getFieldsByType() (string, error) {
 	}
 }
 
-func (c RuleConfig) NewRatioRule(window string) (*monitoringv1.Rule, *monitoringv1.Rule) {
-
+func (c Rule) NewRatioRule(window string) (*monitoringv1.Rule, *monitoringv1.Rule) {
+	//
 	field, err := c.getFieldsByType()
 	if err != nil || field == "" {
 		return nil, nil
@@ -158,7 +161,7 @@ func (c RuleConfig) NewRatioRule(window string) (*monitoringv1.Rule, *monitoring
 	expr := fmt.Sprintf(ExprFmt, field, window)
 
 	rule := monitoringv1.Rule{
-		Record: fmt.Sprintf("osko_%s", c.Record),
+		Record: fmt.Sprintf("%s_%s", RecordPrefix, c.Record),
 		Expr:   intstr.Parse(expr),
 	}
 
@@ -171,8 +174,8 @@ func (c RuleConfig) NewRatioRule(window string) (*monitoringv1.Rule, *monitoring
 	return &rule, &supportiveRule
 }
 
-func (c RuleConfig) NewSupportiveRule(baseRule monitoringv1.Rule) (rule monitoringv1.Rule) {
-	rule.Record = fmt.Sprintf("osko_%s", c.Record)
+func (c Rule) NewSupportiveRule(baseRule monitoringv1.Rule) (rule monitoringv1.Rule) {
+	rule.Record = fmt.Sprintf("%s_%s", RecordPrefix, c.Record)
 	labels := c.SupportiveRule.MetricLabelCompiler.NewMetricLabelCompiler(&baseRule, baseRule.Labels["window"])
 	expr := fmt.Sprintf("sum(increase(%s{%s}[%s])) by (service, sli_name, slo_name)", baseRule.Record, labels, c.SupportiveRule.TimeWindow)
 	rule.Expr = intstr.Parse(expr)
@@ -183,22 +186,34 @@ func (c RuleConfig) NewSupportiveRule(baseRule monitoringv1.Rule) (rule monitori
 	return rule
 }
 
-func (c RuleConfig) NewTargetRule() (rule monitoringv1.Rule) {
-	rule.Record = fmt.Sprintf("osko_%s", c.Record)
+func (c Rule) NewTargetRule() (rule monitoringv1.Rule) {
+	rule.Record = fmt.Sprintf("%s_%s", RecordPrefix, c.Record)
 	rule.Expr = intstr.Parse(fmt.Sprintf("vector(%s)", c.Slo.Spec.Objectives[0].Target))
 	rule.Labels = c.MetricLabelCompiler.NewMetricLabelGenerator()
 	return rule
 }
 
-func (b BudgetRuleConfig) NewBudgetRule() (rule monitoringv1.Rule) {
-	rule.Record = fmt.Sprintf("osko_%s", b.Record)
-	expr := fmt.Sprintf("(1 - %s{%s}) * (%s{%s} - %s{%s})",
+func (b BudgetRule) NewBudgetRule() (rule monitoringv1.Rule) {
+	log := ctrllog.FromContext(context.Background())
+	gbRule := &Rule{}
+	if b.BadRuleConfig.Sli.Spec.RatioMetric.Bad.MetricSource.Spec == "" || b.BadRuleConfig.Slo.Spec.Indicator.Spec.RatioMetric.Bad.MetricSource.Spec == "" {
+		log.Info("Bad rule not provided, calculating bad as (total - good)")
+		gbRule = b.GoodRuleConfig
+	} else {
+		log.Info("Bad rule provided")
+		gbRule = b.BadRuleConfig
+	}
+	rule.Record = fmt.Sprintf("%s_%s", RecordPrefix, b.Record)
+	expr := fmt.Sprintf("(1 - %s_%s{%s}) * (%s_%s{%s} - %s_%s{%s})",
+		RecordPrefix,
 		b.TargetRuleConfig.Record,
 		b.TargetRuleConfig.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
+		RecordPrefix,
 		b.TotalRuleConfig.Record,
 		b.TotalRuleConfig.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
-		b.BadRuleConfig.Record,
-		b.BadRuleConfig.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
+		RecordPrefix,
+		gbRule.Record,
+		gbRule.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
 	)
 	rule.Expr = intstr.Parse(expr)
 	return rule

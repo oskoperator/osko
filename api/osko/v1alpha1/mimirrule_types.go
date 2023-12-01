@@ -44,6 +44,7 @@ type Rule struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:printcolumn:name="Ready",type=string,JSONPath=.status.ready,description="The reason for the current status of the MimirRule resource"
+//+kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // MimirRule is the Schema for the mimirrules API
 type MimirRule struct {

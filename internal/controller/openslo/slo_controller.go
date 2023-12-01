@@ -59,7 +59,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	err := r.Get(ctx, req.NamespacedName, slo)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("SLO resource not found. Object must have been deleted.")
+			log.V(1).Info("SLO resource not found. Object must have been deleted.")
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, errGetSLO)
@@ -73,14 +73,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			apierrors.IsNotFound(err)
 			{
 				log.Error(err, errGetSLI)
-				err = utils.UpdateStatus(
-					ctx,
-					slo,
-					r.Client,
-					"Ready",
-					metav1.ConditionFalse,
-					"SLI Object not found",
-				)
+				err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
 				if err != nil {
 					log.Error(err, "Failed to update SLO status")
 					return ctrl.Result{}, err
@@ -89,7 +82,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			}
 		}
 	} else if slo.Spec.Indicator != nil {
-		log.Info("SLO has an inline SLI")
+		log.V(1).Info("SLO has an inline SLI")
 		sli.Name = slo.Spec.Indicator.Metadata.Name
 		sli.Spec.Description = slo.Spec.Indicator.Spec.Description
 		if slo.Spec.Indicator.Spec.RatioMetric != (openslov1.RatioMetricSpec{}) {
@@ -156,15 +149,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		log.Info("MimirRule not found. Let's make one.")
 		mimirRule, err = helpers.NewMimirRule(slo, promRule)
 		if err != nil {
-			err = utils.UpdateStatus(
-				ctx,
-				slo,
-				r.Client,
-				"Ready",
-				metav1.ConditionFalse,
-				"Failed to create Mimir Rule Object",
-			)
-			if err != nil {
+			if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule Object"); err != nil {
 				log.Error(err, "Failed to update SLO status")
 				return ctrl.Result{}, err
 			}

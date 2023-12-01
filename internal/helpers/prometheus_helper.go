@@ -9,13 +9,17 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+const (
+	RecordPrefix = "osko"
+)
+
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
 	var monitoringRules []monitoringv1.Rule
 	var targetVector monitoringv1.Rule
 	defaultRateWindow := "1m"
 	//burnRateTimeWindows := []string{"1h", "6h", "3d"}
 	sloTimeWindowDuration := string(slo.Spec.TimeWindow[0].Duration)
-	m := utils.MetricLabelParams{Slo: slo, Sli: sli}
+	m := utils.MetricLabel{Slo: slo, Sli: sli}
 
 	targetVector.Record = "osko_slo_target"
 	targetVector.Expr = intstr.Parse(fmt.Sprintf("vector(%s)", slo.Spec.Objectives[0].Value))
@@ -24,7 +28,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 
 	// for now, total and good are required. bad is optional and is calculated as (total - good) if not provided
 	// TODO: validate that the SLO budgeting method is Occurrences and that the SLIs are all ratio metrics in other case throw an error
-	targetVectorConfig := utils.RuleConfig{
+	targetVectorConfig := utils.Rule{
 		Record:              "slo_target",
 		Expr:                "",
 		TimeWindow:          sloTimeWindowDuration,
@@ -33,7 +37,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		MetricLabelCompiler: &m,
 	}
 
-	totalRule28Config := utils.RuleConfig{
+	totalRule28Config := utils.Rule{
 		RuleType:            "total",
 		Record:              "sli_ratio_total",
 		Expr:                "sum(increase(%s[%s]))",
@@ -43,7 +47,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		MetricLabelCompiler: &m,
 	}
 
-	goodRule28Config := utils.RuleConfig{
+	goodRule28Config := utils.Rule{
 		RuleType:            "good",
 		Record:              "sli_ratio_total",
 		Expr:                "sum(increase(%s[%s]))",
@@ -53,7 +57,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		MetricLabelCompiler: &m,
 	}
 
-	badRule28Config := utils.RuleConfig{
+	badRule28Config := utils.Rule{
 		RuleType:            "bad",
 		Record:              "sli_ratio_total",
 		Expr:                "sum(increase(%s[%s]))",
@@ -63,7 +67,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		MetricLabelCompiler: &m,
 	}
 
-	totalRuleConfig := utils.RuleConfig{
+	totalRuleConfig := utils.Rule{
 		RuleType:            "total",
 		Record:              "sli_ratio_total",
 		Expr:                "sum(increase(%s[%s]))",
@@ -74,7 +78,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		MetricLabelCompiler: &m,
 	}
 
-	goodRuleConfig := utils.RuleConfig{
+	goodRuleConfig := utils.Rule{
 		RuleType:            "good",
 		Record:              "sli_ratio_good",
 		Expr:                "sum(increase(%s[%s]))",
@@ -85,7 +89,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		MetricLabelCompiler: &m,
 	}
 
-	badRuleConfig := utils.RuleConfig{
+	badRuleConfig := utils.Rule{
 		RuleType:            "bad",
 		Record:              "sli_ratio_bad",
 		Expr:                "sum(increase(%s[%s]))",
@@ -96,16 +100,17 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		MetricLabelCompiler: &m,
 	}
 
-	errorBudgetRuleConfig := utils.BudgetRuleConfig{
+	errorBudgetRuleConfig := utils.BudgetRule{
 		Record:           "error_budget_available",
 		Slo:              slo,
 		Sli:              sli,
 		TargetRuleConfig: &targetVectorConfig,
 		TotalRuleConfig:  &totalRuleConfig,
 		BadRuleConfig:    &badRuleConfig,
+		GoodRuleConfig:   &goodRuleConfig,
 	}
 
-	configs := []utils.RuleConfig{
+	configs := []utils.Rule{
 		totalRuleConfig,
 		goodRuleConfig,
 		badRuleConfig,

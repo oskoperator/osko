@@ -8,8 +8,6 @@ import (
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	"github.com/prometheus/prometheus/model/rulefmt"
-	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 )
@@ -17,6 +15,20 @@ import (
 const (
 	mimirRuleNamespace = "osko"
 )
+
+type MimirClientConfig struct {
+	Address  string
+	TenantId string
+}
+
+func (m *MimirClientConfig) NewMimirClient() (*mimirclient.MimirClient, error) {
+	return mimirclient.New(
+		mimirclient.Config{
+			Address: m.Address,
+			ID:      m.TenantId,
+		},
+	)
+}
 
 func NewMimirRule(slo *openslov1.SLO, rule *monitoringv1.PrometheusRule) (mimirRule *oskov1alpha1.MimirRule, err error) {
 	ownerRef := []metav1.OwnerReference{
@@ -34,21 +46,30 @@ func NewMimirRule(slo *openslov1.SLO, rule *monitoringv1.PrometheusRule) (mimirR
 		OwnerReferences: ownerRef,
 	}
 
+	var mimirRules []oskov1alpha1.Rule
+
+	for _, group := range rule.Spec.Groups {
+		for _, r := range group.Rules {
+			mimirRuleNode := oskov1alpha1.Rule{
+				Record: r.Record,
+				Expr:   r.Expr.String(),
+				Labels: r.Labels,
+			}
+			mimirRules = append(mimirRules, mimirRuleNode)
+		}
+	}
+
 	mimirRule = &oskov1alpha1.MimirRule{
 		ObjectMeta: objectMeta,
 		Spec: oskov1alpha1.MimirRuleSpec{
 			Groups: []oskov1alpha1.RuleGroup{
 				{
-					Name:          rule.Name,
-					SourceTenants: nil,
-					Rules: []oskov1alpha1.Rule{
-						{
-							Record:      rule.Spec.Groups[0].Rules[0].Record,
-							Expr:        rule.Spec.Groups[0].Rules[0].Expr.String(),
-							Labels:      rule.Spec.Groups[0].Rules[0].Labels,
-							Annotations: rule.Spec.Groups[0].Rules[0].Annotations,
-						},
+					Name: rule.Name,
+					SourceTenants: []string{
+						"infra",
+						"logging",
 					},
+					Rules: mimirRules,
 				},
 			},
 		},
@@ -56,37 +77,31 @@ func NewMimirRule(slo *openslov1.SLO, rule *monitoringv1.PrometheusRule) (mimirR
 	return mimirRule, nil
 }
 
-func NewMimirRuleGroup(rule *monitoringv1.PrometheusRule) (*rwrulefmt.RuleGroup, error) {
-	var mimirRuleNodes []rulefmt.RuleNode
+func NewMimirRuleGroup(rule *monitoringv1.PrometheusRule) (*oskov1alpha1.RuleGroup, error) {
+	var mimirRules []oskov1alpha1.Rule
 
 	for _, group := range rule.Spec.Groups {
 		for _, r := range group.Rules {
-			mimirRuleNode := rulefmt.RuleNode{
-				Record: yaml.Node{
-					Kind:  8,
-					Value: r.Record,
-				},
-				Alert: yaml.Node{},
-				Expr: yaml.Node{
-					Kind:  8,
-					Value: r.Expr.StrVal,
-				},
-				Labels: rule.Labels,
+			mimirRuleNode := oskov1alpha1.Rule{
+				Record: r.Record,
+				Expr:   r.Expr.String(),
+				Labels: r.Labels,
 			}
-			mimirRuleNodes = append(mimirRuleNodes, mimirRuleNode)
+			mimirRules = append(mimirRules, mimirRuleNode)
 		}
 	}
 
 	//dsConfig := utils.DataSourceConfig{DataSource: ds}
-	//sourceTenants := dsConfig.ParseTenantAnnotation()
+	sourceTenants := []string{
+		"infra",
+		"logging",
+		"billing",
+	}
 
-	mimirRuleGroup := &rwrulefmt.RuleGroup{
-		RuleGroup: rulefmt.RuleGroup{
-			Name: rule.Name,
-			//SourceTenants: sourceTenants,
-			Rules: mimirRuleNodes,
-		},
-		RWConfigs: []rwrulefmt.RemoteWriteConfig{},
+	mimirRuleGroup := &oskov1alpha1.RuleGroup{
+		Name:          rule.Name,
+		Rules:         mimirRules,
+		SourceTenants: sourceTenants,
 	}
 
 	return mimirRuleGroup, nil
@@ -100,34 +115,6 @@ func GetMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, ru
 	}
 
 	return mimirRuleGroup
-}
-
-func CreateMimirRuleGroupAPI(log logr.Logger, mimirClient *mimirclient.MimirClient, rule *oskov1alpha1.RuleGroup, ds *openslov1.Datasource) error {
-	mimirRule := &rwrulefmt.RuleGroup{
-		RuleGroup: rulefmt.RuleGroup{
-			Name: rule.Name,
-			Rules: []rulefmt.RuleNode{
-				{
-					Record: yaml.Node{
-						Kind:  8,
-						Value: rule.Rules[0].Record,
-					},
-					Alert: yaml.Node{},
-					Expr: yaml.Node{
-						Kind:  8,
-						Value: rule.Rules[0].Expr,
-					},
-				},
-			},
-		},
-	}
-
-	if err := mimirClient.CreateRuleGroup(context.Background(), mimirRuleNamespace, *mimirRule); err != nil {
-		log.Error(err, "Failed to create rule group")
-		return err
-	}
-
-	return nil
 }
 
 func UpdateMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, existingGroup *rwrulefmt.RuleGroup, desiredGroup *rwrulefmt.RuleGroup) error {

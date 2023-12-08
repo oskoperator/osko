@@ -2,9 +2,9 @@ name: Publish Chart
 on:
   push:
     branches:
-      - helm-chart
-#    paths:
-#      - 'helm/**'
+      - main
+    paths:
+      - 'helm/**'
 
 jobs:
   lint-chart:

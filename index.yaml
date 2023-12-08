@@ -2,6 +2,17 @@ apiVersion: v1
 entries:
   osko:
   - apiVersion: v2
+    appVersion: 0.0.1
+    created: "2023-12-08T08:10:59.904278587Z"
+    description: Base Helm chart for OSKO
+    digest: f2ace92ffef31898890fcc65a8181ff326400bf0e05971271e9c9122056d6163
+    home: https://github.com/oskoperator/osko
+    name: osko
+    type: application
+    urls:
+    - osko-0.0.1.tgz
+    version: 0.0.1
+  - apiVersion: v2
     appVersion: 0.0.1-alpha
     created: "2023-12-08T08:08:30.408481343Z"
     description: Base Helm chart for OSKO
@@ -12,4 +23,4 @@ entries:
     urls:
     - osko-0.0.1-alpha.tgz
     version: 0.0.1-alpha
-generated: "2023-12-08T08:08:30.408491993Z"
+generated: "2023-12-08T08:10:59.904292292Z"

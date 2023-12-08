@@ -69,4 +69,5 @@ jobs:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:
           charts_dir: helm
+          skip_existing: false
           packages_with_index: true

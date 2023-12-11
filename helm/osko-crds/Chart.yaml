@@ -1,7 +1,21 @@
 apiVersion: v2
-name: osko-crds
-description: A Helm chart for osko CRDs
 type: application
 version: 0.0.1
+name: osko-crds
+description: A Helm chart for osko CRDs
+keywords:
+  - osko
+  - crds
 appVersion: "0.0.1"
+sources:
+  - https://github.com/oskoperator/osko
+maintainers:
+  - name: fourstepper
+    email: me@robinopletal.com
+  - name: Hy3n4
+    email: hy3nk4@gmail.com
 home: https://github.com/oskoperator/osko
+
+dependencies:
+  - name: crds
+    version: 0.0.0

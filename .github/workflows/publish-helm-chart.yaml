@@ -63,7 +63,7 @@ jobs:
 
       - name: Copy CRDs to it's chart
         run: |
-          cp -rf config/crd/bases/* helm/osko-crds/templates/
+          cp -rf config/crd/bases/* helm/osko-crds/charts/crds/templates/
 
       - name: Install Helm
         uses: azure/setup-helm@v3

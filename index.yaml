@@ -23,4 +23,16 @@ entries:
     urls:
     - osko-0.0.1-alpha.tgz
     version: 0.0.1-alpha
-generated: "2023-12-08T08:10:59.904292292Z"
+  osko-crds:
+  - apiVersion: v2
+    appVersion: 0.0.1
+    created: "2023-12-11T12:10:41.436166816Z"
+    description: A Helm chart for osko CRDs
+    digest: 9dc63bcabf87bc150f0b1f53c055b333e1a7e9833f5535ec80210648e8b24dc2
+    home: https://github.com/oskoperator/osko
+    name: osko-crds
+    type: application
+    urls:
+    - osko-crds-0.0.1.tgz
+    version: 0.0.1
+generated: "2023-12-11T12:10:41.436180481Z"

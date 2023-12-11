@@ -1,0 +1,22 @@
+# permissions for end users to view mimirrules.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{ include "osko.labels" . | nindent 4 }}
+  name: {{ .Release.Name }}-mimirrule-viewer-role
+rules:
+- apiGroups:
+  - osko.dev
+  resources:
+  - mimirrules
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - osko.dev
+  resources:
+  - mimirrules/status
+  verbs:
+  - get

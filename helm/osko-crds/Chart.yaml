@@ -1,0 +1,7 @@
+apiVersion: v2
+name: osko-crds
+description: A Helm chart for osko CRDs
+type: application
+version: 0.0.1
+appVersion: "0.0.1"
+home: https://github.com/oskoperator/osko

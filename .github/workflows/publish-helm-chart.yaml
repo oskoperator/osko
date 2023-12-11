@@ -60,6 +60,10 @@ jobs:
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
+      - name: Copy CRDs to it's chart
+        run: |
+          cp -rf config/crd/bases/* helm/osko-crds/charts/crds/templates/
+
       - name: Install Helm
         uses: azure/setup-helm@v3
 

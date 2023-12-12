@@ -37,9 +37,9 @@ const (
 	mimirRuleNamespace = "osko"
 )
 
-// +kubebuilder:rbac:groups=osko.openslo,resources=mimirrules,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=osko.openslo,resources=mimirrules/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=osko.openslo,resources=mimirrules/finalizers,verbs=update
+// +kubebuilder:rbac:groups=osko.dev,resources=mimirrules,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=osko.dev,resources=mimirrules/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=osko.dev,resources=mimirrules/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to

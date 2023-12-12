@@ -23,6 +23,20 @@ rules:
       - update
       - watch
   - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - prometheusrules/finalizers
+    verbs:
+      - update
+  - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - prometheusrules/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
       - openslo.com
     resources:
       - alertconditions
@@ -174,6 +188,32 @@ rules:
       - openslo.com
     resources:
       - slos/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - osko.dev
+    resources:
+      - mimirrules
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - osko.dev
+    resources:
+      - mimirrules/finalizers
+    verbs:
+      - update
+  - apiGroups:
+      - osko.dev
+    resources:
+      - mimirrules/status
     verbs:
       - get
       - patch

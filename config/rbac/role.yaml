@@ -194,7 +194,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - osko.openslo
+  - osko.dev
   resources:
   - mimirrules
   verbs:
@@ -206,13 +206,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - osko.openslo
+  - osko.dev
   resources:
   - mimirrules/finalizers
   verbs:
   - update
 - apiGroups:
-  - osko.openslo
+  - osko.dev
   resources:
   - mimirrules/status
   verbs:

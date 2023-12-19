@@ -2,13 +2,13 @@ package controller
 
 import (
 	"context"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
+	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 )
 
 // AlertConditionReconciler reconciles a AlertCondition object
@@ -16,6 +16,10 @@ type AlertConditionReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
+
+const (
+	errGetAlertCondition = "unable to get AlertCondition"
+)
 
 //+kubebuilder:rbac:groups=openslo.com,resources=alertconditions,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=openslo.com,resources=alertconditions/status,verbs=get;update;patch
@@ -31,9 +35,19 @@ type AlertConditionReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.15.0/pkg/reconcile
 func (r *AlertConditionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := ctrllog.FromContext(ctx)
 
-	// TODO(user): your logic here
+	alertCondition := &openslov1.AlertCondition{}
+	err := r.Get(ctx, req.NamespacedName, alertCondition)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("AlertCondition resource not found. Object must have been deleted.")
+			return ctrl.Result{}, nil
+		}
+
+		log.Error(err, errGetAlertCondition)
+		return ctrl.Result{}, nil
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -42,5 +56,6 @@ func (r *AlertConditionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 func (r *AlertConditionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openslov1.AlertCondition{}).
+		Owns(&openslov1.AlertNotificationTarget{}).
 		Complete(r)
 }

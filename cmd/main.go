@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+	monitoringcoreoscom "github.com/oskoperator/osko/internal/controller/monitoring.coreos.com"
+	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 	"os"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -37,6 +39,7 @@ func init() {
 	utilruntime.Must(openslov1.AddToScheme(scheme))
 	utilruntime.Must(oskov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
+	utilruntime.Must(monitoringv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -130,6 +133,27 @@ func main() {
 		Recorder: mgr.GetEventRecorderFor("mimirrule-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MimirRule")
+		os.Exit(1)
+	}
+	if err = (&oskocontroller.MimirAlertManagerReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MimirAlertManager")
+		os.Exit(1)
+	}
+	if err = (&monitoringcoreoscom.AlertManagerConfigReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AlertmanagerConfig")
+		os.Exit(1)
+	}
+	if err = (&monitoringcoreoscom.PrometheusRuleReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PrometheusRule")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

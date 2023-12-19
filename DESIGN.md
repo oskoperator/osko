@@ -38,50 +38,69 @@ If the target system is unable to reconcile the created [`PrometheusRule`](https
 ---
 Title: OSKO Dependency Graph
 ---
-flowchart LR;
-subgraph userspace
-sloObject(SLO)
-sliObject(SLI)
-dataSourceObject(DataSource)
-end
-subgraph controllerspace
-prometheusRuleObject(PrometheusRule)
-end
+flowchart LR
+;
+  subgraph userspace
+    sloObject(SLO)
+    sliObject(SLI)
+    dataSourceObject(DataSource)
+  end
+  subgraph controllerspace
+    prometheusRuleObject(PrometheusRule)
+  end
 
-sloController(SLO Controller)
-mimirRuleController(Mimir Rule Controller)
-sliController(SLI Controller)
-dataSourceController(DataSource Controller)
+  sloController(SLO Controller)
+  mimirRuleController(Mimir Rule Controller)
+  sliController(SLI Controller)
+  dataSourceController(DataSource Controller)
+  prometheusRuleController(Prometheus Rule Controller)
 
-subgraph external
-mimir[Mimir]
-cortex[Cortex]
-end
+  subgraph external
+    mimir[Mimir]
+    cortex[Cortex]
+  end
 
-cortexRuleController(Optional: Cortex Rule Controller)
-cortexRuleController --> |Watch| prometheusRuleObject
-cortexRuleController --> |Updates| cortex
-
-mimirRuleController --> |Watch| prometheusRuleObject
-mimirRuleController --> |Updates| mimir
-
-sloController --> |Own| sloObject
-sloController --> |Watch| sliObject
-sloController --> |Watch| dataSourceObject
-sloController --> |Own| prometheusRuleObject
-
-sliController --> |Own| sliObject
-sliController --> |Watch| dataSourceObject
-
-dataSourceController --> |Own| dataSourceObject
-
-sloObject --> |Reference| sliObject
-sliObject --> |Reference| dataSourceObject
+  cortexRuleController(Optional: Cortex Rule Controller)
+  cortexRuleController -->|Watch| prometheusRuleObject
+  cortexRuleController -->|Updates| cortex
+  mimirRuleController -->|Watch| prometheusRuleObject
+  mimirRuleController -->|Updates| mimir
+  sloController -->|Own| sloObject
+  sloController -->|Watch| sliObject
+  sloController -->|Watch| dataSourceObject
+  sloController -->|Watch| prometheusRuleObject
+  prometheusRuleController -->|Own| prometheusRuleObject
+  prometheusRuleController -->|Watch| sloObject
+  sliController -->|Own| sliObject
+  sliController -->|Watch| dataSourceObject
+  dataSourceController -->|Own| dataSourceObject
+  sloObject -->|Reference| sliObject
+  sliObject -->|Reference| dataSourceObject
 %% reference slo -> datasource asi netreba, to bereme na zaklade SLIs ne? Dela to pak
 %% hnusnej graf :D, kdyztak zkus odkomentovat
 %%  sloObject --> |Reference| dataSourceObject
 %%  prometheusRuleObject --> |Reference| dataSourceObject
+```
 
+### Alerting design
 
-
+```mermaid
+---
+Title: OSKO Alerting Dependency Graph
+---
+flowchart TB
+;
+  alertPolicyController(AlertPolicy Controller)
+  alertConditionController(AlertCondition Controller)
+  alertNotificationTargetController(AlertNotificationTarget Controller)
+  alertPolicyObject(AlertPolicy)
+  alertConditionObject(AlertCondition)
+  alertNotificationTargetObject(AlertNotificationTarget)
+  
+  alertPolicyController -->|Own| alertPolicyObject
+  alertConditionController -->|Own| alertConditionObject
+  alertNotificationTargetController -->|Own| alertNotificationTargetObject
+  
+  alertPolicyController -->|Watch| alertConditionObject
+  alertPolicyController -->|Watch| alertNotificationTargetObject
 ```

@@ -38,6 +38,32 @@ rules:
   - patch
   - update
 - apiGroups:
+  - monitoring.coreos.com.openslo
+  resources:
+  - alertmanagerconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - monitoring.coreos.com.openslo
+  resources:
+  - alertmanagerconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - monitoring.coreos.com.openslo
+  resources:
+  - alertmanagerconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - openslo.com
   resources:
   - alertconditions
@@ -215,6 +241,32 @@ rules:
   - osko.dev
   resources:
   - mimirrules/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - osko.openslo
+  resources:
+  - mimiralertmanagers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - osko.openslo
+  resources:
+  - mimiralertmanagers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - osko.openslo
+  resources:
+  - mimiralertmanagers/status
   verbs:
   - get
   - patch

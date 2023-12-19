@@ -1,13 +1,14 @@
 package v1
 
 import (
+	osko "github.com/oskoperator/osko/api/osko/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // AlertNotificationTargetSpec defines the desired state of AlertNotificationTarget
 type AlertNotificationTargetSpec struct {
-	Description Description `json:"description,omitempty"`
-	Target      string      `json:"target,omitempty"`
+	Description Description              `json:"description,omitempty"`
+	Target      osko.NotificationTargets `json:"target,omitempty"`
 }
 
 // AlertNotificationTargetStatus defines the observed state of AlertNotificationTarget
@@ -22,7 +23,7 @@ type AlertNotificationTargetStatus struct {
 // AlertNotificationTarget is the Schema for the alertnotificationtargets API
 type AlertNotificationTarget struct {
 	metav1.TypeMeta   `json:",inline"`
-	ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   AlertNotificationTargetSpec   `json:"spec,omitempty"`
 	Status AlertNotificationTargetStatus `json:"status,omitempty"`

@@ -15,7 +15,7 @@ type AlertPolicyNotificationTarget struct {
 type AlertPolicyCondition struct {
 	// +kubebuilder:validation:Enum=AlertCondition
 	Kind         string              `json:"kind,omitempty"`
-	Metadata     ObjectMetaOpenSLO   `json:"metadata,omitempty"`
+	Metadata     metav1.ObjectMeta   `json:"metadata,omitempty"`
 	Spec         *AlertConditionSpec `json:"spec,omitempty"`
 	ConditionRef *string             `json:"conditionRef,omitempty"`
 }

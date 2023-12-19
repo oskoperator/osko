@@ -8,4 +8,5 @@ resources:
 - openslo_v1_alertnotificationtarget.yaml
 - openslo_v1_service.yaml
 - osko_v1alpha1_mimirrule.yaml
+- osko_v1alpha1_mimiralertmanager.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

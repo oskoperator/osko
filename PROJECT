@@ -90,4 +90,23 @@ resources:
   kind: MimirRule
   path: github.com/oskoperator/osko/api/osko/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openslo
+  group: osko
+  kind: MimirAlertManager
+  path: github.com/oskoperator/osko/api/osko/v1alpha1
+  version: v1alpha1
+- controller: true
+  domain: openslo
+  group: monitoring.coreos.com
+  kind: AlertManager
+  version: v1
+- controller: true
+  domain: openslo
+  group: monitoring.coreos.com
+  kind: AlertManagerConfig
+  version: v1beta1
 version: "3"

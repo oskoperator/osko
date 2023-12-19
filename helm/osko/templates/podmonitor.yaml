@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+type: PodMonitor
+metadata:
+  name: {{ include "osko.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osko.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+    app.kubernetes.io/name: {{ include "osko.fullname" . }}
+    release: prometheus-operator
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  podMetricsEndpoints:
+    - port: metrics
+      path: /

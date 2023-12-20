@@ -1,3 +1,5 @@
+# TODO: heureka-specific sample, should be replaced in the further-future with a more comprehensive dev environment
+# ref.: https://github.com/oskoperator/osko/issues/45
 apiVersion: openslo.com/v1
 kind: Datasource
 metadata:
@@ -7,14 +9,13 @@ metadata:
     app.kubernetes.io/part-of: slo-kubernetes-operator
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: slo-kubernetes-operator
-  name: datasource-main # should it have some special name/annotation?
+  name: logging-ds
 spec:
-  description: Mimir Example Datasource
+  description: Mimir Datasource for logging tenant
   type: mimir
   connectionDetails:
     address: https://mimir.monitoring.dev.heu.group/
-    targetTenant: billing
     sourceTenants:
       - billing
       - infra
-    syncPrometheusRules: true
+    targetTenant: billing

@@ -9,7 +9,7 @@ resources:
 - bases/openslo.com_alertconditions.yaml
 - bases/openslo.com_alertnotificationtargets.yaml
 - bases/openslo.com_services.yaml
-- bases/osko.openslo_mimirrules.yaml
+- bases/osko.dev_mimirrules.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patches: []

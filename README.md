@@ -21,7 +21,13 @@ See the [design document](DESIGN.md) for more details on what `osko` aims to do.
 make install
 ```
 
-3. Run your controller (this will run in the foreground, so switch to a new terminal if you want to leave it running):
+3. We also depend on Prometheus Operator CRDs (`monitoring.coreos.com` API group). Let's install that to our local cluster now:
+
+```sh
+helm install prometheus-operator-crds prometheus-community/prometheus-operator-crds
+```
+
+4. Run your controller (this will run in the foreground, so switch to a new terminal if you want to leave it running):
 
 ```sh
 make run

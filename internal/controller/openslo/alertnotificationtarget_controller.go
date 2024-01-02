@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
 	"github.com/oskoperator/osko/internal/helpers"
 	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -72,6 +73,29 @@ func (r *AlertNotificationTargetReconciler) Reconcile(ctx context.Context, req c
 		return ctrl.Result{}, err
 	}
 
+	mimirAlertManager := &oskov1alpha1.MimirAlertManager{}
+	err = r.Get(ctx, types.NamespacedName{
+		Name:      alertNotificationTarget.Name,
+		Namespace: alertNotificationTarget.Namespace,
+	}, mimirAlertManager)
+
+	if apierrors.IsNotFound(err) {
+		log.V(1).Info("Creating MimirAlertManager.")
+		mimirAlertManager, err = helpers.NewMimirAlertManager(alertNotificationTarget, alertmanagerConfig)
+		if err != nil {
+			log.Error(err, "Failed to create MimirAlertManager")
+			return ctrl.Result{}, nil
+		}
+
+		if err = r.Create(ctx, mimirAlertManager); err != nil {
+			log.Error(err, "Failed to create MimirAlertManager")
+			return ctrl.Result{}, nil
+		} else {
+			log.Info("MimirAlertManager created.")
+			return ctrl.Result{}, nil
+		}
+	}
+
 	log.Info("AlertNotificationTarget reconciled.")
 
 	return ctrl.Result{}, nil
@@ -82,5 +106,6 @@ func (r *AlertNotificationTargetReconciler) SetupWithManager(mgr ctrl.Manager) e
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openslov1.AlertNotificationTarget{}).
 		Owns(&monitoringv1alpha1.AlertmanagerConfig{}).
+		Owns(&oskov1alpha1.MimirAlertManager{}).
 		Complete(r)
 }

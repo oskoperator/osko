@@ -27,8 +27,8 @@ func CreateAlertManagerConfig(alertNotificationTarget *openslov1.AlertNotificati
 	}
 
 	opsgenieConfig := monitoringv1alpha1.OpsGenieConfig{
-		APIURL:   alertNotificationTarget.Spec.Target.OpsGenie.APIURL,
-		APIKey:   alertNotificationTarget.Spec.Target.OpsGenie.APIKey,
+		APIURL: alertNotificationTarget.Spec.Target.OpsGenie.APIURL,
+		//APIKey:   alertNotificationTarget.Spec.Target.OpsGenie.APIKey,
 		Priority: alertNotificationTarget.Spec.Target.OpsGenie.Priority,
 	}
 
@@ -67,9 +67,9 @@ func CreateAlertManagerConfig(alertNotificationTarget *openslov1.AlertNotificati
 			Receiver: "betteruptime",
 			Matchers: []monitoringv1alpha1.Matcher{
 				{
-					Name:  "alertname",
-					Value: ".*",
-					Regex: true,
+					Name:      "alertname",
+					Value:     ".*",
+					MatchType: monitoringv1alpha1.MatchRegexp,
 				},
 			},
 			Continue: true,
@@ -77,21 +77,23 @@ func CreateAlertManagerConfig(alertNotificationTarget *openslov1.AlertNotificati
 			Receiver: "opsgenie",
 			Matchers: []monitoringv1alpha1.Matcher{
 				{
-					Name:  "alertname",
-					Value: ".*",
-					Regex: true,
+					Name:      "alertname",
+					Value:     ".*",
+					MatchType: monitoringv1alpha1.MatchRegexp,
 				},
 			},
 		},
 	}
 
-	alerRoutesJSON, err := json.Marshal(alertRoutes)
-	if err != nil {
-		return nil, err
-	}
+	for _, aroute := range alertRoutes {
+		alertRoutesJSON, err := json.Marshal(aroute)
+		if err != nil {
+			return nil, err
+		}
 
-	route := apiextensionsv1.JSON{Raw: alerRoutesJSON}
-	routesJSON = append(routesJSON, route)
+		route := apiextensionsv1.JSON{Raw: alertRoutesJSON}
+		routesJSON = append(routesJSON, route)
+	}
 
 	routes := &monitoringv1alpha1.Route{
 		Receiver: opsGenieReceiver.Name,

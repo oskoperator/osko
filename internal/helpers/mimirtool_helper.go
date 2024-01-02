@@ -8,6 +8,7 @@ import (
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 )
@@ -137,4 +138,29 @@ func DeleteMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient,
 	}
 
 	return nil
+}
+
+func NewMimirAlertManager(alertNotificationTarget *openslov1.AlertNotificationTarget, alertmanagerConfig *monitoringv1alpha1.AlertmanagerConfig) (*oskov1alpha1.MimirAlertManager, error) {
+	//log := ctrllog.FromContext(context.Background())
+
+	ownerRef := []metav1.OwnerReference{
+		*metav1.NewControllerRef(
+			alertNotificationTarget,
+			openslov1.GroupVersion.WithKind("AlertNotificationTarget"),
+		),
+	}
+
+	objectMeta := metav1.ObjectMeta{
+		Name:            alertmanagerConfig.Name,
+		Namespace:       alertmanagerConfig.Namespace,
+		Labels:          alertmanagerConfig.Labels,
+		Annotations:     alertmanagerConfig.Annotations,
+		OwnerReferences: ownerRef,
+	}
+
+	mimirAlertManager := &oskov1alpha1.MimirAlertManager{
+		ObjectMeta: objectMeta,
+		Spec:       alertmanagerConfig.Spec,
+	}
+	return mimirAlertManager, nil
 }

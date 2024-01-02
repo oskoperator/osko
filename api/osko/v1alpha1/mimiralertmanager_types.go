@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -9,11 +10,7 @@ import (
 
 // MimirAlertManagerSpec defines the desired state of MimirAlertManager
 type MimirAlertManagerSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of MimirAlertManager. Edit mimiralertmanager_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// INSERT ADDITIONAL SPEC FIELD - desired state of cluster
 }
 
 // MimirAlertManagerStatus defines the observed state of MimirAlertManager
@@ -30,17 +27,17 @@ type MimirAlertManager struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   MimirAlertManagerSpec   `json:"spec,omitempty"`
-	Status MimirAlertManagerStatus `json:"status,omitempty"`
+	Spec   monitoringv1alpha1.AlertmanagerConfigSpec `json:"spec,omitempty" yaml:"spec"`
+	Status MimirAlertManagerStatus                   `json:"status,omitempty" yaml:"status"`
 }
 
 //+kubebuilder:object:root=true
 
 // MimirAlertManagerList contains a list of MimirAlertManager
 type MimirAlertManagerList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []MimirAlertManager `json:"items"`
+	metav1.TypeMeta `json:",inline" yaml:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Items           []MimirAlertManager `json:"items" yaml:"items"`
 }
 
 func init() {

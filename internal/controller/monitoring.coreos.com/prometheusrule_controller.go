@@ -80,7 +80,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	ds := &openslov1.Datasource{}
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: prometheusRule.Namespace,
-		Name:      "logging-ds",
+		Name:      "logging-ds", //TODO: Should be taken from the annotation
 	}, ds); err != nil {
 		log.Error(err, "Failed to get Datasource")
 		return ctrl.Result{}, err

@@ -77,15 +77,6 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}
 
-	ds := &openslov1.Datasource{}
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: prometheusRule.Namespace,
-		Name:      "logging-ds",
-	}, ds); err != nil {
-		log.Error(err, "Failed to get Datasource")
-		return ctrl.Result{}, err
-	}
-
 	if apierrors.IsNotFound(err) {
 		log.Info("PrometheusRule not found. Let's make one.")
 		prometheusRule, err = helpers.CreatePrometheusRule(slo, sli)

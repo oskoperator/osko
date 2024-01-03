@@ -70,32 +70,6 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: prometheusRule.Namespace,
-		Name:      "logging-ds",
-	}, ds); err != nil {
-		log.Error(err, "Failed to get Datasource")
-		return ctrl.Result{}, err
-	}
-
-	log.Info("Datasource found", "Datasource", ds)
-
-	if err := r.newMimirClient(ds); err != nil {
-		log.Error(err, "Failed to create MimirClient")
-		return ctrl.Result{}, err
-	}
-
-	rgs, err := helpers.NewMimirRuleGroup(prometheusRule)
-	if err != nil {
-		log.Error(err, "Failed to convert MimirRuleGroup")
-		return ctrl.Result{}, err
-	}
-
-	if err := r.createMimirRuleGroupAPI(log, rgs); err != nil {
-		log.Error(err, "Failed to create MimirRuleGroup")
-		return ctrl.Result{}, err
-	}
-
 	err = r.Get(ctx, req.NamespacedName, mimirRule)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -108,7 +82,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if apierrors.IsNotFound(err) {
 		log.Info("MimirRule not found. Let's make one.")
-		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule)
+		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, ds)
 
 		if err = r.Create(ctx, mimirRule); err != nil {
 			r.Recorder.Event(mimirRule, "Error", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
@@ -142,6 +116,32 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: prometheusRule.Namespace,
+		Name:      slo.ObjectMeta.Annotations["osko.dev/datasourceRef"],
+	}, ds); err != nil {
+		log.Error(err, "Failed to get Datasource")
+		return ctrl.Result{}, err
+	}
+
+	log.Info("Datasource found", "Datasource", ds)
+
+	if err := r.newMimirClient(ds); err != nil {
+		log.Error(err, "Failed to create MimirClient")
+		return ctrl.Result{}, err
+	}
+
+	rgs, err := helpers.NewMimirRuleGroup(prometheusRule)
+	if err != nil {
+		log.Error(err, "Failed to convert MimirRuleGroup")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.createMimirRuleGroupAPI(log, rgs); err != nil {
+		log.Error(err, "Failed to create MimirRuleGroup")
+		return ctrl.Result{}, err
+	}
+
 	if !utils.ContainString(mimirRule.GetFinalizers(), mimirRuleFinalizer) {
 		if err := r.addFinalizer(log, mimirRule); err != nil {
 			return ctrl.Result{}, err
@@ -149,7 +149,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	log.Info("MmimirRule already exists, we should update it.")
-	newMimirRule, err = helpers.NewMimirRule(slo, prometheusRule)
+	newMimirRule, err = helpers.NewMimirRule(slo, prometheusRule, ds)
 	if err != nil {
 		log.Error(err, "Failed to create new MimirRule")
 		return ctrl.Result{}, err
@@ -221,10 +221,13 @@ func (r *MimirRuleReconciler) createMimirRuleGroupAPI(log logr.Logger, rule *osk
 		},
 	}
 
-	if err := r.MimirClient.CreateRuleGroup(context.Background(), mimirRuleNamespace, mimirRule); err != nil {
+	err := r.MimirClient.CreateRuleGroup(context.Background(), mimirRuleNamespace, mimirRule)
+	if err != nil {
 		log.Error(err, "Failed to create rule group")
 		return err
 	}
+
+	// TODO: move finalizer addition here
 
 	return nil
 }
@@ -254,25 +257,12 @@ func (r *MimirRuleReconciler) getMimirRuleGroupAPI(log logr.Logger, rule *monito
 //	return nil
 //}
 
-func (r *MimirRuleReconciler) deleteMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, ruleGroup *rwrulefmt.RuleGroup) error {
+func (r *MimirRuleReconciler) deleteMimirRuleGroupAPI(log logr.Logger, mimirClient *mimirclient.MimirClient, ruleGroup *rwrulefmt.RuleGroup) error {
 	if err := mimirClient.DeleteRuleGroup(context.Background(), mimirRuleNamespace, ruleGroup.Name); err != nil {
 		log.Error(err, "Failed to delete rule group")
 		return err
 	}
 
-	return nil
-}
-
-func (r *MimirRuleReconciler) updateMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, existingGroup *rwrulefmt.RuleGroup, desiredGroup *rwrulefmt.RuleGroup) error {
-	log.Info("Updating Mimir rule group")
-	if reflect.DeepEqual(existingGroup, desiredGroup) {
-		log.Info("Mimir rule group is already up to date")
-		return nil
-	}
-	err := r.deleteMimirRuleGroup(log, mimirClient, existingGroup)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 

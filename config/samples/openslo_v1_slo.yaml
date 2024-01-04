@@ -5,7 +5,7 @@ kind: SLO
 metadata:
   name: logging-query-frontend-error-rate
   annotations:
-    osko.com/source-tenants: "logging,infra"
+    osko.dev/datasourceRef: "logging-ds"
 spec:
   budgetingMethod: Occurrences
   description: 99.00% of Loki read requests return valid response
@@ -18,13 +18,11 @@ spec:
         counter: true
         good:
           metricSource:
-            metricSourceRef: datasource-sample
             spec: |
               loki_request_duration_seconds_count{route=~"loki.*", service="loki-loki-distributed-query-frontend",status_code!~"5.*"}
             type: Prometheus
         total:
           metricSource:
-            metricSourceRef: datasource-sample
             spec: |
               loki_request_duration_seconds_count{route=~"loki.*", service="loki-loki-distributed-query-frontend"}
             type: Prometheus

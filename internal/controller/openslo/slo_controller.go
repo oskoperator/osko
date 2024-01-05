@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"fmt"
+
 	"github.com/go-logr/logr"
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
@@ -56,6 +58,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	sli := &openslov1.SLI{}
 	slo := &openslov1.SLO{}
+	ds := &openslov1.Datasource{}
 	err := r.Get(ctx, req.NamespacedName, slo)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -64,6 +67,17 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 		log.Error(err, errGetSLO)
 		return ctrl.Result{}, nil
+	}
+
+	// Get DS from SLO's ref
+	err = r.Get(ctx, client.ObjectKey{Name: slo.ObjectMeta.Annotations["osko.dev/datasourceRef"], Namespace: slo.Namespace}, ds)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info(fmt.Sprintf("datasourceRef: %v", errGetDS))
+			return ctrl.Result{}, nil
+		}
+		log.Error(err, errGetDS)
+		return ctrl.Result{}, err
 	}
 
 	// Get SLI from SLO's ref
@@ -147,7 +161,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if apierrors.IsNotFound(err) {
 		log.Info("MimirRule not found. Let's make one.")
-		mimirRule, err = helpers.NewMimirRule(slo, promRule)
+		mimirRule, err = helpers.NewMimirRule(slo, promRule, ds)
 		if err != nil {
 			if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule Object"); err != nil {
 				log.Error(err, "Failed to update SLO status")
@@ -173,11 +187,6 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			if err := r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO ready status")
 				return ctrl.Result{}, err
-			}
-			if !utils.ContainString(mimirRule.GetFinalizers(), mimirRuleFinalizer) {
-				if err := r.addFinalizer(log, mimirRule); err != nil {
-					return ctrl.Result{}, err
-				}
 			}
 			return ctrl.Result{}, nil
 		}

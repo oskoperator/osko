@@ -64,10 +64,14 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("PrometheusRule resource not found. Ignoring since object must be deleted")
-			return ctrl.Result{}, nil
+		} else {
+			log.Error(err, "Failed to get PrometheusRule")
 		}
-		log.Error(err, "Failed to get PrometheusRule")
-		return ctrl.Result{}, err
+	}
+
+	rgs, err := helpers.NewMimirRuleGroup(prometheusRule)
+	if err != nil {
+		log.Error(err, "Failed to convert MimirRuleGroup")
 	}
 
 	err = r.Get(ctx, req.NamespacedName, mimirRule)
@@ -78,6 +82,24 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		log.Error(err, "Failed to get MimirRule")
 		return ctrl.Result{}, err
+	}
+
+	isMimirRuleMarkedToBeDeleted := mimirRule.GetDeletionTimestamp() != nil
+	if isMimirRuleMarkedToBeDeleted {
+		if err := r.deleteMimirRuleGroupAPI(log, req.Name); err != nil {
+			log.Error(err, "Failed to delete MimirRule from the Mimir API")
+			return ctrl.Result{}, err
+		}
+		if controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
+			controllerutil.RemoveFinalizer(mimirRule, mimirRuleFinalizer)
+			err := r.Update(ctx, mimirRule)
+			if err != nil {
+				log.Error(err, "Failed to remove the finalizer from the MimirRule")
+				return ctrl.Result{}, err
+			}
+		}
+		return ctrl.Result{}, nil
+
 	}
 
 	if apierrors.IsNotFound(err) {
@@ -131,12 +153,6 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	rgs, err := helpers.NewMimirRuleGroup(prometheusRule)
-	if err != nil {
-		log.Error(err, "Failed to convert MimirRuleGroup")
-		return ctrl.Result{}, err
-	}
-
 	if err := r.createMimirRuleGroupAPI(log, rgs); err != nil {
 		log.Error(err, "Failed to create MimirRuleGroup")
 		return ctrl.Result{}, err
@@ -148,7 +164,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	log.Info("MmimirRule already exists, we should update it.")
+	log.Info("MimirRule already exists, we should update it.")
 	newMimirRule, err = helpers.NewMimirRule(slo, prometheusRule, ds)
 	if err != nil {
 		log.Error(err, "Failed to create new MimirRule")
@@ -257,8 +273,8 @@ func (r *MimirRuleReconciler) getMimirRuleGroupAPI(log logr.Logger, rule *monito
 //	return nil
 //}
 
-func (r *MimirRuleReconciler) deleteMimirRuleGroupAPI(log logr.Logger, mimirClient *mimirclient.MimirClient, ruleGroup *rwrulefmt.RuleGroup) error {
-	if err := mimirClient.DeleteRuleGroup(context.Background(), mimirRuleNamespace, ruleGroup.Name); err != nil {
+func (r *MimirRuleReconciler) deleteMimirRuleGroupAPI(log logr.Logger, name string) error {
+	if err := r.MimirClient.DeleteRuleGroup(context.Background(), mimirRuleNamespace, name); err != nil {
 		log.Error(err, "Failed to delete rule group")
 		return err
 	}

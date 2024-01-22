@@ -29,8 +29,6 @@ If the target system is unable to reconcile the created [`PrometheusRule`](https
 # Technical notes
 
 - We should look into how to implement [Multiwindow, Multi-Burn-Rate Alerts](https://sre.google/workbook/alerting-on-slos/#6-multiwindow-multi-burn-rate-alerts) based on the OpenSLO spec
-  <!-- TODO(fourstepper): a little bookmark here for now, move somewhere else later -->
-- [Objectives](https://github.com/OpenSLO/OpenSLO#objectives) are cool
 
 ## Design
 

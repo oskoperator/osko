@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
 	"github.com/oskoperator/osko/internal/helpers"
@@ -18,7 +17,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -236,18 +234,6 @@ func (r *SLOReconciler) findObjectsForSli() func(ctx context.Context, a client.O
 		}
 		return requests
 	}
-}
-
-func (r *SLOReconciler) addFinalizer(log logr.Logger, rule *oskov1alpha1.MimirRule) error {
-	log.Info("Adding Finalizer for the MimirRule")
-	controllerutil.AddFinalizer(rule, mimirRuleFinalizer)
-
-	err := r.Update(context.Background(), rule)
-	if err != nil {
-		log.Error(err, "Failed to update MimirRule with finalizer")
-		return err
-	}
-	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

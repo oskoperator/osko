@@ -158,8 +158,10 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	if !utils.ContainString(mimirRule.GetFinalizers(), mimirRuleFinalizer) {
-		if err := r.addFinalizer(log, mimirRule); err != nil {
+	if !controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
+		controllerutil.AddFinalizer(mimirRule, mimirRuleFinalizer)
+		if err := r.Update(ctx, mimirRule); err != nil {
+			log.Error(err, "Failed to remove the finalizer from the MimirRule")
 			return ctrl.Result{}, err
 		}
 	}
@@ -279,18 +281,6 @@ func (r *MimirRuleReconciler) deleteMimirRuleGroupAPI(log logr.Logger, name stri
 		return err
 	}
 
-	return nil
-}
-
-func (r *MimirRuleReconciler) addFinalizer(log logr.Logger, rule *oskov1alpha1.MimirRule) error {
-	log.Info("Adding Finalizer for the MimirRule")
-	controllerutil.AddFinalizer(rule, mimirRuleFinalizer)
-
-	err := r.Update(context.Background(), rule)
-	if err != nil {
-		log.Error(err, "Failed to update MimirRule with finalizer")
-		return err
-	}
 	return nil
 }
 

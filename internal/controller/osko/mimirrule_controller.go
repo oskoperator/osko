@@ -2,6 +2,9 @@ package osko
 
 import (
 	"context"
+	"reflect"
+	"time"
+
 	"github.com/go-logr/logr"
 	mimirclient "github.com/grafana/mimir/pkg/mimirtool/client"
 	"github.com/grafana/mimir/pkg/mimirtool/rules/rwrulefmt"
@@ -13,7 +16,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -26,9 +28,10 @@ import (
 // MimirRuleReconciler reconciles a MimirRule object
 type MimirRuleReconciler struct {
 	client.Client
-	Scheme      *runtime.Scheme
-	Recorder    record.EventRecorder
-	MimirClient *mimirclient.MimirClient
+	Scheme             *runtime.Scheme
+	Recorder           record.EventRecorder
+	MimirClient        *mimirclient.MimirClient
+	RequeueAfterPeriod time.Duration
 }
 
 const (
@@ -109,7 +112,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					log.Error(err, "Failed to update MimirRule ready status")
 					return ctrl.Result{}, err
 				}
-				return ctrl.Result{}, nil
+				return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 			}
 		}
 	}
@@ -166,7 +169,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	compareResult := reflect.DeepEqual(mimirRule.Spec, newMimirRule.Spec)
 	if compareResult {
 		log.Info("MimirRule is up to date")
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 	}
 
 	newMimirRule.ResourceVersion = mimirRule.ResourceVersion
@@ -182,7 +185,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	log.Info("MimirRule reconciled")
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 }
 
 func (r *MimirRuleReconciler) newMimirClient(ds *openslov1.Datasource) error {

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
@@ -51,6 +52,14 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	opts := zap.Options{}
 	opts.BindFlags(flag.CommandLine)
+
+	var mimirRuleRequeuePeriod time.Duration
+	mimirRuleRequeuePeriodDefault, err := time.ParseDuration("5m")
+	if err != nil {
+		setupLog.Error(err, "can't parse default \"mimirRuleRequeuePeriodDefault\"")
+		os.Exit(1)
+	}
+	flag.DurationVar(&mimirRuleRequeuePeriod, "mimirrule-requeue-period", mimirRuleRequeuePeriodDefault, "The requeue period for MimirRule object reconcilation.")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
@@ -125,9 +134,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&oskocontroller.MimirRuleReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("mimirrule-controller"),
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		Recorder:           mgr.GetEventRecorderFor("mimirrule-controller"),
+		RequeueAfterPeriod: mimirRuleRequeuePeriod,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MimirRule")
 		os.Exit(1)

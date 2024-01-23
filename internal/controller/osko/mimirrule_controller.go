@@ -154,7 +154,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if !controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
 		controllerutil.AddFinalizer(mimirRule, mimirRuleFinalizer)
 		if err := r.Update(ctx, mimirRule); err != nil {
-			log.Error(err, "Failed to remove the finalizer from the MimirRule")
+			log.Error(err, "Failed to add the finalizer to the MimirRule")
 			return ctrl.Result{}, err
 		}
 	}
@@ -237,8 +237,6 @@ func (r *MimirRuleReconciler) createMimirRuleGroupAPI(log logr.Logger, rule *osk
 		log.Error(err, "Failed to create rule group")
 		return err
 	}
-
-	// TODO: move finalizer addition here
 
 	return nil
 }

@@ -68,7 +68,6 @@ type SLOSpec struct {
 type SLOStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	// TODO: Maybe we should use something like []corev1.ObejctReference here?
 	Conditions         []metav1.Condition `json:"conditions,omitempty"`
 	CurrentSLO         string             `json:"currentSLO,omitempty"`
 	LastEvaluationTime metav1.Time        `json:"lastEvaluationTime,omitempty"`

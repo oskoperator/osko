@@ -4,6 +4,8 @@ apiVersion: openslo.com/v1
 kind: SLO
 metadata:
   name: logging-query-frontend-error-rate
+  labels:
+    app.kubernetes.io/name: logging-query-frontend-error-rate
   annotations:
     osko.dev/datasourceRef: "logging-ds"
 spec:

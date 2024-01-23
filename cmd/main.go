@@ -54,7 +54,7 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 
 	var mimirRuleRequeuePeriod time.Duration
-	mimirRuleRequeuePeriodDefault, err := time.ParseDuration("5m")
+	mimirRuleRequeuePeriodDefault, err := time.ParseDuration("1m")
 	if err != nil {
 		setupLog.Error(err, "can't parse default \"mimirRuleRequeuePeriodDefault\"")
 		os.Exit(1)

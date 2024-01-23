@@ -92,7 +92,6 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 		return ctrl.Result{}, nil
-
 	}
 
 	if apierrors.IsNotFound(err) {
@@ -241,37 +240,11 @@ func (r *MimirRuleReconciler) createMimirRuleGroupAPI(log logr.Logger, rule *osk
 	return nil
 }
 
-func (r *MimirRuleReconciler) getMimirRuleGroupAPI(log logr.Logger, rule *monitoringv1.PrometheusRule) *rwrulefmt.RuleGroup {
-	mimirRuleGroup, err := r.MimirClient.GetRuleGroup(context.Background(), mimirRuleNamespace, rule.Name)
-	if err != nil {
-		log.Error(err, "Failed to get rule group")
-		return nil
-	}
-
-	return mimirRuleGroup
-}
-
-//func (r *MimirRuleReconciler) createMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, rule *monitoringv1.PrometheusRule, ds *openslov1.Datasource) error {
-//	mimirRuleGroup, err := helpers.NewMimirRuleGroup(rule)
-//	if err != nil {
-//		log.Error(err, "Failed to create Mimir rule group")
-//		return err
-//	}
-//
-//	if err := mimirClient.CreateRuleGroup(context.Background(), mimirRuleNamespace, *mimirRuleGroup); err != nil {
-//		log.Error(err, "Failed to create rule group")
-//		return err
-//	}
-//
-//	return nil
-//}
-
 func (r *MimirRuleReconciler) deleteMimirRuleGroupAPI(log logr.Logger, name string) error {
 	if err := r.MimirClient.DeleteRuleGroup(context.Background(), mimirRuleNamespace, name); err != nil {
 		log.Error(err, "Failed to delete rule group")
 		return err
 	}
-
 	return nil
 }
 

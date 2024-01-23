@@ -2,6 +2,9 @@ package osko
 
 import (
 	"context"
+	"reflect"
+	"time"
+
 	"github.com/go-logr/logr"
 	mimirclient "github.com/grafana/mimir/pkg/mimirtool/client"
 	"github.com/grafana/mimir/pkg/mimirtool/rules/rwrulefmt"
@@ -13,7 +16,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -26,9 +28,10 @@ import (
 // MimirRuleReconciler reconciles a MimirRule object
 type MimirRuleReconciler struct {
 	client.Client
-	Scheme      *runtime.Scheme
-	Recorder    record.EventRecorder
-	MimirClient *mimirclient.MimirClient
+	Scheme             *runtime.Scheme
+	Recorder           record.EventRecorder
+	MimirClient        *mimirclient.MimirClient
+	RequeueAfterPeriod time.Duration
 }
 
 const (
@@ -89,7 +92,6 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 		return ctrl.Result{}, nil
-
 	}
 
 	if apierrors.IsNotFound(err) {
@@ -109,7 +111,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					log.Error(err, "Failed to update MimirRule ready status")
 					return ctrl.Result{}, err
 				}
-				return ctrl.Result{}, nil
+				return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 			}
 		}
 	}
@@ -151,7 +153,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if !controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
 		controllerutil.AddFinalizer(mimirRule, mimirRuleFinalizer)
 		if err := r.Update(ctx, mimirRule); err != nil {
-			log.Error(err, "Failed to remove the finalizer from the MimirRule")
+			log.Error(err, "Failed to add the finalizer to the MimirRule")
 			return ctrl.Result{}, err
 		}
 	}
@@ -166,7 +168,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	compareResult := reflect.DeepEqual(mimirRule.Spec, newMimirRule.Spec)
 	if compareResult {
 		log.Info("MimirRule is up to date")
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 	}
 
 	newMimirRule.ResourceVersion = mimirRule.ResourceVersion
@@ -182,7 +184,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	log.Info("MimirRule reconciled")
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 }
 
 func (r *MimirRuleReconciler) newMimirClient(ds *openslov1.Datasource) error {
@@ -235,42 +237,14 @@ func (r *MimirRuleReconciler) createMimirRuleGroupAPI(log logr.Logger, rule *osk
 		return err
 	}
 
-	// TODO: move finalizer addition here
-
 	return nil
 }
-
-func (r *MimirRuleReconciler) getMimirRuleGroupAPI(log logr.Logger, rule *monitoringv1.PrometheusRule) *rwrulefmt.RuleGroup {
-	mimirRuleGroup, err := r.MimirClient.GetRuleGroup(context.Background(), mimirRuleNamespace, rule.Name)
-	if err != nil {
-		log.Error(err, "Failed to get rule group")
-		return nil
-	}
-
-	return mimirRuleGroup
-}
-
-//func (r *MimirRuleReconciler) createMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, rule *monitoringv1.PrometheusRule, ds *openslov1.Datasource) error {
-//	mimirRuleGroup, err := helpers.NewMimirRuleGroup(rule)
-//	if err != nil {
-//		log.Error(err, "Failed to create Mimir rule group")
-//		return err
-//	}
-//
-//	if err := mimirClient.CreateRuleGroup(context.Background(), mimirRuleNamespace, *mimirRuleGroup); err != nil {
-//		log.Error(err, "Failed to create rule group")
-//		return err
-//	}
-//
-//	return nil
-//}
 
 func (r *MimirRuleReconciler) deleteMimirRuleGroupAPI(log logr.Logger, name string) error {
 	if err := r.MimirClient.DeleteRuleGroup(context.Background(), mimirRuleNamespace, name); err != nil {
 		log.Error(err, "Failed to delete rule group")
 		return err
 	}
-
 	return nil
 }
 

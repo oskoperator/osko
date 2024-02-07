@@ -5,6 +5,8 @@ on:
       - main
     paths:
       - 'helm/**'
+    tags:
+      - '*'
 
 jobs:
   lint-chart:

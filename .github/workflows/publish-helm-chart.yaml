@@ -37,9 +37,9 @@ jobs:
         uses: helm/kind-action@v1.8.0
 
       - name: Run Chart testing
-        uses: helm/release-action@v2.1.0
+        uses: helm/chart-testing-action@v2.1.0
         with:
-          config: helm/ct.yaml
+          config: ct.yaml
 
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')

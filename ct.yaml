@@ -3,7 +3,5 @@ remote: origin
 target-branch: main
 chart-dirs:
   - helm
-charts-repo: https://github.com/oskoperator/osko
-excluded-charts:
-  - osko-crds
+charts-repo: https://helm.osko.dev
 validate-maintainers: false

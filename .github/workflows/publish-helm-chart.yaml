@@ -5,9 +5,12 @@ on:
       - main
     paths:
       - 'helm/**'
+    tags:
+      - '*'
 
 jobs:
   lint-chart:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -16,34 +19,30 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@v3
 
-      - uses: actions/setup-python@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.12.0'
           check-latest: true
 
-      - name: Run chart-testing (lint)
-        uses: helm/chart-testing-action@main
+      - name: Cache dependecies
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache
+          key: ${{ runner.os }}-helm-${{ hashFiles('**/requirements.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-helm-${{ hashFiles('**/Chart.yaml') }}
 
-      - name: Run chart-testing (list-changed)
-        id: list-changed
-        run: |
-          changed=$(ct list-changed --target-branch ${{ github.ref_name	 }})
-          if [[ -n "$changed" ]]; then
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Run chart-testing (lint)
-        if: steps.list-changed.outputs.changed == 'true'
-        run: ct lint --target-branch ${{ github.ref_name }}
-
-      - name: Create kind cluster
-        if: steps.list-changed.outputs.changed == 'true'
+      - name: Create Kind Cluster
         uses: helm/kind-action@v1.8.0
 
-      - name: Run chart-testing (install)
-        if: steps.list-changed.outputs.changed == 'true'
-        run: ct install --target-branch ${{ github.ref_name }}
+      - name: Run Chart testing
+        uses: helm/release-action@v2.1.0
+        with:
+          config: helm/ct.yaml
+
   release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
     runs-on: ubuntu-latest

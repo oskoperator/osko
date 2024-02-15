@@ -29,7 +29,7 @@ dependencies:
   - name: prometheus-operator-crds
     version: 8.0.1
     repository: https://prometheus-community.github.io/helm-charts
-    condition: installcrds.prometheus-operator.enabled
+    condition: installcrds.prometheus-operator
   - name: crds
     version: 0.0.0
-    condition: installcrds.osko.enabled
+    condition: installcrds.osko

@@ -53,6 +53,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Configure Git
         run: |
@@ -61,13 +63,11 @@ jobs:
 
       - name: Copy CRDs to it's chart
         run: |
-          cp -rf config/crd/bases/* charts/osko-crds/charts/crds/templates/
-          cp -rf config/crd/bases/* charts/osko/charts/crds/templates/
+          cp -rf config/crd/bases/* helm/osko-crds/charts/crds/templates/
+          cp -rf config/crd/bases/* helm/osko/charts/crds/templates/
 
       - name: Install Helm
         uses: azure/setup-helm@v3
-        with:
-          version: v3.13.1
 
       - name: Add dependency chart repos
         run: |
@@ -78,6 +78,6 @@ jobs:
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:
-          charts_dir: charts
+          charts_dir: helm
           skip_existing: false
           packages_with_index: true

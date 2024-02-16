@@ -2,6 +2,9 @@ package monitoringcoreoscom
 
 import (
 	"context"
+	"reflect"
+	"strconv"
+
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/helpers"
 	"github.com/oskoperator/osko/internal/utils"
@@ -12,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -64,6 +66,22 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			if err := r.Get(ctx, sloNamespacedName, slo); err != nil {
 				log.Error(err, "Failed to get SLO")
 				return ctrl.Result{}, err
+			}
+			break
+		}
+	}
+
+	if slo == nil {
+		value, found := prometheusRule.ObjectMeta.Labels["osko.dev/manage"]
+		valueBool, err := strconv.ParseBool(value)
+		if err != nil {
+			log.Error(err, "Couldn't parse the osko.dev/manage label")
+			return ctrl.Result{}, err
+		}
+		if !found || !valueBool {
+			valueBool, err := strconv.ParseBool(value)
+			if err != nil && valueBool {
+				log.Info("Manage found, continuing")
 			}
 		}
 	}

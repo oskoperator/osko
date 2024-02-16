@@ -3,7 +3,6 @@ package monitoringcoreoscom
 import (
 	"context"
 	"reflect"
-	"strconv"
 
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/helpers"
@@ -56,6 +55,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
+	// check if the PrometheusRule is owned by an SLO
 	for _, ref := range prometheusRule.ObjectMeta.OwnerReferences {
 		if ref.Kind == "SLO" {
 			sloNamespacedName := types.NamespacedName{
@@ -71,18 +71,12 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}
 
+	// if not, check if we are supposed to manage it or not
 	if slo == nil {
 		value, found := prometheusRule.ObjectMeta.Labels["osko.dev/manage"]
-		valueBool, err := strconv.ParseBool(value)
-		if err != nil {
-			log.Error(err, "Couldn't parse the osko.dev/manage label")
-			return ctrl.Result{}, err
-		}
-		if !found || !valueBool {
-			valueBool, err := strconv.ParseBool(value)
-			if err != nil && valueBool {
-				log.Info("Manage found, continuing")
-			}
+		if !found || value != "true" {
+			log.Info("Not managing a PrometheusRule unrelated to osko")
+			return ctrl.Result{}, nil
 		}
 	}
 

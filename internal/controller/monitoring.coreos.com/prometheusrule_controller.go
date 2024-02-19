@@ -2,6 +2,8 @@ package monitoringcoreoscom
 
 import (
 	"context"
+	"reflect"
+
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/helpers"
 	"github.com/oskoperator/osko/internal/utils"
@@ -12,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -54,6 +55,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
+	// check if the PrometheusRule is owned by an SLO
 	for _, ref := range prometheusRule.ObjectMeta.OwnerReferences {
 		if ref.Kind == "SLO" {
 			sloNamespacedName := types.NamespacedName{
@@ -65,6 +67,16 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				log.Error(err, "Failed to get SLO")
 				return ctrl.Result{}, err
 			}
+			break
+		}
+	}
+
+	// if not, check if we are supposed to manage it or not
+	if slo == nil {
+		value, found := prometheusRule.ObjectMeta.Labels["osko.dev/manage"]
+		if !found || value != "true" {
+			log.Info("Not managing a PrometheusRule unrelated to osko")
+			return ctrl.Result{}, nil
 		}
 	}
 

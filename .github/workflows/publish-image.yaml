@@ -13,7 +13,6 @@ env:
 
 jobs:
   build-and-push-image:
-    if: ${{ false }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

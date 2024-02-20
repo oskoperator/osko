@@ -126,7 +126,9 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 	}
 
 	monitoringRules = append(monitoringRules, targetVectorConfig.NewTargetRule())
-	monitoringRules = append(monitoringRules, errorBudgetRuleConfig.NewBudgetRule())
+	budgetRule, sliMeasurement := errorBudgetRuleConfig.NewBudgetRule()
+	monitoringRules = append(monitoringRules, budgetRule)
+	monitoringRules = append(monitoringRules, sliMeasurement)
 
 	ownerRef := []metav1.OwnerReference{
 		*metav1.NewControllerRef(

@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"github.com/go-logr/logr"
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,11 +49,12 @@ type DataSourceConfig struct {
 }
 
 const (
-	RecordPrefix = "osko"
-	TypeTotal    = "total"
-	TypeBad      = "bad"
-	TypeGood     = "good"
-	ExprFmt      = "sum(increase(%s[%s]))"
+	RecordPrefix    = "osko"
+	TypeTotal       = "total"
+	TypeBad         = "bad"
+	TypeGood        = "good"
+	TypeMeasurement = "sli_measurement"
+	ExprFmt         = "sum(increase(%s[%s]))"
 )
 
 // UpdateCondition checks if the condition of the given type is already in the slice
@@ -193,30 +195,49 @@ func (c Rule) NewTargetRule() (rule monitoringv1.Rule) {
 	return rule
 }
 
-func (b BudgetRule) NewBudgetRule() (rule monitoringv1.Rule) {
+func (b BudgetRule) NewBudgetRule() (budgetRule monitoringv1.Rule, sliMeasurement monitoringv1.Rule) {
 	log := ctrllog.FromContext(context.Background())
-	gbRule := &Rule{}
-	if b.BadRuleConfig.Sli.Spec.RatioMetric.Bad.MetricSource.Spec == "" || b.BadRuleConfig.Slo.Spec.Indicator.Spec.RatioMetric.Bad.MetricSource.Spec == "" {
-		log.Info("Bad rule not provided, calculating bad as (total - good)")
-		gbRule = b.GoodRuleConfig
-	} else {
-		log.Info("Bad rule provided")
-		gbRule = b.BadRuleConfig
+
+	goodRuleSpec := b.GoodRuleConfig.Sli.Spec.RatioMetric.Good.MetricSource.Spec
+	sloIndicatorSpec := b.GoodRuleConfig.Slo.Spec.Indicator.Spec.RatioMetric.Good.MetricSource.Spec
+	gbRule := getRelevantRule(b, goodRuleSpec, sloIndicatorSpec, log)
+
+	sliMeasurement = createSLIMeasurement(gbRule, b.TotalRuleConfig)
+	budgetRule = createBudgetRule(b, gbRule)
+
+	return budgetRule, sliMeasurement
+}
+
+func getRelevantRule(b BudgetRule, goodRuleSpec, sloIndicatorSpec string, log logr.Logger) *Rule {
+	if goodRuleSpec == "" || sloIndicatorSpec == "" {
+		log.Info("Good rule not provided, calculating bad as (total - bad)")
+		return b.BadRuleConfig
 	}
-	rule.Record = fmt.Sprintf("%s_%s", RecordPrefix, b.Record)
-	expr := fmt.Sprintf("(1 - %s_%s{%s}) * (%s_%s{%s} - %s_%s{%s})",
-		RecordPrefix,
-		b.TargetRuleConfig.Record,
-		b.TargetRuleConfig.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
-		RecordPrefix,
-		b.TotalRuleConfig.Record,
-		b.TotalRuleConfig.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
-		RecordPrefix,
-		gbRule.Record,
-		gbRule.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
-	)
-	rule.Expr = intstr.Parse(expr)
-	return rule
+	log.Info("Good rule provided")
+	return b.GoodRuleConfig
+}
+
+func createSLIMeasurement(gbRule, totalRuleConfig *Rule) monitoringv1.Rule {
+	measurement := monitoringv1.Rule{}
+	measurement.Record = fmt.Sprintf("%s_%s", RecordPrefix, TypeMeasurement)
+	exprFormat := "%s_%s{%s} / %s_%s{%s}"
+	measurement.Expr = intstr.Parse(fmt.Sprintf(exprFormat,
+		RecordPrefix, gbRule.Record, gbRule.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
+		RecordPrefix, totalRuleConfig.Record, totalRuleConfig.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
+	))
+	return measurement
+}
+
+func createBudgetRule(b BudgetRule, gbRule *Rule) monitoringv1.Rule {
+	bRule := monitoringv1.Rule{}
+	bRule.Record = fmt.Sprintf("%s_%s", RecordPrefix, b.Record)
+	exprFormat := "(1 - %s_%s{%s}) * (%s_%s{%s} / %s_%s{%s})"
+	bRule.Expr = intstr.Parse(fmt.Sprintf(exprFormat,
+		RecordPrefix, b.TargetRuleConfig.Record, b.TargetRuleConfig.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
+		RecordPrefix, gbRule.Record, gbRule.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
+		RecordPrefix, b.TotalRuleConfig.Record, b.TotalRuleConfig.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
+	))
+	return bRule
 }
 
 func (d DataSourceConfig) ParseTenantAnnotation() (tenants []string) {

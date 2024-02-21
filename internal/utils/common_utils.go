@@ -202,7 +202,7 @@ func (b BudgetRule) NewBudgetRule() (budgetRule monitoringv1.Rule, sliMeasuremen
 	sloIndicatorSpec := b.GoodRuleConfig.Slo.Spec.Indicator.Spec.RatioMetric.Good.MetricSource.Spec
 	gbRule := getRelevantRule(b, goodRuleSpec, sloIndicatorSpec, log)
 
-	sliMeasurement = createSLIMeasurement(gbRule, b.TotalRuleConfig)
+	//sliMeasurement = createSLIMeasurement(gbRule, b.TotalRuleConfig)
 	budgetRule = createBudgetRule(b, gbRule)
 
 	return budgetRule, sliMeasurement
@@ -217,16 +217,24 @@ func getRelevantRule(b BudgetRule, goodRuleSpec, sloIndicatorSpec string, log lo
 	return b.GoodRuleConfig
 }
 
-func createSLIMeasurement(gbRule, totalRuleConfig *Rule) monitoringv1.Rule {
+func CreateSLIMeasurement(m MetricLabel, goodRule monitoringv1.Rule, totalRule monitoringv1.Rule) monitoringv1.Rule {
 	measurement := monitoringv1.Rule{}
 	measurement.Record = fmt.Sprintf("%s_%s", RecordPrefix, TypeMeasurement)
-	exprFormat := "%s_%s{%s} / %s_%s{%s}"
-	measurement.Expr = intstr.Parse(fmt.Sprintf(exprFormat,
-		RecordPrefix, gbRule.Record, gbRule.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
-		RecordPrefix, totalRuleConfig.Record, totalRuleConfig.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
-	))
+	exprFormat := "%s{%s} / %s{%s}"
+	measurement.Expr = intstr.Parse(fmt.Sprintf(exprFormat, goodRule.Record, m.NewMetricLabelCompiler(&goodRule, ""), totalRule.Record, m.NewMetricLabelCompiler(&totalRule, "")))
 	return measurement
 }
+
+//func createSLIMeasurement(gbRule, totalRuleConfig *Rule) monitoringv1.Rule {
+//	measurement := monitoringv1.Rule{}
+//	measurement.Record = fmt.Sprintf("%s_%s", RecordPrefix, TypeMeasurement)
+//	exprFormat := "%s_%s{%s} / %s_%s{%s}"
+//	measurement.Expr = intstr.Parse(fmt.Sprintf(exprFormat,
+//		RecordPrefix, gbRule.Record, gbRule.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
+//		RecordPrefix, totalRuleConfig.Record, totalRuleConfig.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
+//	))
+//	return measurement
+//}
 
 func createBudgetRule(b BudgetRule, gbRule *Rule) monitoringv1.Rule {
 	bRule := monitoringv1.Rule{}

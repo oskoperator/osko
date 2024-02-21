@@ -1,12 +1,14 @@
 package helpers
 
 import (
+	"context"
 	"fmt"
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/utils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -14,6 +16,71 @@ const (
 )
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
+	log := ctrllog.FromContext(context.Background())
+
+	var monitoringRules []monitoringv1.Rule
+
+	sloTarget := newSloTarget(slo)
+
+	monitoringRules = append(monitoringRules, *sloTarget)
+
+	for i := range monitoringRules {
+		// Check if the Labels map is nil and initialize if necessary
+		if monitoringRules[i].Labels == nil {
+			monitoringRules[i].Labels = make(map[string]string)
+		}
+		// Append new label to the Labels map
+		monitoringRules[i].Labels["app"] = "label"
+	}
+
+	log.V(1).Info("Monitoring Rules", "PrometheusRule", monitoringRules)
+
+	ownerRef := []metav1.OwnerReference{
+		*metav1.NewControllerRef(
+			slo,
+			openslov1.GroupVersion.WithKind("SLO"),
+		),
+	}
+
+	objectMeta := metav1.ObjectMeta{
+		Name:            slo.Name,
+		Namespace:       slo.Namespace,
+		Labels:          slo.Labels,
+		Annotations:     slo.Annotations,
+		OwnerReferences: ownerRef,
+	}
+
+	ruleGroup := []monitoringv1.RuleGroup{
+		{
+			Name:  slo.Name,
+			Rules: monitoringRules,
+		},
+	}
+
+	typeMeta := metav1.TypeMeta{
+		APIVersion: "monitoring.coreos.com/v1",
+		Kind:       "PrometheusRule",
+	}
+
+	prometheusRule := monitoringv1.PrometheusRule{}
+
+	prometheusRule.TypeMeta = typeMeta
+	prometheusRule.ObjectMeta = objectMeta
+	prometheusRule.Spec = monitoringv1.PrometheusRuleSpec{
+		Groups: ruleGroup,
+	}
+
+	return &prometheusRule, nil
+}
+
+func newSloTarget(slo *openslov1.SLO) *monitoringv1.Rule {
+	return &monitoringv1.Rule{
+		Record: "osko_slo_target",
+		Expr:   intstr.Parse(fmt.Sprintf("vector(%s)", slo.Spec.Objectives[0].Target)),
+	}
+}
+
+func CreatePrometheusRule2(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
 	var monitoringRules []monitoringv1.Rule
 	var targetVector monitoringv1.Rule
 	defaultRateWindow := "1m"

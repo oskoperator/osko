@@ -203,6 +203,15 @@ func (r *MimirRuleReconciler) newMimirClient(ds *openslov1.Datasource) error {
 	return nil
 }
 
+//func (r *MimirRuleReconciler) getMimirRuleGroupAPI(log logr.Logger, name string) (*rwrulefmt.RuleGroup, error) {
+//	mimirRule, err := r.MimirClient.GetRuleGroup(context.Background(), mimirRuleNamespace, name)
+//	if err != nil {
+//		log.Error(err, "Failed to get rule group")
+//		return nil, err
+//	}
+//	return mimirRule, nil
+//}
+
 func (r *MimirRuleReconciler) createMimirRuleGroupAPI(log logr.Logger, rule *oskov1alpha1.RuleGroup) error {
 	var mimirRuleNodes []rulefmt.RuleNode
 	for _, r := range rule.Rules {

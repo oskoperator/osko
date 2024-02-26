@@ -15,22 +15,26 @@ const (
 	RecordPrefix = "osko"
 )
 
+type Rule monitoringv1.Rule
+
+func (r *Rule) addLabel(key, value string) {
+	if r.Labels == nil {
+		r.Labels = make(map[string]string)
+	}
+	r.Labels[key] = value
+}
+
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
 	log := ctrllog.FromContext(context.Background())
 
-	var monitoringRules []monitoringv1.Rule
+	var monitoringRules []Rule
 
 	sloTarget := newSloTarget(slo)
 
 	monitoringRules = append(monitoringRules, *sloTarget)
 
-	for i := range monitoringRules {
-		// Check if the Labels map is nil and initialize if necessary
-		if monitoringRules[i].Labels == nil {
-			monitoringRules[i].Labels = make(map[string]string)
-		}
-		// Append new label to the Labels map
-		monitoringRules[i].Labels["app"] = "label"
+	for _, rule := range monitoringRules {
+		rule.addLabel("app", "testing")
 	}
 
 	log.V(1).Info("Monitoring Rules", "PrometheusRule", monitoringRules)
@@ -50,10 +54,15 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		OwnerReferences: ownerRef,
 	}
 
+	finalMonitoringRules := make([]monitoringv1.Rule, len(monitoringRules))
+	for i, localRule := range monitoringRules {
+		finalMonitoringRules[i] = monitoringv1.Rule(localRule)
+	}
+
 	ruleGroup := []monitoringv1.RuleGroup{
 		{
 			Name:  slo.Name,
-			Rules: monitoringRules,
+			Rules: finalMonitoringRules,
 		},
 	}
 
@@ -73,8 +82,8 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 	return &prometheusRule, nil
 }
 
-func newSloTarget(slo *openslov1.SLO) *monitoringv1.Rule {
-	return &monitoringv1.Rule{
+func newSloTarget(slo *openslov1.SLO) *Rule {
+	return &Rule{
 		Record: "osko_slo_target",
 		Expr:   intstr.Parse(fmt.Sprintf("vector(%s)", slo.Spec.Objectives[0].Target)),
 	}

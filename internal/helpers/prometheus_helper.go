@@ -3,6 +3,8 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"slices"
+
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/utils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -24,20 +26,33 @@ func (r *Rule) addLabel(key, value string) {
 	r.Labels[key] = value
 }
 
+func (r *Rule) timeWindows(windows []string) {
+	for i, window := range windows {
+		r.addLabel(fmt.Sprintf("window%v", i), window)
+	}
+}
+
+var burnRateTimeWindows = []string{"5m", "30m", "1h", "6h", "3d"}
+
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
 	log := ctrllog.FromContext(context.Background())
 
-	var monitoringRules []Rule
+	var simpleMonitoringRules []*Rule
+	var preTimeWindowedMonitoringRules []*Rule
+	var timeWindowedMonitoringRules []*Rule
 
-	sloTarget := newSloTarget(slo)
+	simpleMonitoringRules = append(simpleMonitoringRules, newSloTarget(slo))
+	preTimeWindowedMonitoringRules = append(preTimeWindowedMonitoringRules, newSliRatioGood(slo), newSliRatioBad(slo))
 
-	monitoringRules = append(monitoringRules, *sloTarget)
-
-	for _, rule := range monitoringRules {
-		rule.addLabel("app", "testing")
+	for _, window := range burnRateTimeWindows {
+		for _, rule := range preTimeWindowedMonitoringRules {
+			originalRule := *rule
+			originalRule.addLabel("window", window)
+			timeWindowedMonitoringRules = append(timeWindowedMonitoringRules, &originalRule)
+		}
 	}
 
-	log.V(1).Info("Monitoring Rules", "PrometheusRule", monitoringRules)
+	log.Info("Monitoring Rules", "PrometheusRule", timeWindowedMonitoringRules)
 
 	ownerRef := []metav1.OwnerReference{
 		*metav1.NewControllerRef(
@@ -54,15 +69,20 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		OwnerReferences: ownerRef,
 	}
 
-	finalMonitoringRules := make([]monitoringv1.Rule, len(monitoringRules))
-	for i, localRule := range monitoringRules {
-		finalMonitoringRules[i] = monitoringv1.Rule(localRule)
+	finalSimpleMonitoringRules := make([]monitoringv1.Rule, len(simpleMonitoringRules))
+	for i, localRule := range simpleMonitoringRules {
+		finalSimpleMonitoringRules[i] = monitoringv1.Rule(*localRule)
+	}
+
+	finalTimeWindowedMonitoringRules := make([]monitoringv1.Rule, len(timeWindowedMonitoringRules))
+	for i, localRule := range timeWindowedMonitoringRules {
+		finalTimeWindowedMonitoringRules[i] = monitoringv1.Rule(*localRule)
 	}
 
 	ruleGroup := []monitoringv1.RuleGroup{
 		{
 			Name:  slo.Name,
-			Rules: finalMonitoringRules,
+			Rules: slices.Concat(finalSimpleMonitoringRules, finalTimeWindowedMonitoringRules),
 		},
 	}
 
@@ -85,6 +105,21 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 func newSloTarget(slo *openslov1.SLO) *Rule {
 	return &Rule{
 		Record: "osko_slo_target",
+		Expr:   intstr.Parse(fmt.Sprintf("vector(%s)", slo.Spec.Objectives[0].Target)),
+	}
+}
+
+// edit from here on to the bottom
+func newSliRatioGood(slo *openslov1.SLO) *Rule {
+	return &Rule{
+		Record: "osko_sli_ratio_good",
+		Expr:   intstr.Parse(fmt.Sprintf("vector(%s)", slo.Spec.Objectives[0].Target)),
+	}
+}
+
+func newSliRatioBad(slo *openslov1.SLO) *Rule {
+	return &Rule{
+		Record: "osko_sli_ratio_bad",
 		Expr:   intstr.Parse(fmt.Sprintf("vector(%s)", slo.Spec.Objectives[0].Target)),
 	}
 }

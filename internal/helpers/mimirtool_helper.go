@@ -74,7 +74,7 @@ func NewMimirRule(slo *openslov1.SLO, rule *monitoringv1.PrometheusRule, ds *ope
 	return mimirRule, nil
 }
 
-func NewMimirRuleGroup(rule *monitoringv1.PrometheusRule) (*oskov1alpha1.RuleGroup, error) {
+func NewMimirRuleGroup(rule *monitoringv1.PrometheusRule, ds *openslov1.Datasource) (*oskov1alpha1.RuleGroup, error) {
 	var mimirRules []oskov1alpha1.Rule
 
 	for _, group := range rule.Spec.Groups {
@@ -88,8 +88,9 @@ func NewMimirRuleGroup(rule *monitoringv1.PrometheusRule) (*oskov1alpha1.RuleGro
 		}
 	}
 	mimirRuleGroup := &oskov1alpha1.RuleGroup{
-		Name:  rule.Name,
-		Rules: mimirRules,
+		Name:          rule.Name,
+		Rules:         mimirRules,
+		SourceTenants: ds.Spec.ConnectionDetails.SourceTenants,
 	}
 
 	return mimirRuleGroup, nil

@@ -72,10 +72,49 @@ func mapToColonSeparatedString(labels map[string]string) string {
 	return strings.Join(pairs, ", ")
 }
 
+func (mrs *MonitoringRuleSet) createErrorBudgetValueRecordingRule(sliMeasurement monitoringv1.Rule, window string) (monitoringv1.Rule, error) {
+	return monitoringv1.Rule{
+		Record: fmt.Sprintf("%s_error_budget_available", RecordPrefix),
+		Expr:   intstr.FromString(fmt.Sprintf("1 - %s{%s}", sliMeasurement.Record, mapToColonSeparatedString(sliMeasurement.Labels))),
+		Labels: map[string]string{
+			"service":  mrs.Slo.Spec.Service,
+			"sli_name": mrs.Sli.Name,
+			"slo_name": mrs.Slo.Name,
+			"window":   window,
+		},
+	}, nil
+}
+
+func (mrs *MonitoringRuleSet) createErrorBudgetTargetRecordingRule(window string) (monitoringv1.Rule, error) {
+	return monitoringv1.Rule{
+		Record: fmt.Sprintf("%s_error_budget_target", RecordPrefix),
+		Expr:   intstr.FromString(fmt.Sprintf("1 - %s", mrs.Slo.Spec.Objectives[0].Target)),
+		Labels: map[string]string{
+			"service":  mrs.Slo.Spec.Service,
+			"sli_name": mrs.Sli.Name,
+			"slo_name": mrs.Slo.Name,
+			"window":   window,
+		},
+	}, nil
+}
+
 func (mrs *MonitoringRuleSet) createSliMeasurementRecordingRule(totalRule, goodRule monitoringv1.Rule, window string) (monitoringv1.Rule, error) {
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_sli_measurement", RecordPrefix),
 		Expr:   intstr.FromString(fmt.Sprintf("%s{%s} / %s{%s}", goodRule.Record, mapToColonSeparatedString(goodRule.Labels), totalRule.Record, mapToColonSeparatedString(totalRule.Labels))),
+		Labels: map[string]string{
+			"service":  mrs.Slo.Spec.Service,
+			"sli_name": mrs.Sli.Name,
+			"slo_name": mrs.Slo.Name,
+			"window":   window,
+		},
+	}, nil
+}
+
+func (mrs *MonitoringRuleSet) createBurnRateRecordingRule(errorBudgetAvailable, errorBudgetTarget monitoringv1.Rule, window string) (monitoringv1.Rule, error) {
+	return monitoringv1.Rule{
+		Record: fmt.Sprintf("%s_burn_rate", RecordPrefix),
+		Expr:   intstr.FromString(fmt.Sprintf("%s{%s} / %s{%s}", errorBudgetAvailable.Record, mapToColonSeparatedString(errorBudgetAvailable.Labels), errorBudgetTarget.Record, mapToColonSeparatedString(errorBudgetTarget.Labels))),
 		Labels: map[string]string{
 			"service":  mrs.Slo.Spec.Service,
 			"sli_name": mrs.Sli.Name,
@@ -137,7 +176,30 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 	sliMeasurementBase, _ := mrs.createSliMeasurementRecordingRule(totalRuleBase, goodRuleBase, baseWindow)
 	sliMeasurementExtended, _ := mrs.createSliMeasurementRecordingRule(totalRuleExtended, goodRuleExtended, extendedWindow)
 
-	rules := []monitoringv1.Rule{targetRuleBase, totalRuleBase, goodRuleBase, totalRuleExtended, goodRuleExtended, sliMeasurementBase, sliMeasurementExtended}
+	errorBudgetAvailableBase, _ := mrs.createErrorBudgetValueRecordingRule(sliMeasurementBase, baseWindow)
+	errorBudgetAvailableExtended, _ := mrs.createErrorBudgetValueRecordingRule(sliMeasurementExtended, extendedWindow)
+
+	errorBudgetTargetBase, _ := mrs.createErrorBudgetTargetRecordingRule(baseWindow)
+	errorBudgetTargetExtended, _ := mrs.createErrorBudgetTargetRecordingRule(extendedWindow)
+
+	burnRateBase, _ := mrs.createBurnRateRecordingRule(errorBudgetAvailableBase, errorBudgetTargetBase, baseWindow)
+	burnRateExtended, _ := mrs.createBurnRateRecordingRule(errorBudgetAvailableExtended, errorBudgetTargetExtended, extendedWindow)
+
+	rules := []monitoringv1.Rule{
+		targetRuleBase,
+		totalRuleBase,
+		goodRuleBase,
+		totalRuleExtended,
+		goodRuleExtended,
+		sliMeasurementBase,
+		sliMeasurementExtended,
+		errorBudgetAvailableBase,
+		errorBudgetAvailableExtended,
+		errorBudgetTargetBase,
+		errorBudgetTargetExtended,
+		burnRateBase,
+		burnRateExtended,
+	}
 
 	return rules, nil
 }

@@ -225,17 +225,6 @@ func CreateSLIMeasurement(m MetricLabel, goodRule monitoringv1.Rule, totalRule m
 	return measurement
 }
 
-//func createSLIMeasurement(gbRule, totalRuleConfig *Rule) monitoringv1.Rule {
-//	measurement := monitoringv1.Rule{}
-//	measurement.Record = fmt.Sprintf("%s_%s", RecordPrefix, TypeMeasurement)
-//	exprFormat := "%s_%s{%s} / %s_%s{%s}"
-//	measurement.Expr = intstr.Parse(fmt.Sprintf(exprFormat,
-//		RecordPrefix, gbRule.Record, gbRule.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
-//		RecordPrefix, totalRuleConfig.Record, totalRuleConfig.MetricLabelCompiler.NewMetricLabelCompiler(nil, ""),
-//	))
-//	return measurement
-//}
-
 func createBudgetRule(b BudgetRule, gbRule *Rule) monitoringv1.Rule {
 	bRule := monitoringv1.Rule{}
 	bRule.Record = fmt.Sprintf("%s_%s", RecordPrefix, b.Record)

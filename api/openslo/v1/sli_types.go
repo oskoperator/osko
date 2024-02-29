@@ -5,7 +5,7 @@ import (
 )
 
 type MetricSpec struct {
-	MetricSource MetricSourceSpec `json:"metricSource,omitempty"`
+	MetricSource MetricSource `json:"metricSource,omitempty"`
 }
 
 type RatioMetricSpec struct {
@@ -19,7 +19,7 @@ type RatioMetricSpec struct {
 }
 
 type ThresholdMetricSpec struct {
-	MetricSource MetricSourceSpec `json:"metricSource,omitempty"`
+	MetricSource MetricSource `json:"metricSource,omitempty"`
 }
 
 // SLISpec defines the desired state of SLI

@@ -168,8 +168,8 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 	}
 
 	targetRuleBase, _ := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
-	totalRuleBase, _ := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec, "sli_total", baseWindow, false)
-	goodRuleBase, _ := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec, "sli_good", baseWindow, false)
+	totalRuleBase, _ := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", baseWindow, false)
+	goodRuleBase, _ := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, "sli_good", baseWindow, false)
 
 	totalRuleExtended, _ := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", extendedWindow, true)
 	goodRuleExtended, _ := mrs.createRecordingRule(goodRuleBase.Record, "sli_good", extendedWindow, true)

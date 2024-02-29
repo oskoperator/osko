@@ -62,7 +62,18 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	rgs, err := helpers.NewMimirRuleGroup(prometheusRule)
+	// Getting the DataSource from parent PrometheusRule Annotations which should be the same as the SLOs
+	err = r.Get(ctx, client.ObjectKey{
+		Name:      prometheusRule.ObjectMeta.Annotations["osko.dev/datasourceRef"],
+		Namespace: prometheusRule.Namespace,
+	}, ds)
+	if err != nil {
+		log.Error(err, "Failed to get Datasource")
+		return ctrl.Result{}, err
+	}
+
+	// TODO: This logic is total bullshit. We should revise the reconciliation logic and make it more clear.
+	rgs, err := helpers.NewMimirRuleGroup(prometheusRule, ds)
 	if err != nil {
 		log.Error(err, "Failed to convert MimirRuleGroup")
 	}

@@ -1,58 +1,161 @@
 package helpers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"slices"
-
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/utils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sort"
+	"strings"
+	"text/template"
 )
 
 const (
-	RecordPrefix = "osko"
+	RecordPrefix   = "osko"
+	promqlTemplate = `
+	{{- if eq .RecordName "slo_target" -}}
+	vector({{.Metric}})
+	{{- else if and .Extended (eq .RecordName "sli_total") -}}
+	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
+	{{- else if and .Extended (eq .RecordName "sli_good") -}}
+	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
+	{{- else if eq .RecordName "sli_total" -}}
+	sum(increase({{.Metric}}[{{.Window}}]))
+	{{- else if eq .RecordName "sli_good" -}}
+	sum(increase({{.Metric}}[{{.Window}}]))
+	{{- end -}}
+	`
 )
 
-type Rule monitoringv1.Rule
-
-func (r *Rule) addLabel(key, value string) {
-	if r.Labels == nil {
-		r.Labels = make(map[string]string)
-	}
-	r.Labels[key] = value
+// RuleTemplateData holds data to fill the PromQL template.
+type RuleTemplateData struct {
+	Metric     string
+	Service    string
+	Window     string
+	Extended   bool
+	RecordName string
+	Labels     string
 }
 
-func (r *Rule) timeWindows(windows []string) {
-	for i, window := range windows {
-		r.addLabel(fmt.Sprintf("window%v", i), window)
-	}
+type MonitoringRuleSet struct {
+	Slo        *openslov1.SLO
+	Sli        *openslov1.SLI
+	TargetRule monitoringv1.Rule
+	BaseRule   monitoringv1.Rule
+	GoodRule   monitoringv1.Rule
+	TotalRule  monitoringv1.Rule
+	BaseWindow string
 }
 
-var burnRateTimeWindows = []string{"5m", "30m", "1h", "6h", "3d"}
+// mapToColonSeparatedString takes a map[string]string and returns a string
+// that represents the map's key-value pairs, where each pair is concatenated
+// by a equal sign and the pairs are comma-separated.
+func mapToColonSeparatedString(labels map[string]string) string {
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// We build the string by iterating over the sorted keys.
+	pairs := make([]string, len(labels))
+	for i, k := range keys {
+		pairs[i] = fmt.Sprintf("%s=\"%s\"", k, labels[k])
+	}
+
+	// Join the key-value pairs with commas and return the result.
+	return strings.Join(pairs, ", ")
+}
+
+func (mrs *MonitoringRuleSet) createSliMeasurementRecordingRule(totalRule, goodRule monitoringv1.Rule, window string) (monitoringv1.Rule, error) {
+	return monitoringv1.Rule{
+		Record: fmt.Sprintf("%s_sli_measurement", RecordPrefix),
+		Expr:   intstr.FromString(fmt.Sprintf("%s{%s} / %s{%s}", goodRule.Record, mapToColonSeparatedString(goodRule.Labels), totalRule.Record, mapToColonSeparatedString(totalRule.Labels))),
+		Labels: map[string]string{
+			"service":  mrs.Slo.Spec.Service,
+			"sli_name": mrs.Sli.Name,
+			"slo_name": mrs.Slo.Name,
+			"window":   window,
+		},
+	}, nil
+}
+
+func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window string, extended bool) (monitoringv1.Rule, error) {
+	tmpl, err := template.New("promql").Parse(promqlTemplate)
+	if err != nil {
+		return monitoringv1.Rule{}, err
+	}
+
+	data := RuleTemplateData{
+		Metric:     metric,
+		Service:    mrs.Slo.Spec.Service,
+		Window:     window,
+		Extended:   extended,
+		RecordName: recordName,
+		Labels:     fmt.Sprintf("service=\"%s\", sli_name=\"%s\", slo_name=\"%s\", window=\"%s\"", mrs.Slo.Spec.Service, mrs.Sli.Name, mrs.Slo.Name, mrs.BaseWindow),
+	}
+
+	var promql bytes.Buffer
+	if err := tmpl.Execute(&promql, data); err != nil {
+		return monitoringv1.Rule{}, err
+	}
+
+	rule := monitoringv1.Rule{
+		Record: fmt.Sprintf("%s_%s", RecordPrefix, recordName),
+		Expr:   intstr.FromString(promql.String()),
+		Labels: map[string]string{
+			"service":  mrs.Slo.Spec.Service,
+			"sli_name": mrs.Sli.Name,
+			"slo_name": mrs.Slo.Name,
+			"window":   window,
+		},
+	}
+
+	return rule, nil
+}
+
+func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
+	baseWindow := mrs.BaseWindow //Should configurable somewhere as agreed on product workshop
+	extendedWindow := "28d"      //Default to 28d if not specified in the SLO
+
+	if len(mrs.Slo.Spec.TimeWindow) > 0 && mrs.Slo.Spec.TimeWindow[0].Duration != "" {
+		extendedWindow = string(mrs.Slo.Spec.TimeWindow[0].Duration)
+	}
+
+	targetRuleBase, _ := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
+	totalRuleBase, _ := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec, "sli_total", baseWindow, false)
+	goodRuleBase, _ := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec, "sli_good", baseWindow, false)
+
+	totalRuleExtended, _ := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", extendedWindow, true)
+	goodRuleExtended, _ := mrs.createRecordingRule(goodRuleBase.Record, "sli_good", extendedWindow, true)
+
+	sliMeasurementBase, _ := mrs.createSliMeasurementRecordingRule(totalRuleBase, goodRuleBase, baseWindow)
+	sliMeasurementExtended, _ := mrs.createSliMeasurementRecordingRule(totalRuleExtended, goodRuleExtended, extendedWindow)
+
+	rules := []monitoringv1.Rule{targetRuleBase, totalRuleBase, goodRuleBase, totalRuleExtended, goodRuleExtended, sliMeasurementBase, sliMeasurementExtended}
+
+	return rules, nil
+}
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
 	log := ctrllog.FromContext(context.Background())
 
-	var simpleMonitoringRules []*Rule
-	var preTimeWindowedMonitoringRules []*Rule
-	var timeWindowedMonitoringRules []*Rule
-
-	simpleMonitoringRules = append(simpleMonitoringRules, newSloTarget(slo))
-	preTimeWindowedMonitoringRules = append(preTimeWindowedMonitoringRules, newSliRatioGood(slo), newSliRatioBad(slo))
-
-	for _, window := range burnRateTimeWindows {
-		for _, rule := range preTimeWindowedMonitoringRules {
-			originalRule := *rule
-			originalRule.addLabel("window", window)
-			timeWindowedMonitoringRules = append(timeWindowedMonitoringRules, &originalRule)
-		}
+	mrs := &MonitoringRuleSet{
+		Slo:        slo,
+		Sli:        sli,
+		BaseWindow: "5m",
 	}
 
-	log.Info("Monitoring Rules", "PrometheusRule", timeWindowedMonitoringRules)
+	rules, err := mrs.SetupRules()
+	if err != nil {
+		log.V(1).Error(err, "Failed to create PrometheusRule because of some shit")
+		return nil, err
+	}
 
 	ownerRef := []metav1.OwnerReference{
 		*metav1.NewControllerRef(
@@ -69,20 +172,10 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		OwnerReferences: ownerRef,
 	}
 
-	finalSimpleMonitoringRules := make([]monitoringv1.Rule, len(simpleMonitoringRules))
-	for i, localRule := range simpleMonitoringRules {
-		finalSimpleMonitoringRules[i] = monitoringv1.Rule(*localRule)
-	}
-
-	finalTimeWindowedMonitoringRules := make([]monitoringv1.Rule, len(timeWindowedMonitoringRules))
-	for i, localRule := range timeWindowedMonitoringRules {
-		finalTimeWindowedMonitoringRules[i] = monitoringv1.Rule(*localRule)
-	}
-
 	ruleGroup := []monitoringv1.RuleGroup{
 		{
 			Name:  slo.Name,
-			Rules: slices.Concat(finalSimpleMonitoringRules, finalTimeWindowedMonitoringRules),
+			Rules: rules,
 		},
 	}
 
@@ -102,25 +195,16 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 	return &prometheusRule, nil
 }
 
-func newSloTarget(slo *openslov1.SLO) *Rule {
-	return &Rule{
-		Record: "osko_slo_target",
-		Expr:   intstr.Parse(fmt.Sprintf("vector(%s)", slo.Spec.Objectives[0].Target)),
+func (mrs *MonitoringRuleSet) addLabelsToRule(rule *monitoringv1.Rule) {
+	window := string(mrs.Slo.Spec.TimeWindow[0].Duration)
+	if len(mrs.Slo.Spec.TimeWindow) > 0 && mrs.Slo.Spec.TimeWindow[0].Duration != "" {
+		window = string(mrs.Slo.Spec.TimeWindow[0].Duration)
 	}
-}
-
-// edit from here on to the bottom
-func newSliRatioGood(slo *openslov1.SLO) *Rule {
-	return &Rule{
-		Record: "osko_sli_ratio_good",
-		Expr:   intstr.Parse(fmt.Sprintf("vector(%s)", slo.Spec.Objectives[0].Target)),
-	}
-}
-
-func newSliRatioBad(slo *openslov1.SLO) *Rule {
-	return &Rule{
-		Record: "osko_sli_ratio_bad",
-		Expr:   intstr.Parse(fmt.Sprintf("vector(%s)", slo.Spec.Objectives[0].Target)),
+	rule.Labels = map[string]string{
+		"sli_name": mrs.Sli.Name,
+		"slo_name": mrs.Slo.Name,
+		"service":  mrs.Slo.Spec.Service,
+		"window":   window,
 	}
 }
 

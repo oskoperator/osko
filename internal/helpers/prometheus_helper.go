@@ -114,7 +114,7 @@ func (mrs *MonitoringRuleSet) createSliMeasurementRecordingRule(totalRule, goodR
 func (mrs *MonitoringRuleSet) createBurnRateRecordingRule(errorBudgetAvailable, errorBudgetTarget monitoringv1.Rule, window string) (monitoringv1.Rule, error) {
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_burn_rate", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("%s{%s} / %s{%s}", errorBudgetAvailable.Record, mapToColonSeparatedString(errorBudgetAvailable.Labels), errorBudgetTarget.Record, mapToColonSeparatedString(errorBudgetTarget.Labels))),
+		Expr:   intstr.FromString(fmt.Sprintf("sum(%s{%s}) / sum(%s{%s})", errorBudgetAvailable.Record, mapToColonSeparatedString(errorBudgetAvailable.Labels), errorBudgetTarget.Record, mapToColonSeparatedString(errorBudgetTarget.Labels))),
 		Labels: map[string]string{
 			"service":  mrs.Slo.Spec.Service,
 			"sli_name": mrs.Sli.Name,
@@ -158,6 +158,8 @@ func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window str
 	return rule, nil
 }
 
+// SetupRules creates Prometheus recording rules for the SLO and SLI
+// and returns a slice of monitoringv1.Rule.
 func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 	baseWindow := mrs.BaseWindow //Should configurable somewhere as agreed on product workshop
 	extendedWindow := "28d"      //Default to 28d if not specified in the SLO

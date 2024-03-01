@@ -3,35 +3,32 @@
 apiVersion: openslo.com/v1
 kind: SLO
 metadata:
-  name: logging-query-frontend-error-rate
-  labels:
-    app.kubernetes.io/name: logging-query-frontend-error-rate
   annotations:
-    osko.dev/datasourceRef: "logging-ds"
+    osko.dev/datasourceRef: "mimir-infra-ds"
+  name: gatekeeper-webhook-response-time
 spec:
   budgetingMethod: Occurrences
-  description: 99.00% of Loki read requests return valid response
+  description: 99% of Gatekeeper webhook requests return in less than 0.5s
   indicator:
     metadata:
-      name: read-requests-valid-response-rate
+      name: gatekeeper-webhook-less-than-05s
     spec:
-      description: 99.00% of Loki read requests return valid response
+      description: 99% of Gatekeeper webhook requests return in less than 0.5s
       ratioMetric:
-        counter: true
         good:
           metricSource:
+            metricSourceRef: mimir-infra-ds
             spec:
-              query: loki_request_duration_seconds_count{route=~"loki.*", service="loki-loki-distributed-query-frontend",status_code!~"5.*"}
-            type: Prometheus
+              query: controller_runtime_webhook_latency_seconds_bucket{le="0.5", job="gatekeeper-metrics"}
         total:
           metricSource:
+            metricSourceRef: mimir-infra-ds
             spec:
-              query: loki_request_duration_seconds_count{route=~"loki.*", service="loki-loki-distributed-query-frontend"}
-            type: Prometheus
+              query: controller_runtime_webhook_latency_seconds_count{job="gatekeeper-metrics"}
   objectives:
-    - displayName: read-requests-valid-response-rate
-      target: '0.99'
-  service: logging
+  - displayName: gatekeeper-webhook-less-than-05s
+    target: '0.99'
+  service: testing
   timeWindow:
-    - duration: 28d
-      isRolling: true
+  - duration: 28d
+    isRolling: true

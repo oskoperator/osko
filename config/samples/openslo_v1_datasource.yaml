@@ -4,14 +4,13 @@ apiVersion: openslo.com/v1
 kind: Datasource
 metadata:
   labels:
-    app.kubernetes.io/name: logging-ds
-  name: logging-ds
+    app.kubernetes.io/name: mimir-infra-ds
+  name: mimir-infra-ds
 spec:
   description: Mimir Datasource for logging tenant
   type: mimir
   connectionDetails:
     address: https://mimir.monitoring.dev.heu.group/
     sourceTenants:
-      - billing
-      - infra
-    targetTenant: billing
+      - gatekeeper-system
+    targetTenant: gatekeeper-system

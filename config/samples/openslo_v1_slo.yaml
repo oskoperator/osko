@@ -20,13 +20,13 @@ spec:
         counter: true
         good:
           metricSource:
-            spec: |
-              loki_request_duration_seconds_count{route=~"loki.*", service="loki-loki-distributed-query-frontend",status_code!~"5.*"}
+            spec:
+              query: loki_request_duration_seconds_count{route=~"loki.*", service="loki-loki-distributed-query-frontend",status_code!~"5.*"}
             type: Prometheus
         total:
           metricSource:
-            spec: |
-              loki_request_duration_seconds_count{route=~"loki.*", service="loki-loki-distributed-query-frontend"}
+            spec:
+              query: loki_request_duration_seconds_count{route=~"loki.*", service="loki-loki-distributed-query-frontend"}
             type: Prometheus
   objectives:
     - displayName: read-requests-valid-response-rate

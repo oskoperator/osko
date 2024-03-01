@@ -1,0 +1,33 @@
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: gatekeeper-webhook-response-time-0005s
+  namespace: default
+  annotations:
+    osko.dev/datasourceRef: "mimir-infra-ds"
+spec:
+  budgetingMethod: Occurrences
+  description: 99% of Gatekeeper webhook requests return in less than 0.0005s
+  indicator:
+    metadata:
+      name: gatekeeper-webhook-response-time-0005s
+    spec:
+      description: 99% of Gatekeeper webhook requests return in less than 0.0005s
+      ratioMetric:
+        good:
+          metricSource:
+            metricSourceRef: mimir
+            spec:
+              query: controller_runtime_webhook_latency_seconds_bucket{le="0.0005"}
+        total:
+          metricSource:
+            metricSourceRef: mimir
+            spec:
+              query: controller_runtime_webhook_latency_seconds_count{}
+  objectives:
+    - displayName: gatekeeper-webhook-response-time-0005s
+      target: '0.99'
+  service: gatekeeper
+  timeWindow:
+    - duration: 28d
+      isRolling: true

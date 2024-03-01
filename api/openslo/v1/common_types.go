@@ -15,8 +15,12 @@ type Description string
 // +kubebuilder:validation:Pattern=`^[1-9]\d*[s m h d]$`
 type Duration string
 
+type MetricSource struct {
+	MetricSourceRef string           `json:"metricSourceRef,omitempty"`
+	Type            string           `json:"type,omitempty"`
+	Spec            MetricSourceSpec `json:"spec,omitempty"`
+}
+
 type MetricSourceSpec struct {
-	MetricSourceRef string `json:"metricSourceRef,omitempty"`
-	Type            string `json:"type,omitempty"`
-	Spec            string `json:"spec,omitempty"`
+	Query string `json:"query,omitempty"`
 }

@@ -143,11 +143,11 @@ func (m MetricLabel) NewMetricLabelGenerator() map[string]string {
 func (c Rule) getFieldsByType() (string, error) {
 	switch c.RuleType {
 	case TypeTotal:
-		return c.Sli.Spec.RatioMetric.Total.MetricSource.Spec, nil
+		return c.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, nil
 	case TypeBad:
-		return c.Sli.Spec.RatioMetric.Bad.MetricSource.Spec, nil
+		return c.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query, nil
 	case TypeGood:
-		return c.Sli.Spec.RatioMetric.Good.MetricSource.Spec, nil
+		return c.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, nil
 	default:
 		return "", fmt.Errorf("invalid RuleType: %s", c.RuleType)
 	}
@@ -198,8 +198,8 @@ func (c Rule) NewTargetRule() (rule monitoringv1.Rule) {
 func (b BudgetRule) NewBudgetRule() (budgetRule monitoringv1.Rule, sliMeasurement monitoringv1.Rule) {
 	log := ctrllog.FromContext(context.Background())
 
-	goodRuleSpec := b.GoodRuleConfig.Sli.Spec.RatioMetric.Good.MetricSource.Spec
-	sloIndicatorSpec := b.GoodRuleConfig.Slo.Spec.Indicator.Spec.RatioMetric.Good.MetricSource.Spec
+	goodRuleSpec := b.GoodRuleConfig.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query
+	sloIndicatorSpec := b.GoodRuleConfig.Slo.Spec.Indicator.Spec.RatioMetric.Good.MetricSource.Spec.Query
 	gbRule := getRelevantRule(b, goodRuleSpec, sloIndicatorSpec, log)
 
 	//sliMeasurement = createSLIMeasurement(gbRule, b.TotalRuleConfig)

@@ -8,6 +8,7 @@ import (
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"regexp"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sort"
 	"strings"
@@ -53,8 +54,14 @@ type MonitoringRuleSet struct {
 
 // mapToColonSeparatedString takes a map[string]string and returns a string
 // that represents the map's key-value pairs, where each pair is concatenated
-// by a equal sign and the pairs are comma-separated.
+// by an equal sign and the pairs are comma-separated.
 func mapToColonSeparatedString(labels map[string]string) string {
+	pattern := "__.*?__"
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return ""
+	}
+
 	keys := make([]string, 0, len(labels))
 	for k := range labels {
 		keys = append(keys, k)
@@ -64,6 +71,9 @@ func mapToColonSeparatedString(labels map[string]string) string {
 	// We build the string by iterating over the sorted keys.
 	pairs := make([]string, len(labels))
 	for i, k := range keys {
+		if re.MatchString(k) {
+			continue
+		}
 		pairs[i] = fmt.Sprintf("%s=\"%s\"", k, labels[k])
 	}
 
@@ -168,6 +178,9 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 	}
 
 	targetRuleBase, _ := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
+
+	targetRuleExtended, _ := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", extendedWindow, true)
+
 	totalRuleBase, _ := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", baseWindow, false)
 	goodRuleBase, _ := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, "sli_good", baseWindow, false)
 
@@ -188,6 +201,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 
 	rules := []monitoringv1.Rule{
 		targetRuleBase,
+		targetRuleExtended,
 		totalRuleBase,
 		goodRuleBase,
 		totalRuleExtended,

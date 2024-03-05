@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"regexp"
+	"sort"
+	"strings"
+	"text/template"
+
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"regexp"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
-	"sort"
-	"strings"
-	"text/template"
 )
 
 const (
@@ -24,9 +25,13 @@ const (
 	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
 	{{- else if and .Extended (eq .RecordName "sli_good") -}}
 	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
+	{{- else if and .Extended (eq .RecordName "sli_good") -}}
+	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
 	{{- else if eq .RecordName "sli_total" -}}
 	sum(increase({{.Metric}}[{{.Window}}]))
 	{{- else if eq .RecordName "sli_good" -}}
+	sum(increase({{.Metric}}[{{.Window}}]))
+	{{- else if eq .RecordName "sli_bad" -}}
 	sum(increase({{.Metric}}[{{.Window}}]))
 	{{- end -}}
 	`
@@ -137,13 +142,26 @@ func (mrs *MonitoringRuleSet) createBurnRateRecordingRule(errorBudgetAvailable, 
 	if err != nil {
 		return monitoringv1.Rule{}, err
 	}
-	errorBudgetTargetLabels, _ := mapToColonSeparatedString(errorBudgetTarget.Labels)
+	errorBudgetTargetLabels, err := mapToColonSeparatedString(errorBudgetTarget.Labels)
 	if err != nil {
 		return monitoringv1.Rule{}, err
 	}
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_burn_rate", RecordPrefix),
 		Expr:   intstr.FromString(fmt.Sprintf("sum(%s{%s}) / sum(%s{%s})", errorBudgetAvailable.Record, errorBudgetAvailableLabels, errorBudgetTarget.Record, errorBudgetTargetLabels)),
+		Labels: map[string]string{
+			"service":  mrs.Slo.Spec.Service,
+			"sli_name": mrs.Sli.Name,
+			"slo_name": mrs.Slo.Name,
+			"window":   window,
+		},
+	}, nil
+}
+
+func (mrs *MonitoringRuleSet) createAntecedentRule(metric, recordName, window string) (monitoringv1.Rule, error) {
+	return monitoringv1.Rule{
+		Record: recordName,
+		Expr:   intstr.FromString(metric),
 		Labels: map[string]string{
 			"service":  mrs.Slo.Spec.Service,
 			"sli_name": mrs.Sli.Name,
@@ -198,11 +216,22 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 	}
 
 	targetRuleBase, _ := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
-
 	targetRuleExtended, _ := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", extendedWindow, true)
 
 	totalRuleBase, _ := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", baseWindow, false)
-	goodRuleBase, _ := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, "sli_good", baseWindow, false)
+
+	var goodRuleBase monitoringv1.Rule
+	if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
+		goodRuleBase, _ = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, "sli_good", baseWindow, false)
+	} else {
+		badRuleBase, _ := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query, "sli_bad", baseWindow, false)
+		goodRuleBase, _ = mrs.createAntecedentRule(
+			fmt.Sprintf("%v - %v",
+				totalRuleBase.Expr.String(),
+				badRuleBase.Expr.String(),
+			), "sli_good", baseWindow)
+
+	}
 
 	totalRuleExtended, _ := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", extendedWindow, true)
 	goodRuleExtended, _ := mrs.createRecordingRule(goodRuleBase.Record, "sli_good", extendedWindow, true)

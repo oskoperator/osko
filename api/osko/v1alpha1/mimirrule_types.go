@@ -10,6 +10,7 @@ import (
 
 // MimirRuleSpec defines the desired state of MimirRule
 type MimirRuleSpec struct {
+	ConnectionDetails ConnectionDetails `json:"mimirConnectionDetails,omitempty"`
 	// Groups is an example field of MimirRule. Edit mimirrule_types.go to remove/update
 	Groups []RuleGroup `json:"groups"`
 }

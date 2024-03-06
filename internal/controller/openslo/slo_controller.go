@@ -150,7 +150,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if apierrors.IsNotFound(err) {
 		log.Info("MimirRule not found. Let's make one.")
-		mimirRule, err = helpers.NewMimirRule(slo, promRule, ds)
+		mimirRule, err = helpers.NewMimirRule(slo, promRule, &ds.Spec.ConnectionDetails)
 		if err != nil {
 			if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule Object"); err != nil {
 				log.Error(err, "Failed to update SLO status")
@@ -159,6 +159,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			log.Error(err, "Failed to create new PrometheusRule")
 			return ctrl.Result{}, err
 		}
+
 		if err = r.Create(ctx, mimirRule); err != nil {
 			r.Recorder.Event(slo, "Error", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
 			if err = r.Status().Update(ctx, slo); err != nil {

@@ -47,7 +47,6 @@ const (
 func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
 
-	ds := &openslov1.Datasource{}
 	slo := &openslov1.SLO{}
 	prometheusRule := &monitoringv1.PrometheusRule{}
 	mimirRule := &oskov1alpha1.MimirRule{}
@@ -62,18 +61,8 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	// Getting the DataSource from parent PrometheusRule Annotations which should be the same as the SLOs
-	err = r.Get(ctx, client.ObjectKey{
-		Name:      prometheusRule.ObjectMeta.Annotations["osko.dev/datasourceRef"],
-		Namespace: prometheusRule.Namespace,
-	}, ds)
-	if err != nil {
-		log.Error(err, "Failed to get Datasource")
-		return ctrl.Result{}, err
-	}
-
 	// TODO: This logic is total bullshit. We should revise the reconciliation logic and make it more clear.
-	rgs, err := helpers.NewMimirRuleGroup(prometheusRule, ds)
+	rgs, err := helpers.NewMimirRuleGroup(prometheusRule, &mimirRule.Spec.ConnectionDetails)
 	if err != nil {
 		log.Error(err, "Failed to convert MimirRuleGroup")
 	}
@@ -107,7 +96,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if apierrors.IsNotFound(err) {
 		log.Info("MimirRule not found. Let's make one.")
-		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, ds)
+		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &mimirRule.Spec.ConnectionDetails)
 
 		if err = r.Create(ctx, mimirRule); err != nil {
 			r.Recorder.Event(mimirRule, "Error", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
@@ -141,17 +130,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: prometheusRule.Namespace,
-		Name:      slo.ObjectMeta.Annotations["osko.dev/datasourceRef"],
-	}, ds); err != nil {
-		log.Error(err, "Failed to get Datasource")
-		return ctrl.Result{}, err
-	}
-
-	log.Info("Datasource found", "Datasource", ds)
-
-	if err := r.newMimirClient(ds); err != nil {
+	if err := r.newMimirClient(&mimirRule.Spec.ConnectionDetails); err != nil {
 		log.Error(err, "Failed to create MimirClient")
 		return ctrl.Result{}, err
 	}
@@ -170,7 +149,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	log.Info("MimirRule already exists, we should update it.")
-	newMimirRule, err = helpers.NewMimirRule(slo, prometheusRule, ds)
+	newMimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &mimirRule.Spec.ConnectionDetails)
 	if err != nil {
 		log.Error(err, "Failed to create new MimirRule")
 		return ctrl.Result{}, err
@@ -203,10 +182,10 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 }
 
-func (r *MimirRuleReconciler) newMimirClient(ds *openslov1.Datasource) error {
+func (r *MimirRuleReconciler) newMimirClient(connectionDetails *oskov1alpha1.ConnectionDetails) error {
 	mClientConfig := helpers.MimirClientConfig{
-		Address:  ds.Spec.ConnectionDetails.Address,
-		TenantId: ds.Spec.ConnectionDetails.TargetTenant,
+		Address:  connectionDetails.Address,
+		TenantId: connectionDetails.TargetTenant,
 	}
 
 	mimirClient, err := mClientConfig.NewMimirClient()

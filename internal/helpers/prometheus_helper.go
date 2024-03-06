@@ -25,8 +25,6 @@ const (
 	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
 	{{- else if and .Extended (eq .RecordName "sli_good") -}}
 	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
-	{{- else if and .Extended (eq .RecordName "sli_good") -}}
-	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
 	{{- else if eq .RecordName "sli_total" -}}
 	sum(increase({{.Metric}}[{{.Window}}]))
 	{{- else if eq .RecordName "sli_good" -}}
@@ -220,7 +218,6 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 				totalRuleBase.Expr.String(),
 				badRuleBase.Expr.String(),
 			), "sli_good", baseWindow)
-
 	}
 
 	totalRuleExtended := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", extendedWindow, true)

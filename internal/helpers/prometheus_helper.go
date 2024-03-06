@@ -25,8 +25,6 @@ const (
 	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
 	{{- else if and .Extended (eq .RecordName "sli_good") -}}
 	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
-	{{- else if and .Extended (eq .RecordName "sli_good") -}}
-	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
 	{{- else if eq .RecordName "sli_total" -}}
 	sum(increase({{.Metric}}[{{.Window}}]))
 	{{- else if eq .RecordName "sli_good" -}}

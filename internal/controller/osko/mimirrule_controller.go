@@ -143,7 +143,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: prometheusRule.Namespace,
-		Name:      slo.ObjectMeta.Annotations["osko.dev/datasourceRef"],
+		Name:      mimirRule.ObjectMeta.Annotations["osko.dev/datasourceRef"],
 	}, ds); err != nil {
 		log.Error(err, "Failed to get Datasource")
 		return ctrl.Result{}, err

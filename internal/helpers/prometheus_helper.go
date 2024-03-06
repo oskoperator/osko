@@ -25,7 +25,7 @@ const (
 	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
 	{{- else if and .Extended (eq .RecordName "sli_good") -}}
 	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
-	{{- else if and .Extended (eq .RecordName "sli_good") -}}
+	{{- else if and .Extended (eq .RecordName "sli_bad") -}}
 	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
 	{{- else if eq .RecordName "sli_total" -}}
 	sum(increase({{.Metric}}[{{.Window}}]))
@@ -120,7 +120,7 @@ func (mrs *MonitoringRuleSet) createSliMeasurementRecordingRule(totalRule, goodR
 	totalLabels := mapToColonSeparatedString(totalRule.Labels)
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_sli_measurement", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("%s{%s} / %s{%s}", goodRule.Record, goodLabels, totalRule.Record, totalLabels)),
+		Expr:   intstr.FromString(fmt.Sprintf("%s{%s} / clamp_min(%s{%s}, 1)", goodRule.Record, goodLabels, totalRule.Record, totalLabels)),
 		Labels: map[string]string{
 			"service":  mrs.Slo.Spec.Service,
 			"sli_name": mrs.Sli.Name,
@@ -220,7 +220,6 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 				totalRuleBase.Expr.String(),
 				badRuleBase.Expr.String(),
 			), "sli_good", baseWindow)
-
 	}
 
 	totalRuleExtended := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", extendedWindow, true)

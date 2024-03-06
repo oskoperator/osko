@@ -172,9 +172,15 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		} else {
 			log.Info("MimirRule created successfully")
 			r.Recorder.Event(slo, "Normal", "MimirRuleCreated", "MimirRule created successfully")
+			r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
 			slo.Status.Ready = "True"
+			mimirRule.Status.Ready = "True"
 			if err := r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO ready status")
+				return ctrl.Result{}, err
+			}
+			if err := r.Status().Update(ctx, mimirRule); err != nil {
+				log.Error(err, "Failed to update MimirRule ready status")
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil

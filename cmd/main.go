@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	monitoringcoreoscom "github.com/oskoperator/osko/internal/controller/monitoring.coreos.com"
 	"os"
 	"time"
 
@@ -110,6 +111,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SLI")
+		os.Exit(1)
+	}
+	if err = (&monitoringcoreoscom.PrometheusRuleReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PrometheusRule")
 		os.Exit(1)
 	}
 	if err = (&openslov1controller.AlertPolicyReconciler{

@@ -23,6 +23,7 @@ import (
 
 const (
 	objectiveRef = ".metaData.ownerReferences.name"
+	errGetSLI    = "could not get SLI Object"
 )
 
 // PrometheusRuleReconciler reconciles a PrometheusRule object
@@ -39,6 +40,7 @@ type PrometheusRuleReconciler struct {
 
 func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
+	log.Info("Reconciling PrometheusRule")
 
 	slo := &openslov1.SLO{}
 	sli := &openslov1.SLI{}
@@ -78,6 +80,39 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			log.Info("Not managing a PrometheusRule unrelated to osko")
 			return ctrl.Result{}, nil
 		}
+	}
+
+	// Get SLI from SLO's ref
+	if slo.Spec.IndicatorRef != nil {
+		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, sli)
+		if err != nil {
+			apierrors.IsNotFound(err)
+			{
+				log.Error(err, errGetSLI)
+				err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
+				if err != nil {
+					log.Error(err, "Failed to update SLO status")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{}, err
+			}
+		}
+	} else if slo.Spec.Indicator != nil {
+		log.V(1).Info("SLO has an inline SLI")
+		sli.Name = slo.Spec.Indicator.Metadata.Name
+		sli.Spec.Description = slo.Spec.Indicator.Spec.Description
+		if slo.Spec.Indicator.Spec.RatioMetric != (openslov1.RatioMetricSpec{}) {
+			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
+		}
+	} else {
+		err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
+		if err != nil {
+			log.Error(err, "Failed to update SLO status")
+			r.Recorder.Event(slo, "Error", "SLIObjectNotFound", "SLI Object not found")
+			return ctrl.Result{}, err
+		}
+		log.Error(err, "SLO has no SLI reference")
+		return ctrl.Result{}, err
 	}
 
 	if apierrors.IsNotFound(err) {
@@ -211,6 +246,7 @@ func (r *PrometheusRuleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Watches(
 			&openslov1.Datasource{},
-			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSlo())).
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSlo()),
+		).
 		Complete(r)
 }

@@ -142,6 +142,8 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
+	log.V(1).Info("PrometheusRule found", "Name", promRule.Name, "Namespace", promRule.Namespace)
+
 	mimirRule := &oskov1alpha1.MimirRule{}
 	err = r.Get(ctx, types.NamespacedName{
 		Name:      slo.Name,
@@ -188,9 +190,21 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
+	log.V(1).Info("MimirRule found", "Name", mimirRule.Name, "Namespace", mimirRule.Namespace)
+
 	if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionTrue, "PrometheusRule created"); err != nil {
+		log.V(1).Error(err, "Failed to update SLO status")
 		return ctrl.Result{}, err
 	}
+
+	promRule.ObjectMeta.Generation = promRule.ObjectMeta.Generation + 1
+
+	if err = r.Update(ctx, promRule); err != nil {
+		log.Error(err, "Failed to update PrometheusRule")
+		return ctrl.Result{}, err
+	}
+
+	log.V(1).Info("Reconciliation completed")
 
 	return ctrl.Result{}, nil
 }
@@ -216,7 +230,7 @@ func (r *SLOReconciler) findObjectsForSli() func(ctx context.Context, a client.O
 			FieldSelector: fields.OneTermEqualSelector(indicatorRef, a.GetName()),
 			Namespace:     a.GetNamespace(),
 		}
-		err := r.List(ctx, attachedSLOs, listOpts)
+		err := r.Client.List(ctx, attachedSLOs, listOpts)
 		if err != nil {
 			return []reconcile.Request{}
 		}

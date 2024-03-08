@@ -2,23 +2,20 @@ package monitoringcoreoscom
 
 import (
 	"context"
-	"reflect"
-
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/helpers"
 	"github.com/oskoperator/osko/internal/utils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -194,59 +191,17 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
-func (r *PrometheusRuleReconciler) createIndices(mgr ctrl.Manager) error {
-	return mgr.GetFieldIndexer().IndexField(
-		context.TODO(),
-		&monitoringv1.PrometheusRule{},
-		objectiveRef,
-		func(object client.Object) []string {
-			pr := object.(*monitoringv1.PrometheusRule)
-			if pr.ObjectMeta.OwnerReferences == nil {
-				return nil
-			}
-			return []string{pr.ObjectMeta.OwnerReferences[0].Name}
-		})
-}
-
-func (r *PrometheusRuleReconciler) findObjectsForSlo() func(ctx context.Context, a client.Object) []reconcile.Request {
-	return func(ctx context.Context, a client.Object) []reconcile.Request {
-		attachedSLOs := &openslov1.SLOList{}
-		listOpts := &client.ListOptions{
-			FieldSelector: fields.OneTermEqualSelector(objectiveRef, a.GetName()),
-			Namespace:     a.GetNamespace(),
-		}
-		err := r.List(ctx, attachedSLOs, listOpts)
-		if err != nil {
-			return []reconcile.Request{}
-		}
-
-		requests := make([]reconcile.Request, len(attachedSLOs.Items))
-		for i, item := range attachedSLOs.Items {
-			requests[i] = reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      item.Name,
-					Namespace: item.Namespace,
-				},
-			}
-		}
-		return requests
-	}
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *PrometheusRuleReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := r.createIndices(mgr); err != nil {
-		return err
-	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&monitoringv1.PrometheusRule{}).
 		Watches(
 			&openslov1.SLO{},
-			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSlo()),
+			&handler.EnqueueRequestForObject{},
 		).
 		Watches(
 			&openslov1.Datasource{},
-			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSlo()),
+			&handler.EnqueueRequestForObject{},
 		).
 		Complete(r)
 }

@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"fmt"
-
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
 	"github.com/oskoperator/osko/internal/helpers"
@@ -102,15 +101,16 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	promRule := &monitoringv1.PrometheusRule{}
+	prometheusRule := &monitoringv1.PrometheusRule{}
+	//newPrometheusRule := &monitoringv1.PrometheusRule{}
 	err = r.Get(ctx, types.NamespacedName{
 		Name:      slo.Name,
 		Namespace: slo.Namespace,
-	}, promRule)
+	}, prometheusRule)
 
 	if apierrors.IsNotFound(err) {
 		log.Info("PrometheusRule not found. Let's make one.")
-		promRule, err = helpers.CreatePrometheusRule(slo, sli)
+		prometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
 		if err != nil {
 			err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule")
 			if err != nil {
@@ -120,9 +120,9 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			log.Error(err, "Failed to create new PrometheusRule")
 			return ctrl.Result{}, err
 		}
-		if err := r.Create(ctx, promRule); err != nil {
+		if err := r.Create(ctx, prometheusRule); err != nil {
 			r.Recorder.Event(slo, "Error", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
-			if err := r.Status().Update(ctx, promRule); err != nil {
+			if err := r.Status().Update(ctx, prometheusRule); err != nil {
 				log.Error(err, "Failed to update SLO status")
 				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule"); err != nil {
 					log.Error(err, "Failed to update SLO ready status")
@@ -142,7 +142,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
-	log.V(1).Info("PrometheusRule found", "Name", promRule.Name, "Namespace", promRule.Namespace)
+	log.V(1).Info("PrometheusRule found", "Name", prometheusRule.Name, "Namespace", prometheusRule.Namespace)
 
 	mimirRule := &oskov1alpha1.MimirRule{}
 	err = r.Get(ctx, types.NamespacedName{
@@ -152,7 +152,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if apierrors.IsNotFound(err) {
 		log.Info("MimirRule not found. Let's make one.")
-		mimirRule, err = helpers.NewMimirRule(slo, promRule, &ds.Spec.ConnectionDetails)
+		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &ds.Spec.ConnectionDetails)
 		if err != nil {
 			if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule Object"); err != nil {
 				log.Error(err, "Failed to update SLO status")
@@ -197,12 +197,29 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	promRule.ObjectMeta.Generation = promRule.ObjectMeta.Generation + 1
+	// Update PrometheusRule
+	// This is the main logic for the PrometheusRule update
+	// Here we should take the existing PrometheusRule and update it with the new one
+	//log.Info("PrometheusRule already exists, we should update it")
+	//newPrometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
+	//if err != nil {
+	//	log.Error(err, "Failed to create new PrometheusRule")
+	//	return ctrl.Result{}, err
+	//}
+	//
+	//compareResult := reflect.DeepEqual(prometheusRule, newPrometheusRule)
+	//if compareResult {
+	//	log.Info("PrometheusRule is already up to date")
+	//	return ctrl.Result{}, nil
+	//}
 
-	if err = r.Update(ctx, promRule); err != nil {
-		log.Error(err, "Failed to update PrometheusRule")
-		return ctrl.Result{}, err
-	}
+	// has to be the same as for previous object, otherwise it will not be updated and throw an error
+	//newPrometheusRule.ResourceVersion = prometheusRule.ResourceVersion
+	//
+	//if err = r.Update(ctx, newPrometheusRule); err != nil {
+	//	log.Error(err, "Failed to update PrometheusRule")
+	//	return ctrl.Result{}, err
+	//}
 
 	log.V(1).Info("Reconciliation completed")
 

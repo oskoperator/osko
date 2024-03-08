@@ -102,7 +102,6 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	prometheusRule := &monitoringv1.PrometheusRule{}
-	//newPrometheusRule := &monitoringv1.PrometheusRule{}
 	err = r.Get(ctx, types.NamespacedName{
 		Name:      slo.Name,
 		Namespace: slo.Namespace,
@@ -196,30 +195,6 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		log.V(1).Error(err, "Failed to update SLO status")
 		return ctrl.Result{}, err
 	}
-
-	// Update PrometheusRule
-	// This is the main logic for the PrometheusRule update
-	// Here we should take the existing PrometheusRule and update it with the new one
-	//log.Info("PrometheusRule already exists, we should update it")
-	//newPrometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
-	//if err != nil {
-	//	log.Error(err, "Failed to create new PrometheusRule")
-	//	return ctrl.Result{}, err
-	//}
-	//
-	//compareResult := reflect.DeepEqual(prometheusRule, newPrometheusRule)
-	//if compareResult {
-	//	log.Info("PrometheusRule is already up to date")
-	//	return ctrl.Result{}, nil
-	//}
-
-	// has to be the same as for previous object, otherwise it will not be updated and throw an error
-	//newPrometheusRule.ResourceVersion = prometheusRule.ResourceVersion
-	//
-	//if err = r.Update(ctx, newPrometheusRule); err != nil {
-	//	log.Error(err, "Failed to update PrometheusRule")
-	//	return ctrl.Result{}, err
-	//}
 
 	log.V(1).Info("Reconciliation completed")
 

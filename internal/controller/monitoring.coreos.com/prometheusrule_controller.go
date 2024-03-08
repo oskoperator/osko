@@ -199,9 +199,5 @@ func (r *PrometheusRuleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&openslov1.SLO{},
 			&handler.EnqueueRequestForObject{},
 		).
-		Watches(
-			&openslov1.Datasource{},
-			&handler.EnqueueRequestForObject{},
-		).
 		Complete(r)
 }

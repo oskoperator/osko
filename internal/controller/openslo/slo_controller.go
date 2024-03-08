@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
 	"github.com/oskoperator/osko/internal/helpers"
@@ -13,7 +12,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/run"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -103,15 +102,15 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	promRule := &monitoringv1.PrometheusRule{}
+	prometheusRule := &monitoringv1.PrometheusRule{}
 	err = r.Get(ctx, types.NamespacedName{
 		Name:      slo.Name,
 		Namespace: slo.Namespace,
-	}, promRule)
+	}, prometheusRule)
 
 	if apierrors.IsNotFound(err) {
 		log.Info("PrometheusRule not found. Let's make one.")
-		promRule, err = helpers.CreatePrometheusRule(slo, sli)
+		prometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
 		if err != nil {
 			err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule")
 			if err != nil {
@@ -121,9 +120,9 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			log.Error(err, "Failed to create new PrometheusRule")
 			return ctrl.Result{}, err
 		}
-		if err := r.Create(ctx, promRule); err != nil {
+		if err := r.Create(ctx, prometheusRule); err != nil {
 			r.Recorder.Event(slo, "Error", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
-			if err := r.Status().Update(ctx, promRule); err != nil {
+			if err := r.Status().Update(ctx, prometheusRule); err != nil {
 				log.Error(err, "Failed to update SLO status")
 				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule"); err != nil {
 					log.Error(err, "Failed to update SLO ready status")
@@ -143,6 +142,8 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
+	log.V(1).Info("PrometheusRule found", "Name", prometheusRule.Name, "Namespace", prometheusRule.Namespace)
+
 	mimirRule := &oskov1alpha1.MimirRule{}
 	err = r.Get(ctx, types.NamespacedName{
 		Name:      slo.Name,
@@ -151,7 +152,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if apierrors.IsNotFound(err) {
 		log.Info("MimirRule not found. Let's make one.")
-		mimirRule, err = helpers.NewMimirRule(slo, promRule, &ds.Spec.ConnectionDetails)
+		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &ds.Spec.ConnectionDetails)
 		if err != nil {
 			if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule Object"); err != nil {
 				log.Error(err, "Failed to update SLO status")
@@ -189,9 +190,14 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
+	log.V(1).Info("MimirRule found", "Name", mimirRule.Name, "Namespace", mimirRule.Namespace)
+
 	if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionTrue, "PrometheusRule created"); err != nil {
+		log.V(1).Error(err, "Failed to update SLO status")
 		return ctrl.Result{}, err
 	}
+
+	log.V(1).Info("Reconciliation completed")
 
 	return ctrl.Result{}, nil
 }
@@ -217,7 +223,7 @@ func (r *SLOReconciler) findObjectsForSli() func(ctx context.Context, a client.O
 			FieldSelector: fields.OneTermEqualSelector(indicatorRef, a.GetName()),
 			Namespace:     a.GetNamespace(),
 		}
-		err := r.List(ctx, attachedSLOs, listOpts)
+		err := r.Client.List(ctx, attachedSLOs, listOpts)
 		if err != nil {
 			return []reconcile.Request{}
 		}

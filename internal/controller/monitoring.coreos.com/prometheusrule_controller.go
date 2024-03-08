@@ -2,27 +2,25 @@ package monitoringcoreoscom
 
 import (
 	"context"
-	"reflect"
-
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/helpers"
 	"github.com/oskoperator/osko/internal/utils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
 	objectiveRef = ".metaData.ownerReferences.name"
+	errGetSLI    = "could not get SLI Object"
 )
 
 // PrometheusRuleReconciler reconciles a PrometheusRule object
@@ -39,6 +37,7 @@ type PrometheusRuleReconciler struct {
 
 func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
+	log.Info("Reconciling PrometheusRule")
 
 	slo := &openslov1.SLO{}
 	sli := &openslov1.SLI{}
@@ -78,6 +77,39 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			log.Info("Not managing a PrometheusRule unrelated to osko")
 			return ctrl.Result{}, nil
 		}
+	}
+
+	// Get SLI from SLO's ref
+	if slo.Spec.IndicatorRef != nil {
+		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, sli)
+		if err != nil {
+			apierrors.IsNotFound(err)
+			{
+				log.Error(err, errGetSLI)
+				err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
+				if err != nil {
+					log.Error(err, "Failed to update SLO status")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{}, err
+			}
+		}
+	} else if slo.Spec.Indicator != nil {
+		log.V(1).Info("SLO has an inline SLI")
+		sli.Name = slo.Spec.Indicator.Metadata.Name
+		sli.Spec.Description = slo.Spec.Indicator.Spec.Description
+		if slo.Spec.Indicator.Spec.RatioMetric != (openslov1.RatioMetricSpec{}) {
+			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
+		}
+	} else {
+		err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
+		if err != nil {
+			log.Error(err, "Failed to update SLO status")
+			r.Recorder.Event(slo, "Error", "SLIObjectNotFound", "SLI Object not found")
+			return ctrl.Result{}, err
+		}
+		log.Error(err, "SLO has no SLI reference")
+		return ctrl.Result{}, err
 	}
 
 	if apierrors.IsNotFound(err) {
@@ -159,58 +191,13 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
-func (r *PrometheusRuleReconciler) createIndices(mgr ctrl.Manager) error {
-	return mgr.GetFieldIndexer().IndexField(
-		context.TODO(),
-		&monitoringv1.PrometheusRule{},
-		objectiveRef,
-		func(object client.Object) []string {
-			pr := object.(*monitoringv1.PrometheusRule)
-			if pr.ObjectMeta.OwnerReferences == nil {
-				return nil
-			}
-			return []string{pr.ObjectMeta.OwnerReferences[0].Name}
-		})
-}
-
-func (r *PrometheusRuleReconciler) findObjectsForSlo() func(ctx context.Context, a client.Object) []reconcile.Request {
-	return func(ctx context.Context, a client.Object) []reconcile.Request {
-		attachedSLOs := &openslov1.SLOList{}
-		listOpts := &client.ListOptions{
-			FieldSelector: fields.OneTermEqualSelector(objectiveRef, a.GetName()),
-			Namespace:     a.GetNamespace(),
-		}
-		err := r.List(ctx, attachedSLOs, listOpts)
-		if err != nil {
-			return []reconcile.Request{}
-		}
-
-		requests := make([]reconcile.Request, len(attachedSLOs.Items))
-		for i, item := range attachedSLOs.Items {
-			requests[i] = reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      item.Name,
-					Namespace: item.Namespace,
-				},
-			}
-		}
-		return requests
-	}
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *PrometheusRuleReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := r.createIndices(mgr); err != nil {
-		return err
-	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&monitoringv1.PrometheusRule{}).
 		Watches(
 			&openslov1.SLO{},
-			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSlo()),
+			&handler.EnqueueRequestForObject{},
 		).
-		Watches(
-			&openslov1.Datasource{},
-			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSlo())).
 		Complete(r)
 }

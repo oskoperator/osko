@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
@@ -63,7 +64,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info(fmt.Sprintf("datasourceRef: %v", errGetDS))
-			return ctrl.Result{}, nil
+			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 		}
 		log.Error(err, errGetDS)
 		return ctrl.Result{}, err

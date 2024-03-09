@@ -178,6 +178,8 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		log.Error(err, "Failed to update MimirRule ready status")
 	}
 
+	r.Recorder.Event(mimirRule, "Normal", "MimirRuleUpdated", "MimirRule updated successfully")
+
 	log.Info("MimirRule reconciled")
 	return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 }

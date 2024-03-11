@@ -25,6 +25,7 @@ import (
 const (
 	indicatorRef       = ".spec.indicatorRef"
 	errGetSLO          = "could not get SLO Object"
+	errDatasourceRef   = "Unable to get Datasource. Check if the referenced datasource exists."
 	mimirRuleFinalizer = "finalizer.mimir.osko.dev"
 )
 
@@ -63,6 +64,12 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info(fmt.Sprintf("datasourceRef: %v", errGetDS))
+			slo.Status.Ready = "False"
+			r.Recorder.Event(slo, "Warning", "datasourceRef", errDatasourceRef)
+			if err := r.Status().Update(ctx, slo); err != nil {
+				log.Error(err, "Failed to update SLO ready status")
+				return ctrl.Result{}, err
+			}
 			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 		}
 		log.Error(err, errGetDS)
@@ -95,7 +102,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
 		if err != nil {
 			log.Error(err, "Failed to update SLO status")
-			r.Recorder.Event(slo, "Error", "SLIObjectNotFound", "SLI Object not found")
+			r.Recorder.Event(slo, "Warning", "SLIObjectNotFound", "SLI Object not found")
 			return ctrl.Result{}, err
 		}
 		log.Error(err, "SLO has no SLI reference")
@@ -163,7 +170,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 
 		if err = r.Create(ctx, mimirRule); err != nil {
-			r.Recorder.Event(slo, "Error", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
+			r.Recorder.Event(slo, "Warning", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
 			if err = r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO status")
 				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule"); err != nil {

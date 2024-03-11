@@ -60,3 +60,7 @@ you would like to see a particular feature implemented after reading the below r
 ## License
 
 For license, see the [LICENSE](LICENSE) file in the root of this repository.
+
+## Sponsors
+
+<img src="assets/HG Logo_Heureka Group Color.png" width="33%">

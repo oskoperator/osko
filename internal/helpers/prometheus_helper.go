@@ -33,21 +33,6 @@ const (
 	sum(increase({{.Metric}}[{{.Window}}]))
 	{{- end -}}
 	`
-	promqlTemplateRaw = `
-	{{- if eq .RecordName "slo_target" -}}
-	vector({{.Metric}})
-	{{- else if and .Extended (eq .RecordName "sli_total") -}}
-	{{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]
-	{{- else if and .Extended (eq .RecordName "sli_good") -}}
-	{{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]
-	{{- else if eq .RecordName "sli_total" -}}
-	{{.Metric}}[{{.Window}}]
-	{{- else if eq .RecordName "sli_good" -}}
-	{{.Metric}}[{{.Window}}]
-	{{- else if eq .RecordName "sli_bad" -}}
-	{{.Metric}}[{{.Window}}]
-	{{- end -}}
-	`
 )
 
 // RuleTemplateData holds data to fill the PromQL template.
@@ -182,11 +167,23 @@ func (mrs *MonitoringRuleSet) createAntecedentRule(metric, recordName, window st
 
 // checks if the metric source type of the metric in the SLI is Prometheus-compatible
 func (mrs *MonitoringRuleSet) isPrometheusSource() bool {
-	switch mrs.Sli.Spec.RatioMetric.Total.MetricSource.Type {
+	sourceString := ""
+	opts := []string{mrs.Sli.Spec.RatioMetric.Total.MetricSource.Type, mrs.Sli.Spec.ThresholdMetric.MetricSource.Type}
+	for _, opt := range opts {
+		if opt != "" {
+			sourceString = opt
+			break
+		}
+	}
+
+	switch sourceString {
 	case
 		"Prometheus",
 		"Mimir",
-		"Cortex":
+		"Cortex",
+		"VictoriaMetrics",
+		"Thanos",
+		"":
 		return true
 	}
 	return false
@@ -194,14 +191,7 @@ func (mrs *MonitoringRuleSet) isPrometheusSource() bool {
 
 func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window string, extended bool) monitoringv1.Rule {
 	log := ctrllog.FromContext(context.Background())
-
-	var tmpl *template.Template
-	var err error
-	if mrs.isPrometheusSource() {
-		tmpl, err = template.New("promql").Parse(promqlTemplate)
-	} else {
-		tmpl, err = template.New("promql").Parse(promqlTemplateRaw)
-	}
+	tmpl, err := template.New("promql").Parse(promqlTemplate)
 	if err != nil {
 		log.Error(err, "Failed to parse the PromQL template")
 		return monitoringv1.Rule{}
@@ -239,6 +229,10 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 
 	if len(mrs.Slo.Spec.TimeWindow) > 0 && mrs.Slo.Spec.TimeWindow[0].Duration != "" {
 		extendedWindow = string(mrs.Slo.Spec.TimeWindow[0].Duration)
+	}
+
+	if !mrs.isPrometheusSource() {
+		return nil, fmt.Errorf("Unsupported metric source type")
 	}
 
 	targetRuleBase := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
@@ -304,7 +298,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 
 	rules, err := mrs.SetupRules()
 	if err != nil {
-		log.V(1).Error(err, "Failed to create PrometheusRule because of some shit")
+		log.V(1).Error(err, "Failed to create the PrometheusRule")
 		return nil, err
 	}
 

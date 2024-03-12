@@ -119,15 +119,17 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		log.Info("PrometheusRule not found. Let's make one.")
 		prometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
 		if err != nil {
-			err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, fmt.Sprintf("Failed to create new Prometheus Rule: %v", err))
-			if err != nil {
-				log.Error(err, "Failed to update SLO status")
-				return ctrl.Result{}, err
+			r.Recorder.Event(slo, "Warning", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
+			errUpdateStatus := utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, fmt.Sprintf("Failed to create new Prometheus Rule: %v", err))
+			if errUpdateStatus != nil {
+				log.Error(errUpdateStatus, "Failed to update SLO status")
+				return ctrl.Result{}, errUpdateStatus
 			}
-			return ctrl.Result{}, err
+			log.Info(fmt.Sprintf("Failed to create new Prometheus Rule: %v", err))
+			return ctrl.Result{}, nil
 		}
 		if err := r.Create(ctx, prometheusRule); err != nil {
-			r.Recorder.Event(slo, "Error", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
+			r.Recorder.Event(slo, "Warning", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
 			if err := r.Status().Update(ctx, prometheusRule); err != nil {
 				log.Error(err, "Failed to update SLO status")
 				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule"); err != nil {

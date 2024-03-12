@@ -232,7 +232,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 	}
 
 	if !mrs.isPrometheusSource() {
-		return nil, fmt.Errorf("Unsupported metric source type")
+		return []monitoringv1.Rule{}, fmt.Errorf("Unsupported metric source type")
 	}
 
 	targetRuleBase := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
@@ -288,7 +288,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
-	log := ctrllog.FromContext(context.Background())
+	// log := ctrllog.FromContext(context.Background())
 
 	mrs := &MonitoringRuleSet{
 		Slo:        slo,
@@ -298,7 +298,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 
 	rules, err := mrs.SetupRules()
 	if err != nil {
-		log.V(1).Error(err, "Failed to create the PrometheusRule")
+		// log.V(1).Error(err, "Failed to create the PrometheusRule")
 		return nil, err
 	}
 

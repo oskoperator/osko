@@ -119,12 +119,11 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		log.Info("PrometheusRule not found. Let's make one.")
 		prometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
 		if err != nil {
-			err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule")
+			err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, fmt.Sprintf("Failed to create new Prometheus Rule: %v", err))
 			if err != nil {
 				log.Error(err, "Failed to update SLO status")
 				return ctrl.Result{}, err
 			}
-			log.Error(err, "Failed to create new PrometheusRule")
 			return ctrl.Result{}, err
 		}
 		if err := r.Create(ctx, prometheusRule); err != nil {
@@ -165,7 +164,6 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				log.Error(err, "Failed to update SLO status")
 				return ctrl.Result{}, err
 			}
-			log.Error(err, "Failed to create new PrometheusRule")
 			return ctrl.Result{}, err
 		}
 

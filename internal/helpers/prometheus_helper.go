@@ -33,6 +33,21 @@ const (
 	sum(increase({{.Metric}}[{{.Window}}]))
 	{{- end -}}
 	`
+	promqlTemplateRaw = `
+	{{- if eq .RecordName "slo_target" -}}
+	vector({{.Metric}})
+	{{- else if and .Extended (eq .RecordName "sli_total") -}}
+	{{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]
+	{{- else if and .Extended (eq .RecordName "sli_good") -}}
+	{{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]
+	{{- else if eq .RecordName "sli_total" -}}
+	{{.Metric}}[{{.Window}}]
+	{{- else if eq .RecordName "sli_good" -}}
+	{{.Metric}}[{{.Window}}]
+	{{- else if eq .RecordName "sli_bad" -}}
+	{{.Metric}}[{{.Window}}]
+	{{- end -}}
+	`
 )
 
 // RuleTemplateData holds data to fill the PromQL template.
@@ -165,11 +180,30 @@ func (mrs *MonitoringRuleSet) createAntecedentRule(metric, recordName, window st
 	}
 }
 
+// checks if the metric source type of the metric in the SLI is Prometheus-compatible
+func (mrs *MonitoringRuleSet) isPrometheusSource() bool {
+	switch mrs.Sli.Spec.RatioMetric.Total.MetricSource.Type {
+	case
+		"Prometheus",
+		"Mimir",
+		"Cortex":
+		return true
+	}
+	return false
+}
+
 func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window string, extended bool) monitoringv1.Rule {
 	log := ctrllog.FromContext(context.Background())
-	tmpl, err := template.New("promql").Parse(promqlTemplate)
+
+	var tmpl *template.Template
+	var err error
+	if mrs.isPrometheusSource() {
+		tmpl, err = template.New("promql").Parse(promqlTemplate)
+	} else {
+		tmpl, err = template.New("promql").Parse(promqlTemplateRaw)
+	}
 	if err != nil {
-		log.Error(err, "Failed to parse PromQL template")
+		log.Error(err, "Failed to parse the PromQL template")
 		return monitoringv1.Rule{}
 	}
 

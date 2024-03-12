@@ -64,6 +64,16 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
 
+.PHONY: run-mimir
+run-mimir:
+	docker run \
+	  --rm \
+	  --detach \
+	  --name mimir \
+	  --publish 9009:9009 \
+	  --volume $(shell pwd)/devel/mimir.yaml:/etc/mimir/config.yaml grafana/mimir:latest \
+	  --config.file=/etc/mimir/config.yaml
+
 ##@ Build
 
 .PHONY: build

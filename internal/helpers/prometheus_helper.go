@@ -132,7 +132,7 @@ func (mrs *MonitoringRuleSet) createBurnRateRecordingRule(errorBudgetAvailable, 
 	errorBudgetAvailableLabels := mapToColonSeparatedString(errorBudgetAvailable.Labels)
 	errorBudgetTargetLabels := mapToColonSeparatedString(errorBudgetTarget.Labels)
 	return monitoringv1.Rule{
-		Record: fmt.Sprintf("%s_burn_rate", RecordPrefix),
+		Record: fmt.Sprintf("%s_error_budget_burn_rate", RecordPrefix),
 		Expr:   intstr.FromString(fmt.Sprintf("sum(%s{%s}) / sum(%s{%s})", errorBudgetAvailable.Record, errorBudgetAvailableLabels, errorBudgetTarget.Record, errorBudgetTargetLabels)),
 		Labels: map[string]string{
 			"service":  mrs.Slo.Spec.Service,

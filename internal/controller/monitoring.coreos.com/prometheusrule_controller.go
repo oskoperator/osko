@@ -105,8 +105,8 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
 		if err != nil {
 			log.Error(err, "Failed to update SLO status")
-			r.Recorder.Event(slo, "Error", "SLIObjectNotFound", "SLI Object not found")
-			return ctrl.Result{}, err
+			//r.Recorder.Event(slo, "Error", "SLIObjectNotFound", "SLI Object not found")
+			return ctrl.Result{}, nil
 		}
 		log.Error(err, "SLO has no SLI reference")
 		return ctrl.Result{}, err

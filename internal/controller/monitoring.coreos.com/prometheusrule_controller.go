@@ -71,7 +71,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// if not, check if we are supposed to manage it or not
-	if slo == nil {
+	if reflect.DeepEqual(slo, &openslov1.SLO{}) {
 		value, found := prometheusRule.ObjectMeta.Labels["osko.dev/manage"]
 		if !found || value != "true" {
 			log.Info("Not managing a PrometheusRule unrelated to osko")
@@ -105,7 +105,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
 		if err != nil {
 			log.Error(err, "Failed to update SLO status")
-			//r.Recorder.Event(slo, "Error", "SLIObjectNotFound", "SLI Object not found")
+			r.Recorder.Event(slo, "Warning", "SLIObjectNotFound", "SLI Object not found")
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, "SLO has no SLI reference")
@@ -116,14 +116,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		log.Info("PrometheusRule not found. Let's make one.")
 		prometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
 		if err != nil {
-			err = utils.UpdateStatus(
-				ctx,
-				slo,
-				r.Client,
-				"Ready",
-				metav1.ConditionFalse,
-				"Failed to create Prometheus Rule",
-			)
+			err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule")
 			if err != nil {
 				log.Error(err, "Failed to update SLO status")
 				return ctrl.Result{}, err

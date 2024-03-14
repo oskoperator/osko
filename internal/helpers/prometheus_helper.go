@@ -97,7 +97,7 @@ func mergeLabels(ms ...map[string]string) map[string]string {
 	return labels
 }
 
-func (mrs *MonitoringRuleSet) createRuleLabels(window string) map[string]string {
+func (mrs *MonitoringRuleSet) createBaseRuleLabels(window string) map[string]string {
 	return map[string]string{
 		"service":  mrs.Slo.Spec.Service,
 		"sli_name": mrs.Sli.Name,
@@ -107,9 +107,9 @@ func (mrs *MonitoringRuleSet) createRuleLabels(window string) map[string]string 
 
 }
 
-func (mrs *MonitoringRuleSet) createAdditionalRuleLabels() map[string]string {
+func (mrs *MonitoringRuleSet) createUserDefinedRuleLabels() map[string]string {
 	relevantLabels := make(map[string]string)
-	labelPrefix := "osko.dev/"
+	labelPrefix := "label.osko.dev/"
 	for key, value := range mrs.Slo.ObjectMeta.Labels {
 		if strings.HasPrefix(key, labelPrefix) {
 			relevantKey := strings.TrimPrefix(key, labelPrefix)
@@ -125,7 +125,7 @@ func (mrs *MonitoringRuleSet) createErrorBudgetValueRecordingRule(sliMeasurement
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_error_budget_available", RecordPrefix),
 		Expr:   intstr.FromString(fmt.Sprintf("1 - %s{%s}", sliMeasurement.Record, sliMeasurementLabels)),
-		Labels: mergeLabels(mrs.createRuleLabels(window), mrs.createAdditionalRuleLabels()),
+		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 }
 
@@ -133,7 +133,7 @@ func (mrs *MonitoringRuleSet) createErrorBudgetTargetRecordingRule(window string
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_error_budget_target", RecordPrefix),
 		Expr:   intstr.FromString(fmt.Sprintf("1 - %s", mrs.Slo.Spec.Objectives[0].Target)),
-		Labels: mergeLabels(mrs.createRuleLabels(window), mrs.createAdditionalRuleLabels()),
+		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 }
 
@@ -143,7 +143,7 @@ func (mrs *MonitoringRuleSet) createSliMeasurementRecordingRule(totalRule, goodR
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_sli_measurement", RecordPrefix),
 		Expr:   intstr.FromString(fmt.Sprintf("clamp_max(%s{%s} / %s{%s}, 1)", goodRule.Record, goodLabels, totalRule.Record, totalLabels)),
-		Labels: mergeLabels(mrs.createRuleLabels(window), mrs.createAdditionalRuleLabels()),
+		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 }
 
@@ -153,7 +153,7 @@ func (mrs *MonitoringRuleSet) createBurnRateRecordingRule(errorBudgetAvailable, 
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_error_budget_burn_rate", RecordPrefix),
 		Expr:   intstr.FromString(fmt.Sprintf("sum(%s{%s}) / sum(%s{%s})", errorBudgetAvailable.Record, errorBudgetAvailableLabels, errorBudgetTarget.Record, errorBudgetTargetLabels)),
-		Labels: mergeLabels(mrs.createRuleLabels(window), mrs.createAdditionalRuleLabels()),
+		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 }
 
@@ -161,7 +161,7 @@ func (mrs *MonitoringRuleSet) createAntecedentRule(metric, recordName, window st
 	return monitoringv1.Rule{
 		Record: recordName,
 		Expr:   intstr.FromString(metric),
-		Labels: mergeLabels(mrs.createRuleLabels(window), mrs.createAdditionalRuleLabels()),
+		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 }
 
@@ -191,7 +191,7 @@ func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window str
 	rule := monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_%s", RecordPrefix, recordName),
 		Expr:   intstr.FromString(promql.String()),
-		Labels: mergeLabels(mrs.createRuleLabels(window), mrs.createAdditionalRuleLabels()),
+		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 
 	return rule

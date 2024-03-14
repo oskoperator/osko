@@ -165,11 +165,34 @@ func (mrs *MonitoringRuleSet) createAntecedentRule(metric, recordName, window st
 	}
 }
 
+// checks if the metric source type of the metric in the SLI is Prometheus-compatible
+func (mrs *MonitoringRuleSet) isPrometheusSource() bool {
+	sourceString := ""
+	opts := []string{mrs.Sli.Spec.RatioMetric.Total.MetricSource.Type, mrs.Sli.Spec.ThresholdMetric.MetricSource.Type}
+	for _, opt := range opts {
+		if opt != "" {
+			sourceString = opt
+			break
+		}
+	}
+
+	switch sourceString {
+	case
+		"Prometheus",
+		"Mimir",
+		"Cortex",
+		"VictoriaMetrics",
+		"Thanos":
+		return true
+	}
+	return false
+}
+
 func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window string, extended bool) monitoringv1.Rule {
 	log := ctrllog.FromContext(context.Background())
 	tmpl, err := template.New("promql").Parse(promqlTemplate)
 	if err != nil {
-		log.Error(err, "Failed to parse PromQL template")
+		log.Error(err, "Failed to parse the PromQL template")
 		return monitoringv1.Rule{}
 	}
 
@@ -205,6 +228,10 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 
 	if len(mrs.Slo.Spec.TimeWindow) > 0 && mrs.Slo.Spec.TimeWindow[0].Duration != "" {
 		extendedWindow = string(mrs.Slo.Spec.TimeWindow[0].Duration)
+	}
+
+	if !mrs.isPrometheusSource() {
+		return []monitoringv1.Rule{}, fmt.Errorf("Unsupported metric source type")
 	}
 
 	targetRuleBase := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
@@ -260,7 +287,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
-	log := ctrllog.FromContext(context.Background())
+	// log := ctrllog.FromContext(context.Background())
 
 	mrs := &MonitoringRuleSet{
 		Slo:        slo,
@@ -270,7 +297,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 
 	rules, err := mrs.SetupRules()
 	if err != nil {
-		log.V(1).Error(err, "Failed to create PrometheusRule because of some shit")
+		// log.V(1).Error(err, "Failed to create the PrometheusRule")
 		return nil, err
 	}
 

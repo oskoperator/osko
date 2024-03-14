@@ -23,6 +23,7 @@ spec:
         total:
           metricSource:
             metricSourceRef: mimir-infra-ds
+            type: SomeRandomDatasource
             spec:
               query: controller_runtime_webhook_latency_seconds_count{job="gatekeeper-metrics"}
   objectives:

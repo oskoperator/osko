@@ -2,6 +2,26 @@ apiVersion: v1
 entries:
   osko:
   - apiVersion: v2
+    appVersion: 0.0.7
+    created: "2024-03-14T13:18:25.049095203Z"
+    dependencies:
+    - condition: installCRDs.prometheus-operator
+      name: prometheus-operator-crds
+      repository: https://prometheus-community.github.io/helm-charts
+      version: 8.0.1
+    - condition: installCRDs.osko
+      name: crds
+      repository: ""
+      version: 0.0.0
+    description: Base Helm chart for OSKO
+    digest: c25d97fe220fbbbd0259acdc1511bca983b47b3d79845a8f74608ba27c7c371d
+    home: https://github.com/oskoperator/osko
+    name: osko
+    type: application
+    urls:
+    - osko-0.0.7.tgz
+    version: 0.0.7
+  - apiVersion: v2
     appVersion: 0.0.5
     created: "2024-03-06T12:53:32.556320114Z"
     dependencies:
@@ -127,4 +147,4 @@ entries:
     urls:
     - osko-crds-0.0.1.tgz
     version: 0.0.1
-generated: "2024-03-06T12:53:32.556336855Z"
+generated: "2024-03-14T13:18:25.049113397Z"

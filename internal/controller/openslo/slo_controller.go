@@ -125,7 +125,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				log.Error(errUpdateStatus, "Failed to update SLO status")
 				return ctrl.Result{}, errUpdateStatus
 			}
-			log.Info(fmt.Sprintf("Failed to create new Prometheus Rule: %v", err))
+			log.V(3).Info(fmt.Sprintf("Failed to create new Prometheus Rule: %v", err))
 			return ctrl.Result{}, nil
 		}
 		if err := r.Create(ctx, prometheusRule); err != nil {

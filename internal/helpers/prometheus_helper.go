@@ -182,8 +182,7 @@ func (mrs *MonitoringRuleSet) isPrometheusSource() bool {
 		"Mimir",
 		"Cortex",
 		"VictoriaMetrics",
-		"Thanos",
-		"":
+		"Thanos":
 		return true
 	}
 	return false

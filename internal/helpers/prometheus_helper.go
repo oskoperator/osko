@@ -105,7 +105,6 @@ func (mrs *MonitoringRuleSet) createBaseRuleLabels(window string) map[string]str
 		"slo_name":  mrs.Slo.Name,
 		"window":    window,
 	}
-
 }
 
 func (mrs *MonitoringRuleSet) createUserDefinedRuleLabels() map[string]string {
@@ -300,8 +299,6 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
-	// log := ctrllog.FromContext(context.Background())
-
 	mrs := &MonitoringRuleSet{
 		Slo:        slo,
 		Sli:        sli,

@@ -175,14 +175,14 @@ func (mrs *MonitoringRuleSet) isPrometheusSource() bool {
 			break
 		}
 	}
-
+	sourceString = strings.ToLower(sourceString)
 	switch sourceString {
 	case
-		"Prometheus",
-		"Mimir",
-		"Cortex",
-		"VictoriaMetrics",
-		"Thanos":
+		"prometheus",
+		"mimir",
+		"cortex",
+		"victoriametrics",
+		"thanos":
 		return true
 	}
 	return false

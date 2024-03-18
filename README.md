@@ -1,6 +1,6 @@
 # osko - OpenSLO Kubernetes Operator
 
-This operator aims to provide it's users with simple management of SLIs, SLOs, alerting rules and alerts routing via Kubernetes CRDs according to the (not only) the [OpenSLO](https://github.com/OpenSLO/OpenSLO) specification (currently `v1`).
+This operator aims to provide it's users with simple management of SLIs, SLOs, alerting rules and alerts routing via Kubernetes CRDs according to the [OpenSLO](https://github.com/OpenSLO/OpenSLO) specification (currently `v1`).
 
 See the [design document](DESIGN.md) for more details on what `osko` aims to do.
 

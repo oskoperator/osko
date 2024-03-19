@@ -99,10 +99,11 @@ func mergeLabels(ms ...map[string]string) map[string]string {
 
 func (mrs *MonitoringRuleSet) createBaseRuleLabels(window string) map[string]string {
 	return map[string]string{
-		"service":  mrs.Slo.Spec.Service,
-		"sli_name": mrs.Sli.Name,
-		"slo_name": mrs.Slo.Name,
-		"window":   window,
+		"namespace": mrs.Slo.Namespace,
+		"service":   mrs.Slo.Spec.Service,
+		"sli_name":  mrs.Sli.Name,
+		"slo_name":  mrs.Slo.Name,
+		"window":    window,
 	}
 
 }

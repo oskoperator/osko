@@ -55,7 +55,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	err := r.Get(ctx, req.NamespacedName, prometheusRule)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("PrometheusRule resource not found. Ignoring since object must be deleted")
+			log.V(1).Info("PrometheusRule resource not found. Ignoring since object must be deleted")
 		} else {
 			log.Error(err, "Failed to get PrometheusRule")
 		}
@@ -64,7 +64,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	err = r.Get(ctx, req.NamespacedName, mimirRule)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("MimirRule resource not found. Ignoring since object must be deleted")
+			log.V(1).Info("MimirRule resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, "Failed to get MimirRule")
@@ -95,7 +95,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	if apierrors.IsNotFound(err) {
-		log.Info("MimirRule not found. Let's make one.")
+		log.V(1).Info("MimirRule not found. Let's make one.")
 		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &mimirRule.Spec.ConnectionDetails)
 
 		if err = r.Create(ctx, mimirRule); err != nil {
@@ -104,7 +104,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				log.Error(err, "Failed to update MimirRule status")
 				return ctrl.Result{}, err
 			} else {
-				log.Info("MimirRule created successfully")
+				log.V(1).Info("MimirRule created successfully")
 				r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
 				mimirRule.Status.Ready = "True"
 				if err := r.Status().Update(ctx, mimirRule); err != nil {
@@ -150,7 +150,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	log.Info("MimirRule already exists, we should update it.")
+	log.V(1).Info("MimirRule already exists, we should update it.")
 	newMimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &mimirRule.Spec.ConnectionDetails)
 	if err != nil {
 		log.Error(err, "Failed to create new MimirRule")
@@ -159,7 +159,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	compareResult := reflect.DeepEqual(mimirRule.Spec, newMimirRule.Spec)
 	if compareResult {
-		log.Info("MimirRule is up to date")
+		log.V(1).Info("MimirRule is up to date")
 		return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 	}
 
@@ -182,7 +182,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	r.Recorder.Event(mimirRule, "Normal", "MimirRuleUpdated", "MimirRule updated successfully")
 
-	log.Info("MimirRule reconciled")
+	log.V(1).Info("MimirRule reconciled")
 	return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 }
 

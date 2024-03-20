@@ -93,9 +93,9 @@ func GetMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, ru
 }
 
 func UpdateMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, existingGroup *rwrulefmt.RuleGroup, desiredGroup *rwrulefmt.RuleGroup) error {
-	log.Info("Updating Mimir rule group")
+	log.V(1).Info("Updating Mimir rule group")
 	if reflect.DeepEqual(existingGroup, desiredGroup) {
-		log.Info("Mimir rule group is already up to date")
+		log.V(1).Info("Mimir rule group is already up to date")
 		return nil
 	}
 	err := DeleteMimirRuleGroup(log, mimirClient, existingGroup)

@@ -42,7 +42,7 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err != nil {
 		// ignore Datasource deletion
 		if apierrors.IsNotFound(err) {
-			log.Info("Datasource deleted")
+			log.V(1).Info("Datasource deleted")
 			return ctrl.Result{}, nil
 		}
 
@@ -62,7 +62,7 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		r.Recorder.Event(ds, "Warning", "NotImplemented", "Cortex support is not implemented yet")
 	}
 
-	log.Info("Datasource reconciled")
+	log.V(1).Info("Datasource reconciled")
 	r.Recorder.Event(ds, "Normal", "DatasourceReconciled", "Datasource reconciled")
 
 	return ctrl.Result{}, nil

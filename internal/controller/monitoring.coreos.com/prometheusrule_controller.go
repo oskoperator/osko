@@ -37,7 +37,6 @@ type PrometheusRuleReconciler struct {
 
 func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
-	log.Info("Reconciling PrometheusRule")
 
 	slo := &openslov1.SLO{}
 	sli := &openslov1.SLI{}
@@ -113,7 +112,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if apierrors.IsNotFound(err) {
-		log.Info("PrometheusRule not found. Let's make one.")
+		log.V(1).Info("PrometheusRule not found. Let's make one.")
 		prometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
 		if err != nil {
 			err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule")
@@ -136,7 +135,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				return ctrl.Result{}, err
 			}
 		} else {
-			log.Info("PrometheusRule created successfully")
+			log.V(1).Info("PrometheusRule created successfully")
 			r.Recorder.Event(slo, "Normal", "PrometheusRuleCreated", "PrometheusRule created successfully")
 			slo.Status.Ready = "True"
 			if err := r.Status().Update(ctx, slo); err != nil {
@@ -149,7 +148,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// Update PrometheusRule
 	// This is the main logic for the PrometheusRule update
 	// Here we should take the existing PrometheusRule and update it with the new one
-	log.Info("PrometheusRule already exists, we should update it")
+	log.V(1).Info("PrometheusRule already exists, we should update it")
 	newPrometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
 	if err != nil {
 		log.Error(err, "Failed to create new PrometheusRule")
@@ -158,7 +157,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	compareResult := reflect.DeepEqual(prometheusRule, newPrometheusRule)
 	if compareResult {
-		log.Info("PrometheusRule is already up to date")
+		log.V(1).Info("PrometheusRule is already up to date")
 		return ctrl.Result{}, nil
 	}
 
@@ -180,7 +179,6 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	log.Info("PrometheusRule reconciled")
 	return ctrl.Result{}, nil
 }
 

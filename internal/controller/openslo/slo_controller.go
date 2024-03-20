@@ -44,7 +44,6 @@ type SLOReconciler struct {
 
 func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
-	log.Info("Reconciling SLO")
 
 	sli := &openslov1.SLI{}
 	slo := &openslov1.SLO{}
@@ -63,7 +62,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	err = r.Get(ctx, client.ObjectKey{Name: slo.ObjectMeta.Annotations["osko.dev/datasourceRef"], Namespace: slo.Namespace}, ds)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info(fmt.Sprintf("datasourceRef: %v", errGetDS))
+			log.V(1).Info(fmt.Sprintf("datasourceRef: %v", errGetDS))
 			slo.Status.Ready = "False"
 			r.Recorder.Event(slo, "Warning", "datasourceRef", errDatasourceRef)
 			if err := r.Status().Update(ctx, slo); err != nil {
@@ -116,7 +115,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}, prometheusRule)
 
 	if apierrors.IsNotFound(err) {
-		log.Info("PrometheusRule not found. Let's make one.")
+		log.V(1).Info("PrometheusRule not found. Let's make one.")
 		prometheusRule, err = helpers.CreatePrometheusRule(slo, sli)
 		if err != nil {
 			r.Recorder.Event(slo, "Warning", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
@@ -139,7 +138,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				return ctrl.Result{}, err
 			}
 		} else {
-			log.Info("PrometheusRule created successfully")
+			log.V(1).Info("PrometheusRule created successfully")
 			r.Recorder.Event(slo, "Normal", "PrometheusRuleCreated", "PrometheusRule created successfully")
 			slo.Status.Ready = "True"
 			if err := r.Status().Update(ctx, slo); err != nil {
@@ -159,7 +158,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}, mimirRule)
 
 	if apierrors.IsNotFound(err) {
-		log.Info("MimirRule not found. Let's make one.")
+		log.V(1).Info("MimirRule not found. Let's make one.")
 		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &ds.Spec.ConnectionDetails)
 		if err != nil {
 			if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule Object"); err != nil {
@@ -181,7 +180,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				return ctrl.Result{}, err
 			}
 		} else {
-			log.Info("MimirRule created successfully")
+			log.V(1).Info("MimirRule created successfully")
 			r.Recorder.Event(slo, "Normal", "MimirRuleCreated", "MimirRule created successfully")
 			r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
 			slo.Status.Ready = "True"

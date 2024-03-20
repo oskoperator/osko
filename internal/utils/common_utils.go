@@ -210,10 +210,10 @@ func (b BudgetRule) NewBudgetRule() (budgetRule monitoringv1.Rule, sliMeasuremen
 
 func getRelevantRule(b BudgetRule, goodRuleSpec, sloIndicatorSpec string, log logr.Logger) *Rule {
 	if goodRuleSpec == "" || sloIndicatorSpec == "" {
-		log.Info("Good rule not provided, calculating bad as (total - bad)")
+		log.V(1).Info("Good rule not provided, calculating bad as (total - bad)")
 		return b.BadRuleConfig
 	}
-	log.Info("Good rule provided")
+	log.V(1).Info("Good rule provided")
 	return b.GoodRuleConfig
 }
 

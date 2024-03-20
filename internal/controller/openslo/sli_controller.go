@@ -32,7 +32,7 @@ func (r *SLIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	err := r.Get(ctx, req.NamespacedName, sli)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("SLI resource not found. Object must have been deleted.")
+			log.V(1).Info("SLI resource not found. Object must have been deleted.")
 			return ctrl.Result{}, nil
 		}
 
@@ -40,7 +40,7 @@ func (r *SLIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	log.Info("SLI reconciled", "SLI Name", sli.Name, "SLI Namespace", sli.Namespace)
+	log.V(1).Info("SLI reconciled", "SLI Name", sli.Name, "SLI Namespace", sli.Namespace)
 	return ctrl.Result{}, nil
 }
 

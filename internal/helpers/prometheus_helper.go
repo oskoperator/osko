@@ -221,9 +221,8 @@ func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window str
 	return rule
 }
 
-// SetupRules creates Prometheus recording rules for the SLO and SLI
-// and returns a slice of monitoringv1.Rule.
-func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
+// SetupRules constructs rule groups for monitoring based on SLO and SLI configurations.
+func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	baseWindow := mrs.BaseWindow //Should configurable somewhere as agreed on product workshop
 	extendedWindow := "28d"      //Default to 28d if not specified in the SLO
 
@@ -232,7 +231,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 	}
 
 	if !mrs.isPrometheusSource() {
-		return []monitoringv1.Rule{}, fmt.Errorf("Unsupported metric source type")
+		return []monitoringv1.RuleGroup{}, fmt.Errorf("Unsupported metric source type")
 	}
 
 	targetRuleBase := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
@@ -274,31 +273,30 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 	burnRateExtended := mrs.createBurnRateRecordingRule(errorBudgetAvailableExtended, errorBudgetTargetExtended, extendedWindow)
 	burnRateExtendedPageFast := mrs.createBurnRateRecordingRule(errorBudgetAvailableExtendedPageFast, errorBudgetTargetExtendedPageFast, "1h")
 
-	rules := []monitoringv1.Rule{
-		targetRuleBase,
-		targetRuleExtended,
-		targetRuleExtendedPageFast,
-		goodRuleBase,
-		goodRuleExtended,
-		goodRuleExtendedPageFast,
-		totalRuleBase,
-		totalRuleExtended,
-		totalRuleExtendedPageFast,
-		sliMeasurementBase,
-		sliMeasurementExtended,
-		sliMeasurementExtendedPageFast,
+	targetRules := []monitoringv1.Rule{targetRuleBase, targetRuleExtended, targetRuleExtendedPageFast}
+	goodRules := []monitoringv1.Rule{goodRuleBase, goodRuleExtended, goodRuleExtendedPageFast}
+	totalRules := []monitoringv1.Rule{totalRuleBase, totalRuleExtended, totalRuleExtendedPageFast}
+	sliMeasurementRules := []monitoringv1.Rule{sliMeasurementBase, sliMeasurementExtended, sliMeasurementExtendedPageFast}
+	errorBudgetRules := []monitoringv1.Rule{
 		errorBudgetAvailableBase,
 		errorBudgetAvailableExtended,
 		errorBudgetAvailableExtendedPageFast,
 		errorBudgetTargetBase,
 		errorBudgetTargetExtended,
 		errorBudgetTargetExtendedPageFast,
-		burnRateBase,
-		burnRateExtended,
-		burnRateExtendedPageFast,
 	}
+	burnRateRules := []monitoringv1.Rule{burnRateBase, burnRateExtended, burnRateExtendedPageFast}
 
-	return rules, nil
+	sloName := mrs.Slo.Name
+	ruleGroups := []monitoringv1.RuleGroup{
+		{Name: fmt.Sprintf("%s_slo_target", sloName), Rules: targetRules},
+		{Name: fmt.Sprintf("%s_sli_good", sloName), Rules: goodRules},
+		{Name: fmt.Sprintf("%s_sli_total", sloName), Rules: totalRules},
+		{Name: fmt.Sprintf("%s_sli_measurement", sloName), Rules: sliMeasurementRules},
+		{Name: fmt.Sprintf("%s_error_budget", sloName), Rules: errorBudgetRules},
+		{Name: fmt.Sprintf("%s_burn_rate", sloName), Rules: burnRateRules},
+	}
+	return ruleGroups, nil
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
@@ -310,7 +308,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		BaseWindow: "5m",
 	}
 
-	rules, err := mrs.SetupRules()
+	ruleGroups, err := mrs.SetupRules()
 	if err != nil {
 		// log.V(1).Error(err, "Failed to create the PrometheusRule")
 		return nil, err
@@ -331,13 +329,6 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 		OwnerReferences: ownerRef,
 	}
 
-	ruleGroup := []monitoringv1.RuleGroup{
-		{
-			Name:  slo.Name,
-			Rules: rules,
-		},
-	}
-
 	typeMeta := metav1.TypeMeta{
 		APIVersion: "monitoring.coreos.com/v1",
 		Kind:       "PrometheusRule",
@@ -348,7 +339,7 @@ func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1
 	prometheusRule.TypeMeta = typeMeta
 	prometheusRule.ObjectMeta = objectMeta
 	prometheusRule.Spec = monitoringv1.PrometheusRuleSpec{
-		Groups: ruleGroup,
+		Groups: ruleGroups,
 	}
 
 	return &prometheusRule, nil

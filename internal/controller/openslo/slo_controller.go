@@ -171,6 +171,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 		if err = r.Create(ctx, mimirRule); err != nil {
 			r.Recorder.Event(slo, "Warning", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
+			log.Error(err, "Failed to create MimirRule")
 			if err = r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO status")
 				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule"); err != nil {

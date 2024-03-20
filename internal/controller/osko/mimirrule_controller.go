@@ -62,7 +62,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// TODO: This logic is total bullshit. We should revise the reconciliation logic and make it more clear.
-	rgs, err := helpers.NewMimirRuleGroup(prometheusRule, &mimirRule.Spec.ConnectionDetails)
+	rgs, err := helpers.NewMimirRuleGroups(prometheusRule, &mimirRule.Spec.ConnectionDetails)
 	if err != nil {
 		log.Error(err, "Failed to convert MimirRuleGroup")
 	}
@@ -135,9 +135,11 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	if err := r.createMimirRuleGroupAPI(log, rgs); err != nil {
-		log.Error(err, "Failed to create MimirRuleGroup")
-		return ctrl.Result{}, err
+	for _, rg := range rgs {
+		if err := r.createMimirRuleGroupAPI(log, &rg); err != nil {
+			log.Error(err, "Failed to create MimirRuleGroup")
+			return ctrl.Result{}, err
+		}
 	}
 
 	if !controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {

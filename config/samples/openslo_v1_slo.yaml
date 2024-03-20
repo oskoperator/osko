@@ -18,12 +18,13 @@ spec:
         good:
           metricSource:
             metricSourceRef: mimir-infra-ds
+            type: Mimir
             spec:
               query: controller_runtime_webhook_latency_seconds_bucket{le="0.5", job="gatekeeper-metrics"}
         total:
           metricSource:
             metricSourceRef: mimir-infra-ds
-            type: SomeRandomDatasource
+            type: Mimir
             spec:
               query: controller_runtime_webhook_latency_seconds_count{job="gatekeeper-metrics"}
   objectives:

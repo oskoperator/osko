@@ -46,23 +46,9 @@ func NewMimirRule(slo *openslov1.SLO, rule *monitoringv1.PrometheusRule, connect
 		OwnerReferences: ownerRef,
 	}
 
-	var ruleGroups []oskov1alpha1.RuleGroup
-	for _, group := range rule.Spec.Groups {
-		var mimirRules []oskov1alpha1.Rule
-		rg := oskov1alpha1.RuleGroup{
-			Name:          group.Name,
-			SourceTenants: connectionDetails.SourceTenants,
-		}
-		for _, r := range group.Rules {
-			mimirRuleNode := oskov1alpha1.Rule{
-				Record: r.Record,
-				Expr:   r.Expr.String(),
-				Labels: r.Labels,
-			}
-			mimirRules = append(mimirRules, mimirRuleNode)
-		}
-		rg.Rules = mimirRules
-		ruleGroups = append(ruleGroups, rg)
+	ruleGroups, err := NewMimirRuleGroups(rule, connectionDetails)
+	if err != nil {
+		return nil, err
 	}
 
 	mimirRule = &oskov1alpha1.MimirRule{

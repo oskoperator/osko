@@ -237,6 +237,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 
 	targetRuleBase := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
 	targetRuleExtended := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", extendedWindow, true)
+	targetRuleExtendedPageFast := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", "1h", true)
 
 	totalRuleBase := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", baseWindow, false)
 
@@ -275,12 +276,13 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 
 	rules := []monitoringv1.Rule{
 		targetRuleBase,
-		totalRuleBase,
 		targetRuleExtended,
-		totalRuleExtendedPageFast,
+		targetRuleExtendedPageFast,
 		goodRuleBase,
-		totalRuleExtended,
 		goodRuleExtended,
+		goodRuleExtendedPageFast,
+		totalRuleBase,
+		totalRuleExtended,
 		totalRuleExtendedPageFast,
 		sliMeasurementBase,
 		sliMeasurementExtended,

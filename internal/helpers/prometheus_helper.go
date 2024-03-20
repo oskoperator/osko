@@ -287,13 +287,14 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	}
 	burnRateRules := []monitoringv1.Rule{burnRateBase, burnRateExtended, burnRateExtendedPageFast}
 
+	sloName := mrs.Slo.Name
 	ruleGroups := []monitoringv1.RuleGroup{
-		{Name: "slo_target", Rules: targetRules},
-		{Name: "slo_good_rules", Rules: goodRules},
-		{Name: "slo_total_rules", Rules: totalRules},
-		{Name: "sli_measurement_rules", Rules: sliMeasurementRules},
-		{Name: "error_budget_rules", Rules: errorBudgetRules},
-		{Name: "burn_rate_rules", Rules: burnRateRules},
+		{Name: fmt.Sprintf("%s_slo_target", sloName), Rules: targetRules},
+		{Name: fmt.Sprintf("%s_sli_good", sloName), Rules: goodRules},
+		{Name: fmt.Sprintf("%s_sli_total", sloName), Rules: totalRules},
+		{Name: fmt.Sprintf("%s_sli_measurement", sloName), Rules: sliMeasurementRules},
+		{Name: fmt.Sprintf("%s_error_budget", sloName), Rules: errorBudgetRules},
+		{Name: fmt.Sprintf("%s_burn_rate", sloName), Rules: burnRateRules},
 	}
 	return ruleGroups, nil
 }

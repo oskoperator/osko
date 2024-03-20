@@ -254,34 +254,46 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 
 	totalRuleExtended := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", extendedWindow, true)
 	goodRuleExtended := mrs.createRecordingRule(goodRuleBase.Record, "sli_good", extendedWindow, true)
+	totalRuleExtendedPageFast := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", "1h", true)
+	goodRuleExtendedPageFast := mrs.createRecordingRule(totalRuleBase.Record, "sli_good", "1h", true)
 
 	sliMeasurementBase := mrs.createSliMeasurementRecordingRule(totalRuleBase, goodRuleBase, baseWindow)
 	sliMeasurementExtended := mrs.createSliMeasurementRecordingRule(totalRuleExtended, goodRuleExtended, extendedWindow)
+	sliMeasurementExtendedPageFast := mrs.createSliMeasurementRecordingRule(totalRuleExtendedPageFast, goodRuleExtendedPageFast, "1h")
 
 	errorBudgetAvailableBase := mrs.createErrorBudgetValueRecordingRule(sliMeasurementBase, baseWindow)
 	errorBudgetAvailableExtended := mrs.createErrorBudgetValueRecordingRule(sliMeasurementExtended, extendedWindow)
+	errorBudgetAvailableExtendedPageFast := mrs.createErrorBudgetValueRecordingRule(sliMeasurementExtendedPageFast, "1h")
 
 	errorBudgetTargetBase := mrs.createErrorBudgetTargetRecordingRule(baseWindow)
 	errorBudgetTargetExtended := mrs.createErrorBudgetTargetRecordingRule(extendedWindow)
+	errorBudgetTargetExtendedPageFast := mrs.createErrorBudgetTargetRecordingRule("1h")
 
 	burnRateBase := mrs.createBurnRateRecordingRule(errorBudgetAvailableBase, errorBudgetTargetBase, baseWindow)
 	burnRateExtended := mrs.createBurnRateRecordingRule(errorBudgetAvailableExtended, errorBudgetTargetExtended, extendedWindow)
+	burnRateExtendedPageFast := mrs.createBurnRateRecordingRule(errorBudgetAvailableExtendedPageFast, errorBudgetTargetExtendedPageFast, "1h")
 
 	rules := []monitoringv1.Rule{
 		targetRuleBase,
-		targetRuleExtended,
 		totalRuleBase,
+		targetRuleExtended,
+		totalRuleExtendedPageFast,
 		goodRuleBase,
 		totalRuleExtended,
 		goodRuleExtended,
+		totalRuleExtendedPageFast,
 		sliMeasurementBase,
 		sliMeasurementExtended,
+		sliMeasurementExtendedPageFast,
 		errorBudgetAvailableBase,
 		errorBudgetAvailableExtended,
+		errorBudgetAvailableExtendedPageFast,
 		errorBudgetTargetBase,
 		errorBudgetTargetExtended,
+		errorBudgetTargetExtendedPageFast,
 		burnRateBase,
 		burnRateExtended,
+		burnRateExtendedPageFast,
 	}
 
 	return rules, nil

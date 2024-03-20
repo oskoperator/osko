@@ -254,9 +254,9 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.Rule, error) {
 	}
 
 	totalRuleExtended := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", extendedWindow, true)
-	goodRuleExtended := mrs.createRecordingRule(goodRuleBase.Record, "sli_good", extendedWindow, true)
 	totalRuleExtendedPageFast := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", "1h", true)
-	goodRuleExtendedPageFast := mrs.createRecordingRule(totalRuleBase.Record, "sli_good", "1h", true)
+	goodRuleExtended := mrs.createRecordingRule(goodRuleBase.Record, "sli_good", extendedWindow, true)
+	goodRuleExtendedPageFast := mrs.createRecordingRule(goodRuleBase.Record, "sli_good", "1h", true)
 
 	sliMeasurementBase := mrs.createSliMeasurementRecordingRule(totalRuleBase, goodRuleBase, baseWindow)
 	sliMeasurementExtended := mrs.createSliMeasurementRecordingRule(totalRuleExtended, goodRuleExtended, extendedWindow)

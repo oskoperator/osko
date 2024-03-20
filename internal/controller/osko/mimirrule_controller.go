@@ -220,7 +220,7 @@ func (r *MimirRuleReconciler) createMimirRuleGroupAPI(log logr.Logger, rule *osk
 		mimirRuleNodes = append(mimirRuleNodes, mimirRuleNode)
 	}
 
-	log.Info("Source tenants", "SourceTenants", rule.SourceTenants)
+	log.V(1).Info("Source tenants", "SourceTenants", rule.SourceTenants)
 
 	mimirRule := rwrulefmt.RuleGroup{
 		RuleGroup: rulefmt.RuleGroup{

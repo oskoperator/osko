@@ -61,12 +61,6 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	// TODO: This logic is total bullshit. We should revise the reconciliation logic and make it more clear.
-	rgs, err := helpers.NewMimirRuleGroups(prometheusRule, &mimirRule.Spec.ConnectionDetails)
-	if err != nil {
-		log.Error(err, "Failed to convert MimirRuleGroup")
-	}
-
 	err = r.Get(ctx, req.NamespacedName, mimirRule)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -75,6 +69,12 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		log.Error(err, "Failed to get MimirRule")
 		return ctrl.Result{}, err
+	}
+
+	// TODO: This logic is total bullshit. We should revise the reconciliation logic and make it more clear.
+	rgs, err := helpers.NewMimirRuleGroups(prometheusRule, &mimirRule.Spec.ConnectionDetails)
+	if err != nil {
+		log.Error(err, "Failed to convert MimirRuleGroup")
 	}
 
 	isMimirRuleMarkedToBeDeleted := mimirRule.GetDeletionTimestamp() != nil

@@ -46,39 +46,28 @@ func NewMimirRule(slo *openslov1.SLO, rule *monitoringv1.PrometheusRule, connect
 		OwnerReferences: ownerRef,
 	}
 
-	var mimirRules []oskov1alpha1.Rule
-
-	for _, group := range rule.Spec.Groups {
-		for _, r := range group.Rules {
-			mimirRuleNode := oskov1alpha1.Rule{
-				Record: r.Record,
-				Expr:   r.Expr.String(),
-				Labels: r.Labels,
-			}
-			mimirRules = append(mimirRules, mimirRuleNode)
-		}
+	ruleGroups, err := NewMimirRuleGroups(rule, connectionDetails)
+	if err != nil {
+		return nil, err
 	}
 
 	mimirRule = &oskov1alpha1.MimirRule{
 		ObjectMeta: objectMeta,
 		Spec: oskov1alpha1.MimirRuleSpec{
 			ConnectionDetails: *connectionDetails,
-			Groups: []oskov1alpha1.RuleGroup{
-				{
-					Name:          rule.Name,
-					SourceTenants: connectionDetails.SourceTenants,
-					Rules:         mimirRules,
-				},
-			},
-		},
+			Groups:            ruleGroups},
 	}
 	return mimirRule, nil
 }
 
-func NewMimirRuleGroup(rule *monitoringv1.PrometheusRule, connectionDetails *oskov1alpha1.ConnectionDetails) (*oskov1alpha1.RuleGroup, error) {
-	var mimirRules []oskov1alpha1.Rule
-
+func NewMimirRuleGroups(rule *monitoringv1.PrometheusRule, connectionDetails *oskov1alpha1.ConnectionDetails) ([]oskov1alpha1.RuleGroup, error) {
+	var ruleGroups []oskov1alpha1.RuleGroup
 	for _, group := range rule.Spec.Groups {
+		var mimirRules []oskov1alpha1.Rule
+		rg := oskov1alpha1.RuleGroup{
+			Name:          group.Name,
+			SourceTenants: connectionDetails.SourceTenants,
+		}
 		for _, r := range group.Rules {
 			mimirRuleNode := oskov1alpha1.Rule{
 				Record: r.Record,
@@ -87,14 +76,10 @@ func NewMimirRuleGroup(rule *monitoringv1.PrometheusRule, connectionDetails *osk
 			}
 			mimirRules = append(mimirRules, mimirRuleNode)
 		}
+		rg.Rules = mimirRules
+		ruleGroups = append(ruleGroups, rg)
 	}
-	mimirRuleGroup := &oskov1alpha1.RuleGroup{
-		Name:          rule.Name,
-		Rules:         mimirRules,
-		SourceTenants: connectionDetails.SourceTenants,
-	}
-
-	return mimirRuleGroup, nil
+	return ruleGroups, nil
 }
 
 func GetMimirRuleGroup(log logr.Logger, mimirClient *mimirclient.MimirClient, rule *monitoringv1.PrometheusRule) *rwrulefmt.RuleGroup {

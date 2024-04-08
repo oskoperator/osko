@@ -174,3 +174,7 @@ deploydev:
 undeploydev:
 	$(KUBECTL) delete -R -f devel/
 
+.PHONY: forwardsvcdev
+forwardsvcdev:
+	$(KUBECTL) port-forward svc/grafana 3000:3000 2>&1 >	/dev/null &
+	$(KUBECTL) port-forward svc/mimir-service 9009:9009 2>&1 >/dev/null &

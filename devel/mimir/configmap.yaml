@@ -5,6 +5,8 @@ metadata:
 data:
   config.yaml: |
     multitenancy_enabled: true
+    tenant_federation:
+      enabled: true
 
     blocks_storage:
       backend: filesystem

@@ -34,6 +34,10 @@ data:
           store: memberlist
         replication_factor: 1
 
+    ruler:
+      tenant_federation:
+        enabled: true
+
     ruler_storage:
       backend: filesystem
       filesystem:

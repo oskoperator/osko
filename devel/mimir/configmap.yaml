@@ -4,7 +4,7 @@ metadata:
   name: mimir-config
 data:
   config.yaml: |
-    multitenancy_enabled: false
+    multitenancy_enabled: true
 
     blocks_storage:
       backend: filesystem

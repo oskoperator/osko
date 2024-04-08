@@ -13,3 +13,7 @@ data:
       access: proxy
       url: http://mimir-service:9009/prometheus
       isDefault: true
+      jsonData:
+        httpHeaderName1: X-Scope-OrgID
+      secureJsonData:
+        httpHeaderValue1: monitoring

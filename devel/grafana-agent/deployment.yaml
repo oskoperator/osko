@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana-agent
+  template:
+    metadata:
+      labels:
+        app: grafana-agent
+    spec:
+      containers:
+        - name: grafana-agent
+          image: grafana/agent:latest
+          args:
+            - 'run'
+            - '/etc/agent/agent.river'
+            - '--storage.path=/tmp/agent'
+            - '--server.http.listen-addr=127.0.0.1:80'
+            - '--server.http.ui-path-prefix=/'
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/agent
+          env:
+            - name: AGENT_MODE
+              value: "flow"
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+
+      volumes:
+        - name: config-volume
+          configMap:
+            name: grafana-agent-config

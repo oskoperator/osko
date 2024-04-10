@@ -299,10 +299,15 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
+	baseWindow := "5m"
+	if slo.ObjectMeta.Annotations["osko.dev/baseWindow"] != "" {
+		baseWindow = slo.ObjectMeta.Annotations["osko.dev/baseWindow"]
+	}
+
 	mrs := &MonitoringRuleSet{
 		Slo:        slo,
 		Sli:        sli,
-		BaseWindow: "5m",
+		BaseWindow: baseWindow,
 	}
 
 	ruleGroups, err := mrs.SetupRules()

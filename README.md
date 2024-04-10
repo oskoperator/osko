@@ -61,6 +61,11 @@ you would like to see a particular feature implemented after reading the below r
 
 For license, see the [LICENSE](LICENSE) file in the root of this repository.
 
+## Community
+
+If you have any questions or need general advice or help, feel free to join the
+[#osko channel on the OpenSLO Slack](https://openslo.slack.com/archives/C06T64CP5DK)
+
 ## Sponsors
 
 <img src="assets/HG Logo_Heureka Group Color.png" width="33%">

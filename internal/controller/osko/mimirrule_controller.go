@@ -2,6 +2,7 @@ package osko
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -35,8 +36,12 @@ type MimirRuleReconciler struct {
 }
 
 const (
-	mimirRuleFinalizer = "finalizer.mimir.osko.dev"
-	mimirRuleNamespace = "osko"
+	mimirRuleNamespace      = "osko"
+	mimirRuleFinalizer      = "finalizer.mimir.osko.dev"
+	prometheusRuleFinalizer = "finalizer.prometheusrule.osko.dev"
+
+	errFinalizerAddFailed    = "Failed to add the finalizer to the"
+	errFinalizerRemoveFailed = "Failed to remove the finalizer from the"
 )
 
 // +kubebuilder:rbac:groups=osko.dev,resources=mimirrules,verbs=get;list;watch;create;update;patch;delete
@@ -56,8 +61,10 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			log.V(1).Info("PrometheusRule resource not found. Ignoring since object must be deleted")
+			return ctrl.Result{}, nil
 		} else {
 			log.Error(err, "Failed to get PrometheusRule")
+			return ctrl.Result{}, err
 		}
 	}
 
@@ -92,9 +99,15 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		if controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
 			controllerutil.RemoveFinalizer(mimirRule, mimirRuleFinalizer)
-			err := r.Update(ctx, mimirRule)
-			if err != nil {
-				log.Error(err, "Failed to remove the finalizer from the MimirRule")
+			if err := r.Update(ctx, mimirRule); err != nil {
+				log.Error(err, fmt.Sprintf("%s MimirRule", errFinalizerRemoveFailed))
+				return ctrl.Result{}, err
+			}
+		}
+		if controllerutil.ContainsFinalizer(prometheusRule, prometheusRuleFinalizer) {
+			controllerutil.RemoveFinalizer(prometheusRule, prometheusRuleFinalizer)
+			if err := r.Update(ctx, prometheusRule); err != nil {
+				log.Error(err, fmt.Sprintf("%s PrometheusRule", errFinalizerRemoveFailed))
 				return ctrl.Result{}, err
 			}
 		}
@@ -147,7 +160,15 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if !controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
 		controllerutil.AddFinalizer(mimirRule, mimirRuleFinalizer)
 		if err := r.Update(ctx, mimirRule); err != nil {
-			log.Error(err, "Failed to add the finalizer to the MimirRule")
+			log.Error(err, fmt.Sprintf("%s MimirRule", errFinalizerAddFailed))
+			return ctrl.Result{}, err
+		}
+	}
+
+	if !controllerutil.ContainsFinalizer(prometheusRule, prometheusRuleFinalizer) {
+		controllerutil.AddFinalizer(prometheusRule, prometheusRuleFinalizer)
+		if err := r.Update(ctx, prometheusRule); err != nil {
+			log.Error(err, fmt.Sprintf("%s PrometheusRule", errFinalizerAddFailed))
 			return ctrl.Result{}, err
 		}
 	}

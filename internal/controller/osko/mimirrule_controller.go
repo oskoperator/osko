@@ -79,9 +79,11 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	isMimirRuleMarkedToBeDeleted := mimirRule.GetDeletionTimestamp() != nil
 	if isMimirRuleMarkedToBeDeleted {
-		if err := r.deleteMimirRuleGroupAPI(log, req.Name); err != nil {
-			log.Error(err, "Failed to delete MimirRule from the Mimir API")
-			return ctrl.Result{}, err
+		for _, rg := range rgs {
+			if err := r.deleteMimirRuleGroupAPI(log, rg.Name); err != nil {
+				log.Error(err, "Failed to delete MimirRule from the Mimir API")
+				return ctrl.Result{}, err
+			}
 		}
 		if controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
 			controllerutil.RemoveFinalizer(mimirRule, mimirRuleFinalizer)

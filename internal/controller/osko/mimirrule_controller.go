@@ -61,7 +61,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			log.V(1).Info("PrometheusRule resource not found. Ignoring since object must be deleted")
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, err
 		} else {
 			log.Error(err, "Failed to get PrometheusRule")
 			return ctrl.Result{}, err

@@ -4,8 +4,8 @@ import (
 	"flag"
 	monitoringcoreoscom "github.com/oskoperator/osko/internal/controller/monitoring.coreos.com"
 	"os"
-	"time"
 
+	"github.com/oskoperator/osko/internal/config"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -54,14 +54,8 @@ func main() {
 	opts := zap.Options{}
 	opts.BindFlags(flag.CommandLine)
 
-	var mimirRuleRequeuePeriod time.Duration
-	mimirRuleRequeuePeriodDefault, err := time.ParseDuration("1m")
-	if err != nil {
-		setupLog.Error(err, "can't parse default \"mimirRuleRequeuePeriodDefault\"")
-		os.Exit(1)
-	}
-	flag.DurationVar(&mimirRuleRequeuePeriod, "mimirrule-requeue-period", mimirRuleRequeuePeriodDefault, "The requeue period for MimirRule object reconcilation.")
 	flag.Parse()
+	cfg := config.NewConfig()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -145,7 +139,7 @@ func main() {
 		Client:             mgr.GetClient(),
 		Scheme:             mgr.GetScheme(),
 		Recorder:           mgr.GetEventRecorderFor("mimirrule-controller"),
-		RequeueAfterPeriod: mimirRuleRequeuePeriod,
+		RequeueAfterPeriod: cfg.MimirRuleRequeuePeriod,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MimirRule")
 		os.Exit(1)

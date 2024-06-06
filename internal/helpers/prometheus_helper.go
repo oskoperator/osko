@@ -159,7 +159,7 @@ func (mrs *MonitoringRuleSet) createBurnRateRecordingRule(errorBudgetAvailable, 
 
 func (mrs *MonitoringRuleSet) createAntecedentRule(metric, recordName, window string) monitoringv1.Rule {
 	return monitoringv1.Rule{
-		Record: recordName,
+		Record: fmt.Sprintf("%s_"+recordName, RecordPrefix),
 		Expr:   intstr.FromString(metric),
 		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}

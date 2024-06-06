@@ -23,13 +23,13 @@ const (
 	vector({{.Metric}})
 	{{- else if and .Extended (eq .RecordName "sli_total") -}}
 	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
-	{{- else if and .Extended (eq .RecordName "sli_bad") -}}
+	{{- else if and .Extended (eq .RecordName "sli_good") -}}
 	sum(increase({{.Metric}}{{ "{" }}{{ .Labels }}{{ "}" }}[{{.Window}}]))
 	{{- else if eq .RecordName "sli_total" -}}
 	sum(increase({{.Metric}}[{{.Window}}])) or vector(0)
-	{{- else if eq .RecordName "sli_bad" -}}
-	sum(increase({{.Metric}}[{{.Window}}])) or vector(0)
 	{{- else if eq .RecordName "sli_good" -}}
+	sum(increase({{.Metric}}[{{.Window}}])) or vector(0)
+	{{- else if eq .RecordName "sli_bad" -}}
 	sum(increase({{.Metric}}[{{.Window}}])) or vector(0)
 	{{- end -}}
 	`
@@ -124,7 +124,7 @@ func (mrs *MonitoringRuleSet) createErrorBudgetValueRecordingRule(sliMeasurement
 	sliMeasurementLabels := mapToColonSeparatedString(sliMeasurement.Labels)
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_error_budget_available", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("%s{%s}", sliMeasurement.Record, sliMeasurementLabels)),
+		Expr:   intstr.FromString(fmt.Sprintf("1 - %s{%s}", sliMeasurement.Record, sliMeasurementLabels)),
 		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 }
@@ -137,12 +137,13 @@ func (mrs *MonitoringRuleSet) createErrorBudgetTargetRecordingRule(window string
 	}
 }
 
-func (mrs *MonitoringRuleSet) createSliMeasurementRecordingRule(totalRule, badRule monitoringv1.Rule, window string) monitoringv1.Rule {
-	badLabels := mapToColonSeparatedString(badRule.Labels)
+func (mrs *MonitoringRuleSet) createSliMeasurementRecordingRule(totalRule, goodRule monitoringv1.Rule, window string) monitoringv1.Rule {
+	goodLabels := mapToColonSeparatedString(goodRule.Labels)
 	totalLabels := mapToColonSeparatedString(totalRule.Labels)
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_sli_measurement", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("1 - (%s{%s} / %s{%s})", badRule.Record, badLabels, totalRule.Record, totalLabels)),
+
+		Expr:   intstr.FromString(fmt.Sprintf("clamp_max(%s{%s} / %s{%s}, 1)", goodRule.Record, goodLabels, totalRule.Record, totalLabels)),
 		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 }
@@ -159,7 +160,7 @@ func (mrs *MonitoringRuleSet) createBurnRateRecordingRule(errorBudgetAvailable, 
 
 func (mrs *MonitoringRuleSet) createAntecedentRule(metric, recordName, window string) monitoringv1.Rule {
 	return monitoringv1.Rule{
-		Record: fmt.Sprintf("%s_"+recordName, RecordPrefix),
+		Record: fmt.Sprintf("%s_%s", RecordPrefix, recordName),
 		Expr:   intstr.FromString(metric),
 		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
@@ -239,26 +240,26 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 
 	totalRuleBase := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", baseWindow, false)
 
-	var badRuleBase monitoringv1.Rule
-	if mrs.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query != "" {
-		badRuleBase = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query, "sli_bad", baseWindow, false)
+	var goodRuleBase monitoringv1.Rule
+	if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
+		goodRuleBase = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, "sli_good", baseWindow, false)
 	} else {
-		goodRuleBase := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, "sli_good", baseWindow, false)
-		badRuleBase = mrs.createAntecedentRule(
+		badRuleBase := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query, "sli_bad", baseWindow, false)
+		goodRuleBase = mrs.createAntecedentRule(
 			fmt.Sprintf("%v - %v",
 				totalRuleBase.Expr.String(),
-				goodRuleBase.Expr.String(),
-			), "sli_bad", baseWindow)
+				badRuleBase.Expr.String(),
+			), "sli_good", baseWindow)
 	}
 
 	totalRuleExtended := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", extendedWindow, true)
 	totalRuleExtendedPageFast := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", "1h", true)
-	badRuleExtended := mrs.createRecordingRule(badRuleBase.Record, "sli_bad", extendedWindow, true)
-	badRuleExtendedPageFast := mrs.createRecordingRule(badRuleBase.Record, "sli_bad", "1h", true)
+	goodRuleExtended := mrs.createRecordingRule(goodRuleBase.Record, "sli_good", extendedWindow, true)
+	goodRuleExtendedPageFast := mrs.createRecordingRule(goodRuleBase.Record, "sli_good", "1h", true)
 
-	sliMeasurementBase := mrs.createSliMeasurementRecordingRule(totalRuleBase, badRuleBase, baseWindow)
-	sliMeasurementExtended := mrs.createSliMeasurementRecordingRule(totalRuleExtended, badRuleExtended, extendedWindow)
-	sliMeasurementExtendedPageFast := mrs.createSliMeasurementRecordingRule(totalRuleExtendedPageFast, badRuleExtendedPageFast, "1h")
+	sliMeasurementBase := mrs.createSliMeasurementRecordingRule(totalRuleBase, goodRuleBase, baseWindow)
+	sliMeasurementExtended := mrs.createSliMeasurementRecordingRule(totalRuleExtended, goodRuleExtended, extendedWindow)
+	sliMeasurementExtendedPageFast := mrs.createSliMeasurementRecordingRule(totalRuleExtendedPageFast, goodRuleExtendedPageFast, "1h")
 
 	errorBudgetAvailableBase := mrs.createErrorBudgetValueRecordingRule(sliMeasurementBase, baseWindow)
 	errorBudgetAvailableExtended := mrs.createErrorBudgetValueRecordingRule(sliMeasurementExtended, extendedWindow)
@@ -273,7 +274,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	burnRateExtendedPageFast := mrs.createBurnRateRecordingRule(errorBudgetAvailableExtendedPageFast, errorBudgetTargetExtendedPageFast, "1h")
 
 	targetRules := []monitoringv1.Rule{targetRuleBase, targetRuleExtended, targetRuleExtendedPageFast}
-	badRules := []monitoringv1.Rule{badRuleBase, badRuleExtended, badRuleExtendedPageFast}
+	goodRules := []monitoringv1.Rule{goodRuleBase, goodRuleExtended, goodRuleExtendedPageFast}
 	totalRules := []monitoringv1.Rule{totalRuleBase, totalRuleExtended, totalRuleExtendedPageFast}
 	sliMeasurementRules := []monitoringv1.Rule{sliMeasurementBase, sliMeasurementExtended, sliMeasurementExtendedPageFast}
 	errorBudgetRules := []monitoringv1.Rule{
@@ -289,7 +290,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	sloName := mrs.Slo.Name
 	ruleGroups := []monitoringv1.RuleGroup{
 		{Name: fmt.Sprintf("%s_slo_target", sloName), Rules: targetRules},
-		{Name: fmt.Sprintf("%s_sli_bad", sloName), Rules: badRules},
+		{Name: fmt.Sprintf("%s_sli_good", sloName), Rules: goodRules},
 		{Name: fmt.Sprintf("%s_sli_total", sloName), Rules: totalRules},
 		{Name: fmt.Sprintf("%s_sli_measurement", sloName), Rules: sliMeasurementRules},
 		{Name: fmt.Sprintf("%s_error_budget", sloName), Rules: errorBudgetRules},

@@ -142,7 +142,7 @@ func (mrs *MonitoringRuleSet) createSliMeasurementRecordingRule(totalRule, badRu
 	totalLabels := mapToColonSeparatedString(totalRule.Labels)
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_sli_measurement", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("clamp_max(%s{%s} / %s{%s}, 1)", badRule.Record, badLabels, totalRule.Record, totalLabels)),
+		Expr:   intstr.FromString(fmt.Sprintf("1 - (%s{%s} / %s{%s})", badRule.Record, badLabels, totalRule.Record, totalLabels)),
 		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 }

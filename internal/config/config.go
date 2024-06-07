@@ -13,6 +13,7 @@ func NewConfig() Config {
 			TicketShortWindow: GetEnvAsFloat64("ABR_TICKET_SHORT_WINDOW", 3),
 			TicketLongWindow:  GetEnvAsFloat64("ABR_TICKET_LONG_WINDOW", 1),
 		},
+		DefaultBaseWindow: GetEnvAsDuration("DEFAULT_BASE_WINDOW", 5*time.Minute),
 	}
 	return config
 }

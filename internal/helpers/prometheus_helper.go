@@ -123,7 +123,7 @@ func (mrs *MonitoringRuleSet) createUserDefinedRuleLabels() map[string]string {
 func (mrs *MonitoringRuleSet) createErrorBudgetValueRecordingRule(sliMeasurement monitoringv1.Rule, window string) monitoringv1.Rule {
 	sliMeasurementLabels := mapToColonSeparatedString(sliMeasurement.Labels)
 	return monitoringv1.Rule{
-		Record: fmt.Sprintf("%s_error_budget_available", RecordPrefix),
+		Record: fmt.Sprintf("%s_error_budget_value", RecordPrefix),
 		Expr:   intstr.FromString(fmt.Sprintf("1 - %s{%s}", sliMeasurement.Record, sliMeasurementLabels)),
 		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
@@ -148,12 +148,12 @@ func (mrs *MonitoringRuleSet) createSliMeasurementRecordingRule(totalRule, goodR
 	}
 }
 
-func (mrs *MonitoringRuleSet) createBurnRateRecordingRule(errorBudgetAvailable, errorBudgetTarget monitoringv1.Rule, window string) monitoringv1.Rule {
-	errorBudgetAvailableLabels := mapToColonSeparatedString(errorBudgetAvailable.Labels)
+func (mrs *MonitoringRuleSet) createBurnRateRecordingRule(errorBudgetValue, errorBudgetTarget monitoringv1.Rule, window string) monitoringv1.Rule {
+	errorBudgetValueLabels := mapToColonSeparatedString(errorBudgetValue.Labels)
 	errorBudgetTargetLabels := mapToColonSeparatedString(errorBudgetTarget.Labels)
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_error_budget_burn_rate", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("sum(%s{%s}) / sum(%s{%s})", errorBudgetAvailable.Record, errorBudgetAvailableLabels, errorBudgetTarget.Record, errorBudgetTargetLabels)),
+		Expr:   intstr.FromString(fmt.Sprintf("sum(%s{%s}) / sum(%s{%s})", errorBudgetValue.Record, errorBudgetValueLabels, errorBudgetTarget.Record, errorBudgetTargetLabels)),
 		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 }
@@ -261,26 +261,26 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	sliMeasurementExtended := mrs.createSliMeasurementRecordingRule(totalRuleExtended, goodRuleExtended, extendedWindow)
 	sliMeasurementExtendedPageFast := mrs.createSliMeasurementRecordingRule(totalRuleExtendedPageFast, goodRuleExtendedPageFast, "1h")
 
-	errorBudgetAvailableBase := mrs.createErrorBudgetValueRecordingRule(sliMeasurementBase, baseWindow)
-	errorBudgetAvailableExtended := mrs.createErrorBudgetValueRecordingRule(sliMeasurementExtended, extendedWindow)
-	errorBudgetAvailableExtendedPageFast := mrs.createErrorBudgetValueRecordingRule(sliMeasurementExtendedPageFast, "1h")
+	errorBudgetValueBase := mrs.createErrorBudgetValueRecordingRule(sliMeasurementBase, baseWindow)
+	errorBudgetValueExtended := mrs.createErrorBudgetValueRecordingRule(sliMeasurementExtended, extendedWindow)
+	errorBudgetValueExtendedPageFast := mrs.createErrorBudgetValueRecordingRule(sliMeasurementExtendedPageFast, "1h")
 
 	errorBudgetTargetBase := mrs.createErrorBudgetTargetRecordingRule(baseWindow)
 	errorBudgetTargetExtended := mrs.createErrorBudgetTargetRecordingRule(extendedWindow)
 	errorBudgetTargetExtendedPageFast := mrs.createErrorBudgetTargetRecordingRule("1h")
 
-	burnRateBase := mrs.createBurnRateRecordingRule(errorBudgetAvailableBase, errorBudgetTargetBase, baseWindow)
-	burnRateExtended := mrs.createBurnRateRecordingRule(errorBudgetAvailableExtended, errorBudgetTargetExtended, extendedWindow)
-	burnRateExtendedPageFast := mrs.createBurnRateRecordingRule(errorBudgetAvailableExtendedPageFast, errorBudgetTargetExtendedPageFast, "1h")
+	burnRateBase := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, baseWindow)
+	burnRateExtended := mrs.createBurnRateRecordingRule(errorBudgetValueExtended, errorBudgetTargetExtended, extendedWindow)
+	burnRateExtendedPageFast := mrs.createBurnRateRecordingRule(errorBudgetValueExtendedPageFast, errorBudgetTargetExtendedPageFast, "1h")
 
 	targetRules := []monitoringv1.Rule{targetRuleBase, targetRuleExtended, targetRuleExtendedPageFast}
 	goodRules := []monitoringv1.Rule{goodRuleBase, goodRuleExtended, goodRuleExtendedPageFast}
 	totalRules := []monitoringv1.Rule{totalRuleBase, totalRuleExtended, totalRuleExtendedPageFast}
 	sliMeasurementRules := []monitoringv1.Rule{sliMeasurementBase, sliMeasurementExtended, sliMeasurementExtendedPageFast}
 	errorBudgetRules := []monitoringv1.Rule{
-		errorBudgetAvailableBase,
-		errorBudgetAvailableExtended,
-		errorBudgetAvailableExtendedPageFast,
+		errorBudgetValueBase,
+		errorBudgetValueExtended,
+		errorBudgetValueExtendedPageFast,
 		errorBudgetTargetBase,
 		errorBudgetTargetExtended,
 		errorBudgetTargetExtendedPageFast,

@@ -3,13 +3,17 @@ package osko
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"time"
+
 	mimirclient "github.com/grafana/mimir/pkg/mimirtool/client"
 	"github.com/oskoperator/osko/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
-	"time"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
@@ -21,9 +25,10 @@ import (
 // AlertManagerConfigReconciler reconciles a AlertManagerConfig object
 type AlertManagerConfigReconciler struct {
 	client.Client
-	Scheme      *runtime.Scheme
-	Recorder    record.EventRecorder
-	MimirClient *mimirclient.MimirClient
+	Scheme               *runtime.Scheme
+	Recorder             record.EventRecorder
+	MimirClient          *mimirclient.MimirClient
+	SecretNamespacedName types.NamespacedName
 }
 
 const (
@@ -100,6 +105,11 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, nil
 	}
 
+	r.SecretNamespacedName = types.NamespacedName{
+		Name:      secret.Name,
+		Namespace: secret.Namespace,
+	}
+
 	//log.V(1).Info("Getting secret", "secretData", secret.Data["alertmanagerconfig.yaml"])
 
 	yamlData, ok := secret.Data["alertmanagerconfig.yaml"]
@@ -123,9 +133,22 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 	return ctrl.Result{}, nil
 }
 
+func (r *AlertManagerConfigReconciler) findObjectsForSecret(secretNamespacedName types.NamespacedName) func(ctx context.Context, a client.Object) []reconcile.Request {
+	return func(ctx context.Context, a client.Object) []reconcile.Request {
+		if secretNamespacedName == (types.NamespacedName{}) {
+			return []reconcile.Request{}
+		}
+		return []reconcile.Request{{NamespacedName: secretNamespacedName}}
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *AlertManagerConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&oskov1alpha1.AlertManagerConfig{}).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSecret(r.SecretNamespacedName)),
+		).
 		Complete(r)
 }

@@ -2,8 +2,9 @@ package main
 
 import (
 	"flag"
-	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 	"os"
+
+	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 
 	monitoringcoreoscom "github.com/oskoperator/osko/internal/controller/monitoring.coreos.com"
 
@@ -16,6 +17,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -149,9 +151,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&oskocontroller.AlertManagerConfigReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("alertmanagerconfig-controller"),
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		Recorder:             mgr.GetEventRecorderFor("alertmanagerconfig-controller"),
+		SecretNamespacedName: types.NamespacedName{},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AlertManagerConfig")
 		os.Exit(1)

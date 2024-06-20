@@ -219,3 +219,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - osko.dev
+  resources:
+  - alertmanagerconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - osko.dev
+  resources:
+  - alertmanagerconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - osko.dev
+  resources:
+  - alertmanagerconfigs/status
+  verbs:
+  - get
+  - patch
+  - update

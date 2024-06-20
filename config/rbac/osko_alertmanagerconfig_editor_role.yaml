@@ -1,0 +1,27 @@
+# permissions for end users to edit alertmanagerconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: osko
+    app.kubernetes.io/managed-by: kustomize
+  name: osko-alertmanagerconfig-editor-role
+rules:
+- apiGroups:
+  - osko.dev
+  resources:
+  - alertmanagerconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - osko.dev
+  resources:
+  - alertmanagerconfigs/status
+  verbs:
+  - get

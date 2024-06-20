@@ -12,7 +12,7 @@ metadata:
   name: mimirrule-editor-role
 rules:
 - apiGroups:
-  - osko.openslo
+  - osko.dev
   resources:
   - mimirrules
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - osko.openslo
+  - osko.dev
   resources:
   - mimirrules/status
   verbs:

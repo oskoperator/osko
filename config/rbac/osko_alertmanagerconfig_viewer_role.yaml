@@ -1,0 +1,23 @@
+# permissions for end users to view alertmanagerconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: osko
+    app.kubernetes.io/managed-by: kustomize
+  name: osko-alertmanagerconfig-viewer-role
+rules:
+- apiGroups:
+  - osko.dev
+  resources:
+  - alertmanagerconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - osko.dev
+  resources:
+  - alertmanagerconfigs/status
+  verbs:
+  - get

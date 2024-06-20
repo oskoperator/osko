@@ -2,11 +2,13 @@ package main
 
 import (
 	"flag"
-	monitoringcoreoscom "github.com/oskoperator/osko/internal/controller/monitoring.coreos.com"
 	"os"
 
-	"github.com/oskoperator/osko/internal/config"
+	monitoringcoreoscom "github.com/oskoperator/osko/internal/controller/monitoring.coreos.com"
+
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+
+	"github.com/oskoperator/osko/internal/config"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -142,6 +144,13 @@ func main() {
 		RequeueAfterPeriod: cfg.MimirRuleRequeuePeriod,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MimirRule")
+		os.Exit(1)
+	}
+	if err = (&oskocontroller.AlertManagerConfigReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AlertManagerConfig")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

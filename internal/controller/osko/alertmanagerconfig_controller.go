@@ -133,11 +133,31 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 	return ctrl.Result{}, nil
 }
 
-func (r *AlertManagerConfigReconciler) findObjectsForSecret(secretNamespacedName types.NamespacedName) func(ctx context.Context, a client.Object) []reconcile.Request {
+func (r *AlertManagerConfigReconciler) findObjectsForSecret() func(ctx context.Context, a client.Object) []reconcile.Request {
 	return func(ctx context.Context, a client.Object) []reconcile.Request {
-		if secretNamespacedName == (types.NamespacedName{}) {
+		log := ctrllog.FromContext(ctx)
+		amc := &oskov1alpha1.AlertManagerConfig{}
+		namespacedName := types.NamespacedName{
+			Name:      a.GetName(),
+			Namespace: a.GetNamespace(),
+		}
+		err := r.Get(ctx, namespacedName, amc)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				log.V(1).Info("MimirAlertManager resource not found. Object must have been deleted.")
+				return []reconcile.Request{}
+			}
+			log.Error(err, errGetAMC)
 			return []reconcile.Request{}
 		}
+		if amc.Spec.SecretRef.Namespace == "" {
+			amc.Spec.SecretRef.Namespace = a.GetName()
+		}
+		secretNamespacedName := types.NamespacedName{
+			Name:      amc.Spec.SecretRef.Name,
+			Namespace: amc.Spec.SecretRef.Namespace,
+		}
+
 		return []reconcile.Request{{NamespacedName: secretNamespacedName}}
 	}
 }
@@ -148,7 +168,7 @@ func (r *AlertManagerConfigReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		For(&oskov1alpha1.AlertManagerConfig{}).
 		Watches(
 			&corev1.Secret{},
-			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSecret(r.SecretNamespacedName)),
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSecret()),
 		).
 		Complete(r)
 }

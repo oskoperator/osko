@@ -65,15 +65,7 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	if apierrors.IsNotFound(err) {
-		log.V(1).Info("AlertmanagerConfig resource not found. Creating new AlertmanagerConfig")
-		if err = r.Create(ctx, amc); err != nil {
-			log.Error(err, "Failed to create AlertmanagerConfig")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	}
-
+	log.V(1).Info("Getting datasourceRef", "datasourceRef", amc.ObjectMeta.Annotations["osko.dev/datasourceRef"])
 	// Get DS from AMC's ref
 	err = r.Get(ctx, client.ObjectKey{Name: amc.ObjectMeta.Annotations["osko.dev/datasourceRef"], Namespace: amc.Namespace}, ds)
 	if err != nil {
@@ -110,11 +102,9 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 		Namespace: secret.Namespace,
 	}
 
-	//log.V(1).Info("Getting secret", "secretData", secret.Data["alertmanagerconfig.yaml"])
-
-	yamlData, ok := secret.Data["alertmanagerconfig.yaml"]
+	yamlData, ok := secret.Data["alertmanager.yaml"]
 	if !ok {
-		log.Error(err, "alertmanagerconfig.yaml not found in secret")
+		log.Error(err, "alertmanager.yaml not found in secret")
 		return ctrl.Result{}, nil
 	}
 
@@ -144,14 +134,13 @@ func (r *AlertManagerConfigReconciler) findObjectsForSecret() func(ctx context.C
 		err := r.Get(ctx, namespacedName, amc)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				log.V(1).Info("MimirAlertManager resource not found. Object must have been deleted.")
 				return []reconcile.Request{}
 			}
 			log.Error(err, errGetAMC)
 			return []reconcile.Request{}
 		}
 		if amc.Spec.SecretRef.Namespace == "" {
-			amc.Spec.SecretRef.Namespace = a.GetName()
+			amc.Spec.SecretRef.Namespace = a.GetNamespace()
 		}
 		secretNamespacedName := types.NamespacedName{
 			Name:      amc.Spec.SecretRef.Name,

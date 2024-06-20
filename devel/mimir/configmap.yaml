@@ -16,6 +16,16 @@ data:
         dir: /tmp/mimir/data/tsdb
       tsdb:
         dir: /tmp/mimir/tsdb
+    
+    alertmanager:
+      data_dir: /tmp/mimir/alertmanager
+      enable_api: true
+      fallback_config_file: /tmp/mimir/alertmanager-config/alertmanager-fallback-config.yaml
+    
+    alertmanager_storage:
+      backend: filesystem
+      filesystem:
+        dir: /tmp/mimir/alert-store
 
     compactor:
       data_dir: /tmp/mimir/compactor
@@ -37,6 +47,9 @@ data:
         replication_factor: 1
 
     ruler:
+      alertmanager_url: http://mimir:9009/alertmanager
+      enable_api: true
+      rule_path: /tmp/mimir/ruler
       tenant_federation:
         enabled: true
 
@@ -47,7 +60,7 @@ data:
 
     server:
       http_listen_port: 9009
-      log_level: error
+      log_level: info
 
     store_gateway:
       sharding_ring:

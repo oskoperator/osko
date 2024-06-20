@@ -1,9 +1,13 @@
 apiVersion: osko.dev/v1alpha1
 kind: AlertManagerConfig
 metadata:
+  annotations:
+    osko.dev/datasourceRef: "mimir-infra-ds"
   labels:
     app.kubernetes.io/name: osko
     app.kubernetes.io/managed-by: kustomize
   name: alertmanagerconfig-sample
 spec:
+  secretRef:
+    name: alertmanagerconfig-sample
   # TODO(user): Add fields here

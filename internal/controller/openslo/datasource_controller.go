@@ -2,18 +2,14 @@ package controller
 
 import (
 	"context"
-	"fmt"
+	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/prometheus/client_golang/api"
-	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"time"
-
-	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 )
 
 const (
@@ -69,20 +65,20 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 }
 
 func (r *DatasourceReconciler) connectDatasource(ctx context.Context, ds *openslov1.Datasource) error {
-	client, err := api.NewClient(api.Config{
+	_, err := api.NewClient(api.Config{
 		Address: ds.Spec.ConnectionDetails.Address + "/prometheus",
 	})
 	if err != nil {
 		r.Recorder.Event(ds, "Warning", "DatasourceConnectionFailed", "Datasource connection failed")
 		return err
 	}
-	api := v1.NewAPI(client)
-	result, _, err := api.Query(ctx, "up", time.Now())
-	if err != nil {
-		r.Recorder.Event(ds, "Warning", "DatasourceConnectionFailed", fmt.Sprintf("API query failed %s", result))
-		return err
-	}
-	r.Recorder.Event(ds, "Normal", "DatasourceConnected", "Datasource successfully connected")
+	//api := v1.NewAPI(client)
+	//result, _, err := api.Query(ctx, "up", time.Now())
+	//if err != nil {
+	//	r.Recorder.Event(ds, "Warning", "DatasourceConnectionFailed", fmt.Sprintf("API query failed %s", result))
+	//	return err
+	//}
+	//r.Recorder.Event(ds, "Normal", "DatasourceConnected", "Datasource successfully connected")
 	return nil
 }
 

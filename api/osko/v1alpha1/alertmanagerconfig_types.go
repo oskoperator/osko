@@ -1,12 +1,14 @@
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // AlertManagerConfigSpec defines the desired state of AlertManagerConfig
 type AlertManagerConfigSpec struct {
-	Raw map[string]string `json:"raw,omitempty"`
+	Raw       map[string]string  `json:"raw,omitempty"`
+	SecretRef v1.SecretReference `json:"secretRef,omitempty"`
 }
 
 // AlertManagerConfigStatus defines the observed state of AlertManagerConfig

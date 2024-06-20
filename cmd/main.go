@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 	"os"
 
 	monitoringcoreoscom "github.com/oskoperator/osko/internal/controller/monitoring.coreos.com"
@@ -41,6 +42,7 @@ func init() {
 	utilruntime.Must(openslov1.AddToScheme(scheme))
 	utilruntime.Must(oskov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
+	utilruntime.Must(monitoringv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -147,8 +149,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&oskocontroller.AlertManagerConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("alertmanagerconfig-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AlertManagerConfig")
 		os.Exit(1)

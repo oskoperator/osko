@@ -7,7 +7,6 @@ import (
 
 // AlertManagerConfigSpec defines the desired state of AlertManagerConfig
 type AlertManagerConfigSpec struct {
-	Raw       map[string]string  `json:"raw,omitempty"`
 	SecretRef v1.SecretReference `json:"secretRef,omitempty"`
 }
 

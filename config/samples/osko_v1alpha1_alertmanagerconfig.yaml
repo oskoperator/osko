@@ -10,4 +10,3 @@ metadata:
 spec:
   secretRef:
     name: alertmanagerconfig-sample
-  # TODO(user): Add fields here

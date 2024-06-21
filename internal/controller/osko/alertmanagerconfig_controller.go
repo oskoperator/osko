@@ -25,10 +25,9 @@ import (
 // AlertManagerConfigReconciler reconciles a AlertManagerConfig object
 type AlertManagerConfigReconciler struct {
 	client.Client
-	Scheme               *runtime.Scheme
-	Recorder             record.EventRecorder
-	MimirClient          *mimirclient.MimirClient
-	SecretNamespacedName types.NamespacedName
+	Scheme      *runtime.Scheme
+	Recorder    record.EventRecorder
+	MimirClient *mimirclient.MimirClient
 }
 
 const (
@@ -95,11 +94,6 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 		}
 		log.Error(err, "Failed to get secret")
 		return ctrl.Result{}, nil
-	}
-
-	r.SecretNamespacedName = types.NamespacedName{
-		Name:      secret.Name,
-		Namespace: secret.Namespace,
 	}
 
 	yamlData, ok := secret.Data["alertmanager.yaml"]

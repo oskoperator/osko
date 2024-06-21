@@ -15,13 +15,21 @@ spec:
       containers:
         - name: mimir
           image: grafana/mimir:latest
-          args: ["-config.file=/etc/mimir/config.yaml"]
+          args: [
+            "-config.file=/etc/mimir/config.yaml",
+            "-target=all,alertmanager",
+          ]
           ports:
             - containerPort: 9009
           volumeMounts:
             - name: config-volume
               mountPath: /etc/mimir
+            - name: alertmanagerconfig-volume
+              mountPath: /tmp/mimir/alertmanager-config/
       volumes:
         - name: config-volume
           configMap:
             name: mimir-config
+        - name: alertmanagerconfig-volume
+          configMap:
+            name: mimir-alertmanager-config

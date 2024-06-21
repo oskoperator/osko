@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mimir-alertmanager-config
+data:
+  alertmanager-fallback-config.yaml: |
+    route:
+      group_wait: 0s
+      receiver: empty-receiver
+    
+    receivers:
+      # In this example we're not going to send any notification out of Alertmanager.
+      - name: 'empty-receiver'

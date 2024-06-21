@@ -196,32 +196,6 @@ rules:
 - apiGroups:
   - osko.dev
   resources:
-  - mimirrules
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - osko.dev
-  resources:
-  - mimirrules/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - osko.dev
-  resources:
-  - mimirrules/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - osko.dev
-  resources:
   - alertmanagerconfigs
   verbs:
   - create
@@ -241,6 +215,32 @@ rules:
   - osko.dev
   resources:
   - alertmanagerconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - osko.dev
+  resources:
+  - mimirrules
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - osko.dev
+  resources:
+  - mimirrules/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - osko.dev
+  resources:
+  - mimirrules/status
   verbs:
   - get
   - patch

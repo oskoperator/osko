@@ -4,11 +4,9 @@ import (
 	"flag"
 	"os"
 
-	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
-
 	monitoringcoreoscom "github.com/oskoperator/osko/internal/controller/monitoring.coreos.com"
-
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 
 	"github.com/oskoperator/osko/internal/config"
 
@@ -39,7 +37,6 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	utilruntime.Must(openslov1.AddToScheme(scheme))
 	utilruntime.Must(oskov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))

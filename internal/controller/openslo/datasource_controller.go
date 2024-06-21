@@ -2,14 +2,18 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/prometheus/client_golang/api"
+	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	"net/http"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"time"
 )
 
 const (
@@ -23,6 +27,11 @@ type DatasourceReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
+}
+
+type CustomRoundTripper struct {
+	Transport http.RoundTripper
+	TenantID  string
 }
 
 //+kubebuilder:rbac:groups=openslo.com,resources=datasources,verbs=get;list;watch;create;update;patch;delete
@@ -65,21 +74,41 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 }
 
 func (r *DatasourceReconciler) connectDatasource(ctx context.Context, ds *openslov1.Datasource) error {
-	_, err := api.NewClient(api.Config{
-		Address: ds.Spec.ConnectionDetails.Address + "/prometheus",
+	datasourceAddress := ""
+
+	if ds.Spec.Type != "mimir" {
+		return fmt.Errorf("unsupported datasource type: %s", ds.Spec.Type)
+	} else {
+		datasourceAddress = ds.Spec.ConnectionDetails.Address + "/prometheus"
+	}
+
+	customRoundtripper := &CustomRoundTripper{
+		Transport: api.DefaultRoundTripper,
+		TenantID:  ds.Spec.ConnectionDetails.TargetTenant,
+	}
+
+	newDsClient, err := api.NewClient(api.Config{
+		Address:      datasourceAddress,
+		RoundTripper: customRoundtripper,
 	})
 	if err != nil {
 		r.Recorder.Event(ds, "Warning", "DatasourceConnectionFailed", "Datasource connection failed")
 		return err
 	}
-	//api := v1.NewAPI(client)
-	//result, _, err := api.Query(ctx, "up", time.Now())
-	//if err != nil {
-	//	r.Recorder.Event(ds, "Warning", "DatasourceConnectionFailed", fmt.Sprintf("API query failed %s", result))
-	//	return err
-	//}
-	//r.Recorder.Event(ds, "Normal", "DatasourceConnected", "Datasource successfully connected")
+
+	newAPI := v1.NewAPI(newDsClient)
+	result, _, err := newAPI.Query(ctx, "up", time.Now())
+	if err != nil {
+		r.Recorder.Event(ds, "Warning", "DatasourceConnectionFailed", fmt.Sprintf("API query failed to address: %s with error: %s", datasourceAddress, err.Error()))
+		return err
+	}
+	r.Recorder.Event(ds, "Normal", "DatasourceConnected", fmt.Sprintf("Datasource successfully connected - %s", result.String()))
 	return nil
+}
+
+func (c *CustomRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Add("X-Scope-OrgId", c.TenantID)
+	return c.Transport.RoundTrip(req)
 }
 
 // SetupWithManager sets up the controller with the Manager.

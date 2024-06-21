@@ -301,8 +301,8 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
-	cfg := config.NewConfig() // should we initialize the config once somewhere and pass it around? Do we care?
-	baseWindow := config.DefaultBaseWindow
+	cfg := config.NewConfig()
+	baseWindow := cfg.DefaultBaseWindow.String()
 	if slo.ObjectMeta.Annotations["osko.dev/baseWindow"] != "" {
 		baseWindow = slo.ObjectMeta.Annotations["osko.dev/baseWindow"]
 	}

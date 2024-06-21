@@ -7,6 +7,7 @@ import (
 type Config struct {
 	MimirRuleRequeuePeriod time.Duration
 	AlertingBurnRates      AlertingBurnRates
+	DefaultBaseWindow      time.Duration
 }
 
 type AlertingBurnRates struct {

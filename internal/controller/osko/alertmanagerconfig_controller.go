@@ -125,6 +125,11 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	if err = utils.UpdateStatus(ctx, amc, r.Client, "Ready", metav1.ConditionTrue, "PrometheusRule created"); err != nil {
+		log.V(1).Error(err, "Failed to update SLO status")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 

@@ -3,6 +3,8 @@ package osko
 import (
 	"context"
 	"fmt"
+	"github.com/oskoperator/osko/internal/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"time"
@@ -65,6 +67,7 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	log.V(1).Info("Getting datasourceRef", "datasourceRef", amc.ObjectMeta.Annotations["osko.dev/datasourceRef"])
+
 	// Get DS from AMC's ref
 	err = r.Get(ctx, client.ObjectKey{Name: amc.ObjectMeta.Annotations["osko.dev/datasourceRef"], Namespace: amc.Namespace}, ds)
 	if err != nil {
@@ -89,7 +92,11 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 	err = r.Get(ctx, client.ObjectKey{Namespace: amc.Spec.SecretRef.Namespace, Name: amc.Spec.SecretRef.Name}, secret)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Error(err, "Secret not found")
+			if err = utils.UpdateStatus(ctx, amc, r.Client, "Ready", metav1.ConditionFalse, "Secret from secretRef not found"); err != nil {
+				log.Error(err, "Failed to update amc status")
+				return ctrl.Result{}, err
+			}
+			r.Recorder.Event(amc, "Warning", "SecretNotFound", "Secret from secretRef not found")
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, "Failed to get secret")
@@ -98,7 +105,11 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	yamlData, ok := secret.Data["alertmanager.yaml"]
 	if !ok {
-		log.Error(err, "alertmanager.yaml not found in secret")
+		if err = utils.UpdateStatus(ctx, amc, r.Client, "Ready", metav1.ConditionFalse, "alertmanager.yaml key not found in secret"); err != nil {
+			log.Error(err, "Failed to update amc status")
+			return ctrl.Result{}, err
+		}
+		r.Recorder.Event(amc, "Warning", "KeyNotFound", "alertmanager.yaml key not found in secret")
 		return ctrl.Result{}, nil
 	}
 
@@ -111,6 +122,12 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	err = r.MimirClient.CreateAlertmanagerConfig(ctx, string(yamlData), nil)
 	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	r.Recorder.Event(amc, "Normal", "AlertManagerConfigCreated", "AlertManagerConfig created successfully")
+	if err = utils.UpdateStatus(ctx, amc, r.Client, "Ready", metav1.ConditionTrue, "PrometheusRule created"); err != nil {
+		log.V(1).Error(err, "Failed to update SLO status")
 		return ctrl.Result{}, err
 	}
 

@@ -11,10 +11,16 @@ type AlertManagerConfigSpec struct {
 }
 
 // AlertManagerConfigStatus defines the observed state of AlertManagerConfig
-type AlertManagerConfigStatus struct{}
+type AlertManagerConfigStatus struct {
+	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	LastEvaluationTime metav1.Time        `json:"lastEvaluationTime,omitempty"`
+	Ready              string             `json:"ready,omitempty"`
+}
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=.status.ready,description="The reason for the current status of the AlertmanagerConfig resource"
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=.metadata.creationTimestamp,description="The time when the AlertmanagerConfig resource was created"
 
 // AlertManagerConfig is the Schema for the alertmanagerconfigs API
 type AlertManagerConfig struct {

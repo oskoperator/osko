@@ -1,5 +1,3 @@
-# TODO: heureka-specific sample, should be replaced in the further-future with a more comprehensive dev environment
-# ref.: https://github.com/oskoperator/osko/issues/45
 apiVersion: openslo.com/v1
 kind: Datasource
 metadata:
@@ -10,7 +8,10 @@ spec:
   description: Mimir Datasource for logging tenant
   type: mimir
   connectionDetails:
+    address: https://mimir.monitoring.dev.heu.group/
     address: http://localhost:9009/
     sourceTenants:
+      - gatekeeper-system
+    targetTenant: gatekeeper-system
       - monitoring
     targetTenant: monitoring

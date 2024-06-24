@@ -16,12 +16,12 @@ data:
         dir: /tmp/mimir/data/tsdb
       tsdb:
         dir: /tmp/mimir/tsdb
-    
+
     alertmanager:
       data_dir: /tmp/mimir/alertmanager
       enable_api: true
       fallback_config_file: /tmp/mimir/alertmanager-config/alertmanager-fallback-config.yaml
-    
+
     alertmanager_storage:
       backend: filesystem
       filesystem:

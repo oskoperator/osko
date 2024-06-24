@@ -92,7 +92,7 @@ func updateCondition(conditions []metav1.Condition, newCondition metav1.Conditio
 	return updatedConditions
 }
 
-func UpdateStatus(ctx context.Context, slo *openslov1.SLO, r client.Client, conditionType string, status metav1.ConditionStatus, message string) error {
+func UpdateStatus(ctx context.Context, obj client.Object, r client.Client, conditionType string, status metav1.ConditionStatus, message string) error {
 	// Update the conditions based on provided arguments
 	condition := metav1.Condition{
 		Type:               conditionType,
@@ -101,9 +101,22 @@ func UpdateStatus(ctx context.Context, slo *openslov1.SLO, r client.Client, cond
 		Message:            message,
 		LastTransitionTime: metav1.NewTime(time.Now()),
 	}
-	slo.Status.Conditions = updateCondition(slo.Status.Conditions, condition)
-	slo.Status.Ready = string(status)
-	return r.Status().Update(ctx, slo)
+
+	statusField := reflect.ValueOf(obj).Elem().FieldByName("Status")
+
+	conditionsField := statusField.FieldByName("Conditions")
+	if conditionsField.IsValid() && conditionsField.CanSet() {
+		conditions := conditionsField.Interface().([]metav1.Condition)
+		updatedConditions := updateCondition(conditions, condition)
+		conditionsField.Set(reflect.ValueOf(updatedConditions))
+	}
+
+	readyField := statusField.FieldByName("Ready")
+	if readyField.IsValid() && readyField.CanSet() {
+		readyField.SetString(string(status))
+	}
+
+	return r.Status().Update(ctx, obj)
 }
 
 func (m MetricLabel) NewMetricLabelCompiler(rule *monitoringv1.Rule, window string) string {

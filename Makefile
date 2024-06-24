@@ -168,13 +168,16 @@ $(ENVTEST): $(LOCALBIN)
 
 .PHONY: deploydev
 deploydev:
-	$(KUBECTL) apply -R -f devel/
+	@$(KUBECTL) apply -R -f devel/
+	@echo "Waiting for services to come online for the port-forwards..."
+	@sleep 5
+	@$(KUBECTL) port-forward svc/grafana 3000:3000 > /dev/null 2>&1 &
+	@$(KUBECTL) port-forward svc/mimir-service 9009:9009 >/dev/null 2>&1 &
+	@echo "Port-forwards activated. Reach Grafana on port 3000 and Mimir on port 9009."
+	@echo "Enjoy!"
 
 .PHONY: undeploydev
 undeploydev:
-	$(KUBECTL) delete -R -f devel/
-
-.PHONY: forwardsvcdev
-forwardsvcdev:
-	$(KUBECTL) port-forward svc/grafana 3000:3000 2>&1 >	/dev/null &
-	$(KUBECTL) port-forward svc/mimir-service 9009:9009 2>&1 >/dev/null &
+	@$(KUBECTL) delete -R -f devel/ 2>/dev/null || true && echo "All resources are already deleted, skipping..."
+	@for pf in mimir-service grafana; do (pkill -f "port-forward svc/$$pf" || true && echo "The $$pf port-forward process is now killed..."); done
+	@echo "All done. Goodbye!"

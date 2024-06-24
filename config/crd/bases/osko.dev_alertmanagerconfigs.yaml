@@ -40,10 +40,6 @@ spec:
           spec:
             description: AlertManagerConfigSpec defines the desired state of AlertManagerConfig
             properties:
-              raw:
-                additionalProperties:
-                  type: string
-                type: object
               secretRef:
                 description: |-
                   SecretReference represents a Secret Reference. It has enough information to retrieve secret

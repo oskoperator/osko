@@ -234,7 +234,7 @@ func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window str
 
 // SetupRules constructs rule groups for monitoring based on SLO and SLI configurations.
 func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
-	log := ctrllog.FromContext(context.Background())
+	//log := ctrllog.FromContext(context.Background())
 
 	baseWindow := mrs.BaseWindow //Should configurable somewhere as agreed on product workshop
 	extendedWindow := "28d"      //Default to 28d if not specified in the SLO
@@ -261,7 +261,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	windows := []string{baseWindow, extendedWindow, "5m", "30m", "1h", "2h", "6h", "24h", "3d"}
 
 	// BASE WINDOW
-	for _, window := range []string{"baseWindow"} {
+	for _, window := range []string{baseWindow} {
 		rules["targetRule"][window] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", window, false)
 		rules["totalRule"][window] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", window, false)
 
@@ -314,17 +314,18 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 
 	// var goodRuleBase monitoringv1.Rule
 
-	finalList := map[string][]monitoringv1.Rule{}
+	finalList := make(map[string][]monitoringv1.Rule)
 
 	// var ruleKeys []string
 	// for key := range rules {
 	// 	ruleKeys = append(ruleKeys, key)
 	// }
 
-	for ruleKey, _ := range rules {
-		log.Info("RULEKEY", "VALUE", ruleKey)
+	for ruleKey, nestedMap := range rules {
 		for _, window := range windows {
-			finalList[ruleKey] = append(finalList[ruleKey], rules[ruleKey][window])
+			if rule, exists := nestedMap[window]; exists {
+				finalList[ruleKey] = append(finalList[ruleKey], rule)
+			}
 		}
 	}
 

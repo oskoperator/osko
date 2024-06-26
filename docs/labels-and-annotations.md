@@ -35,3 +35,13 @@ Accepts a string in the [time.Duration](https://pkg.go.dev/time#Duration) format
 ```yaml
 osko.dev/baseWindow: "30m"
 ```
+
+### `osko.dev/magicAlerting`
+
+Configures whether OSKO creates multiwindow, multi-burn-rate alerts for the SLO, automagically.
+
+Accepts the string "true" as the only valid input.
+
+```yaml
+osko.dev/magicAlerting: "true"
+```

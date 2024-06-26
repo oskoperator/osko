@@ -234,6 +234,8 @@ func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window str
 
 // SetupRules constructs rule groups for monitoring based on SLO and SLI configurations.
 func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
+	log := ctrllog.FromContext(context.Background())
+
 	baseWindow := mrs.BaseWindow //Should configurable somewhere as agreed on product workshop
 	extendedWindow := "28d"      //Default to 28d if not specified in the SLO
 
@@ -245,84 +247,107 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		return []monitoringv1.RuleGroup{}, fmt.Errorf("Unsupported metric source type")
 	}
 
-	targetRuleBase := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
-	targetRuleExtended := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", extendedWindow, true)
-	targetRuleExtendedPageFast := mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", "1h", true)
-
-	totalRuleBase := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", baseWindow, false)
-
-	var goodRuleBase monitoringv1.Rule
-	if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
-		goodRuleBase = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, "sli_good", baseWindow, false)
-	} else {
-		badRuleBase := mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query, "sli_bad", baseWindow, false)
-		goodRuleBase = mrs.createAntecedentRule(
-			fmt.Sprintf("%v - %v",
-				totalRuleBase.Expr.String(),
-				badRuleBase.Expr.String(),
-			), "sli_good", baseWindow)
+	var rules = map[string]map[string]monitoringv1.Rule{
+		"targetRule":        {},
+		"totalRule":         {},
+		"goodRule":          {},
+		"badRule":           {},
+		"sliMeasurement":    {},
+		"errorBudgetValue":  {},
+		"errorBudgetTarget": {},
+		"burnRate":          {},
 	}
 
-	totalRuleExtended := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", extendedWindow, true)
-	totalRuleExtendedPageFast := mrs.createRecordingRule(totalRuleBase.Record, "sli_total", "1h", true)
-	goodRuleExtended := mrs.createRecordingRule(goodRuleBase.Record, "sli_good", extendedWindow, true)
-	goodRuleExtendedPageFast := mrs.createRecordingRule(goodRuleBase.Record, "sli_good", "1h", true)
+	windows := []string{baseWindow, extendedWindow, "5m", "30m", "1h", "2h", "6h", "24h", "3d"}
 
-	sliMeasurementBase := mrs.createSliMeasurementRecordingRule(totalRuleBase, goodRuleBase, baseWindow)
-	sliMeasurementExtended := mrs.createSliMeasurementRecordingRule(totalRuleExtended, goodRuleExtended, extendedWindow)
-	sliMeasurementExtendedPageFast := mrs.createSliMeasurementRecordingRule(totalRuleExtendedPageFast, goodRuleExtendedPageFast, "1h")
+	// BASE WINDOW
+	for _, window := range []string{"baseWindow"} {
+		rules["targetRule"][window] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", window, false)
+		rules["totalRule"][window] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", window, false)
 
-	errorBudgetValueBase := mrs.createErrorBudgetValueRecordingRule(sliMeasurementBase, baseWindow)
-	errorBudgetValueExtended := mrs.createErrorBudgetValueRecordingRule(sliMeasurementExtended, extendedWindow)
-	errorBudgetValueExtendedPageFast := mrs.createErrorBudgetValueRecordingRule(sliMeasurementExtendedPageFast, "1h")
+		if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
+			rules["goodRule"][window] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, "sli_good", window, false)
+		} else {
+			rules["badRule"][window] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query, "sli_bad", window, false)
+			rules["goodRule"][window] = mrs.createAntecedentRule(
+				fmt.Sprintf("%v - %v",
+					rules["totalRule"][window].Expr.StrVal,
+					rules["badRule"][window].Expr.StrVal,
+				), "sli_good", window)
+		}
 
-	errorBudgetTargetBase := mrs.createErrorBudgetTargetRecordingRule(baseWindow)
-	errorBudgetTargetExtended := mrs.createErrorBudgetTargetRecordingRule(extendedWindow)
-	errorBudgetTargetExtendedPageFast := mrs.createErrorBudgetTargetRecordingRule("1h")
-
-	burnRateBase := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, baseWindow)
-	burnRateExtended := mrs.createBurnRateRecordingRule(errorBudgetValueExtended, errorBudgetTargetExtended, extendedWindow)
-	burnRateExtendedPageFast := mrs.createBurnRateRecordingRule(errorBudgetValueExtendedPageFast, errorBudgetTargetExtendedPageFast, "1h")
-
-	targetRules := []monitoringv1.Rule{targetRuleBase, targetRuleExtended, targetRuleExtendedPageFast}
-	goodRules := []monitoringv1.Rule{goodRuleBase, goodRuleExtended, goodRuleExtendedPageFast}
-	totalRules := []monitoringv1.Rule{totalRuleBase, totalRuleExtended, totalRuleExtendedPageFast}
-	sliMeasurementRules := []monitoringv1.Rule{sliMeasurementBase, sliMeasurementExtended, sliMeasurementExtendedPageFast}
-	errorBudgetRules := []monitoringv1.Rule{
-		errorBudgetValueBase,
-		errorBudgetValueExtended,
-		errorBudgetValueExtendedPageFast,
-		errorBudgetTargetBase,
-		errorBudgetTargetExtended,
-		errorBudgetTargetExtendedPageFast,
+		rules["sliMeasurement"][window] = mrs.createSliMeasurementRecordingRule(rules["totalRule"][window], rules["goodRule"][window], window)
+		rules["errorBudgetValue"][window] = mrs.createErrorBudgetValueRecordingRule(rules["sliMeasurement"][window], window)
+		rules["errorBudgetTarget"][window] = mrs.createErrorBudgetTargetRecordingRule(window)
+		rules["burnRate"][window] = mrs.createBurnRateRecordingRule(rules["errorBudgetValue"][window], rules["errorBudgetTarget"][window], window)
 	}
-	burnRateRules := []monitoringv1.Rule{burnRateBase, burnRateExtended, burnRateExtendedPageFast}
+
+	for _, window := range windows {
+		if window == "baseWindow" {
+			continue
+		}
+		rules["targetRule"][window] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", window, false)
+		rules["totalRule"][window] = mrs.createRecordingRule(rules["totalRule"]["baseWindow"].Expr.StrVal, "sli_total", window, true)
+
+		if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
+			rules["goodRule"][window] = mrs.createRecordingRule(rules["goodRule"]["baseWindow"].Expr.StrVal, "sli_good", window, true)
+		} else {
+			rules["badRule"][window] = mrs.createRecordingRule(rules["badRule"]["baseWindow"].Expr.StrVal, "sli_bad", window, true)
+			rules["goodRule"][window] = mrs.createAntecedentRule(
+				fmt.Sprintf("%v - %v",
+					rules["totalRule"][window].Expr.StrVal,
+					rules["badRule"][window].Expr.StrVal,
+				), "sli_good", window)
+		}
+
+		rules["sliMeasurement"][window] = mrs.createSliMeasurementRecordingRule(rules["totalRule"][window], rules["goodRule"][window], window)
+		rules["errorBudgetValue"][window] = mrs.createErrorBudgetValueRecordingRule(rules["sliMeasurement"][window], window)
+		rules["errorBudgetTarget"][window] = mrs.createErrorBudgetTargetRecordingRule(window)
+		rules["burnRate"][window] = mrs.createBurnRateRecordingRule(rules["errorBudgetValue"][window], rules["errorBudgetTarget"][window], window)
+	}
+
+	// rules["targetRule"]["baseWindow"] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
+	// rules["targetRule"]["extendedWindow"] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", extendedWindow, false)
+	//
+	// rules["totalRule"]["baseWindow"] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", baseWindow, false)
+	// rules["totalRule"]["extendedWindow"] = mrs.createRecordingRule(rules["totalRule"]["baseWindow"].Record, "sli_total", extendedWindow, true)
+
+	// var goodRuleBase monitoringv1.Rule
+
+	finalList := map[string][]monitoringv1.Rule{}
+
+	// var ruleKeys []string
+	// for key := range rules {
+	// 	ruleKeys = append(ruleKeys, key)
+	// }
+
+	for ruleKey, _ := range rules {
+		log.Info("RULEKEY", "VALUE", ruleKey)
+		for _, window := range windows {
+			finalList[ruleKey] = append(finalList[ruleKey], rules[ruleKey][window])
+		}
+	}
 
 	sloName := mrs.Slo.Name
 	ruleGroups := []monitoringv1.RuleGroup{
-		{Name: fmt.Sprintf("%s_slo_target", sloName), Rules: targetRules},
-		{Name: fmt.Sprintf("%s_sli_good", sloName), Rules: goodRules},
-		{Name: fmt.Sprintf("%s_sli_total", sloName), Rules: totalRules},
-		{Name: fmt.Sprintf("%s_sli_measurement", sloName), Rules: sliMeasurementRules},
-		{Name: fmt.Sprintf("%s_error_budget", sloName), Rules: errorBudgetRules},
-		{Name: fmt.Sprintf("%s_burn_rate", sloName), Rules: burnRateRules},
+		{Name: fmt.Sprintf("%s_slo_target", sloName), Rules: finalList["targetRule"]},
+		{Name: fmt.Sprintf("%s_sli_good", sloName), Rules: finalList["goodRule"]},
+		{Name: fmt.Sprintf("%s_sli_total", sloName), Rules: finalList["totalRule"]},
+		{Name: fmt.Sprintf("%s_sli_measurement", sloName), Rules: finalList["sliMeasurement"]},
+		{Name: fmt.Sprintf("%s_error_budget", sloName), Rules: finalList["errorBudgetValue"]},
+		{Name: fmt.Sprintf("%s_burn_rate", sloName), Rules: finalList["burnRate"]},
 	}
 
-	// Alerting rules
-	var alertingBurnRates []monitoringv1.Rule
-
-	if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
-		burnRate5m := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "5m")
-		burnRate30m := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "30m")
-		burnRate1h := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "1h")
-		burnRate2h := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "2h")
-		burnRate6h := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "6h")
-		burnRate24h := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "24h")
-		burnRate3d := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "3d")
-
-		alertingBurnRates = []monitoringv1.Rule{burnRate5m, burnRate30m, burnRate1h, burnRate2h, burnRate6h, burnRate24h, burnRate3d}
-		ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{Name: fmt.Sprintf("%s_alerting_burn_rate", sloName), Rules: alertingBurnRates})
-	}
+	// // Alerting rules
+	// var alertingBurnRates []monitoringv1.Rule
+	//
+	// if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
+	// 	alertingBurnRates = append(alertingBurnRates, mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "5m"))
+	// 	alertingBurnRates = append(alertingBurnRates, mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "30m"))
+	//
+	// 	// alertingBurnRates = []monitoringv1.Rule{burnRate5m, burnRate30m, burnRate1h, burnRate2h, burnRate6h, burnRate24h, burnRate3d}
+	// 	ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{Name: fmt.Sprintf("%s_alerting_burn_rate", sloName), Rules: alertingBurnRates})
+	// }
 
 	return ruleGroups, nil
 }

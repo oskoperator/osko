@@ -46,6 +46,16 @@ type RuleTemplateData struct {
 	Labels     string
 }
 
+// AlertRuleTemplateData holds data to fill the PromQL template for alerting rules.
+type AlertRuleTemplateData struct {
+	Metric     string
+	Service    string
+	Window     string
+	RecordName string
+	Labels     string
+	For        string
+}
+
 type MonitoringRuleSet struct {
 	Slo        *openslov1.SLO
 	Sli        *openslov1.SLI
@@ -297,7 +307,63 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		{Name: fmt.Sprintf("%s_error_budget", sloName), Rules: errorBudgetRules},
 		{Name: fmt.Sprintf("%s_burn_rate", sloName), Rules: burnRateRules},
 	}
+
+	// Alerting rules
+	var alertingBurnRates []monitoringv1.Rule
+
+	if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
+		burnRate5m := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "5m")
+		burnRate30m := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "30m")
+		burnRate1h := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "1h")
+		burnRate2h := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "2h")
+		burnRate6h := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "6h")
+		burnRate24h := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "24h")
+		burnRate3d := mrs.createBurnRateRecordingRule(errorBudgetValueBase, errorBudgetTargetBase, "3d")
+
+		alertingBurnRates = []monitoringv1.Rule{burnRate5m, burnRate30m, burnRate1h, burnRate2h, burnRate6h, burnRate24h, burnRate3d}
+		ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{Name: fmt.Sprintf("%s_alerting_burn_rate", sloName), Rules: alertingBurnRates})
+	}
+
 	return ruleGroups, nil
+}
+
+// createPageSeverityExpr generates the PromQL expression for page severity
+func (mrs *MonitoringRuleSet) createPageSeverityExpr(serviceName string) string {
+	return fmt.Sprintf(`
+        (
+          job:slo_errors_per_request:ratio_rate1h{job="%s"} > (14.4*0.001)
+          and
+          job:slo_errors_per_request:ratio_rate5m{job="%s"} > (14.4*0.001)
+        )
+        or
+        (
+          job:slo_errors_per_request:ratio_rate6h{job="%s"} > (6*0.001)
+          and
+          job:slo_errors_per_request:ratio_rate30m{job="%s"} > (6*0.001)
+        )`, serviceName, serviceName, serviceName, serviceName)
+}
+
+func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(sliMeasurement monitoringv1.Rule, threshold string, duration *monitoringv1.Duration, severity string) monitoringv1.Rule {
+
+	alertExpression := fmt.Sprintf("%s > %s", sliMeasurement.Record, threshold)
+
+	return monitoringv1.Rule{
+		Alert: fmt.Sprintf("%s_alert", RecordPrefix),
+		Expr:  intstr.FromString(alertExpression),
+		For:   duration,
+		Labels: map[string]string{
+			// TODO: Come up with a better way to mke this more dynamic in this ticket: https://github.com/oskoperator/osko/issues/103
+			"severity": severity,
+		},
+		Annotations: map[string]string{
+			"summary":     "SLO Burn Rate Alert",
+			"description": fmt.Sprintf("The burn rate of the SLO %s is higher than the %s for %b", mrs.Slo.Name, threshold, duration),
+		},
+	}
+}
+
+func CreateAlertingRule() (*monitoringv1.PrometheusRule, error) {
+	return nil, nil
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {

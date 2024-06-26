@@ -256,6 +256,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		"errorBudgetValue":  {},
 		"errorBudgetTarget": {},
 		"burnRate":          {},
+		"alert":             {},
 	}
 
 	windows := []string{baseWindow, extendedWindow, "5m", "30m", "1h", "2h", "6h", "24h", "3d"}
@@ -302,6 +303,10 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		rules["errorBudgetValue"][window] = mrs.createErrorBudgetValueRecordingRule(rules["sliMeasurement"][window], window)
 		rules["errorBudgetTarget"][window] = mrs.createErrorBudgetTargetRecordingRule(window)
 		rules["burnRate"][window] = mrs.createBurnRateRecordingRule(rules["errorBudgetValue"][window], rules["errorBudgetTarget"][window], window)
+
+		duration := monitoringv1.Duration(window)
+		rules["alert"][window] = mrs.createMagicMultiBurnRateAlert(mrs.createBurnRateRecordingRule(rules["errorBudgetValue"][window], rules["errorBudgetTarget"][window], window), "0.001", &duration, "P3")
+
 	}
 
 	rulesByType := make(map[string][]monitoringv1.Rule)
@@ -321,6 +326,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		{Name: fmt.Sprintf("%s_sli_measurement", sloName), Rules: rulesByType["sliMeasurement"]},
 		{Name: fmt.Sprintf("%s_error_budget", sloName), Rules: rulesByType["errorBudgetValue"]},
 		{Name: fmt.Sprintf("%s_burn_rate", sloName), Rules: rulesByType["burnRate"]},
+		{Name: fmt.Sprintf("%s_alert", sloName), Rules: rulesByType["alert"]},
 	}
 
 	return ruleGroups, nil
@@ -342,9 +348,13 @@ func (mrs *MonitoringRuleSet) createPageSeverityExpr(serviceName string) string 
         )`, serviceName, serviceName, serviceName, serviceName)
 }
 
-func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(sliMeasurement monitoringv1.Rule, threshold string, duration *monitoringv1.Duration, severity string) monitoringv1.Rule {
+func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRate monitoringv1.Rule, threshold string, duration *monitoringv1.Duration, severity string) monitoringv1.Rule {
+	log := ctrllog.FromContext(context.Background())
+	cfg := config.NewConfig()
 
-	alertExpression := fmt.Sprintf("%s > %s", sliMeasurement.Record, threshold)
+	alertExpression := fmt.Sprintf("%s{%s} > (%.1f * %s)", burnRate.Record, mapToColonSeparatedString(burnRate.Labels), cfg.AlertingBurnRates.PageShortWindow, threshold)
+
+	log.Info("Alert Expression", "Expression", alertExpression)
 
 	return monitoringv1.Rule{
 		Alert: fmt.Sprintf("%s_alert", RecordPrefix),
@@ -356,7 +366,7 @@ func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(sliMeasurement monit
 		},
 		Annotations: map[string]string{
 			"summary":     "SLO Burn Rate Alert",
-			"description": fmt.Sprintf("The burn rate of the SLO %s is higher than the %s for %b", mrs.Slo.Name, threshold, duration),
+			"description": fmt.Sprintf("The burn rate of the SLO %s is higher than the %s", mrs.Slo.Name, threshold),
 		},
 	}
 }

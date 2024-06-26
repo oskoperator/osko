@@ -8,6 +8,7 @@ import (
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/prometheus/common/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 )
@@ -68,11 +69,28 @@ func NewMimirRuleGroups(rule *monitoringv1.PrometheusRule, connectionDetails *os
 			Name:          group.Name,
 			SourceTenants: connectionDetails.SourceTenants,
 		}
+		mimirRuleNode := oskov1alpha1.Rule{}
+
 		for _, r := range group.Rules {
-			mimirRuleNode := oskov1alpha1.Rule{
-				Record: r.Record,
-				Expr:   r.Expr.String(),
-				Labels: r.Labels,
+			if r.Record == "" && r.Alert != "" {
+
+				duration, err := model.ParseDuration(string(*r.For))
+				if err != nil {
+					return nil, err
+				}
+
+				mimirRuleNode = oskov1alpha1.Rule{
+					Alert:  r.Alert,
+					Expr:   r.Expr.String(),
+					For:    duration,
+					Labels: r.Labels,
+				}
+			} else {
+				mimirRuleNode = oskov1alpha1.Rule{
+					Record: r.Record,
+					Expr:   r.Expr.String(),
+					Labels: r.Labels,
+				}
 			}
 			mimirRules = append(mimirRules, mimirRuleNode)
 		}

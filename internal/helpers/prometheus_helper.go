@@ -256,10 +256,10 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		"errorBudgetValue":  {},
 		"errorBudgetTarget": {},
 		"burnRate":          {},
-		"alert":             {},
 	}
 
 	windows := []string{baseWindow, extendedWindow, "5m", "30m", "1h", "2h", "6h", "24h", "3d"}
+	var alertRuleErrorBudgets []monitoringv1.Rule
 
 	// BASE WINDOW
 	rules["targetRule"][baseWindow] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
@@ -303,10 +303,9 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		rules["errorBudgetValue"][window] = mrs.createErrorBudgetValueRecordingRule(rules["sliMeasurement"][window], window)
 		rules["errorBudgetTarget"][window] = mrs.createErrorBudgetTargetRecordingRule(window)
 		rules["burnRate"][window] = mrs.createBurnRateRecordingRule(rules["errorBudgetValue"][window], rules["errorBudgetTarget"][window], window)
-
-		duration := monitoringv1.Duration(window)
-		rules["alert"][window] = mrs.createMagicMultiBurnRateAlert(mrs.createBurnRateRecordingRule(rules["errorBudgetValue"][window], rules["errorBudgetTarget"][window], window), "0.001", &duration, "P3")
-
+		if window == "5m" || window == "30m" || window == "1h" || window == "6h" || window == "24h" || window == "3d" || window == "2h" {
+			alertRuleErrorBudgets = append(alertRuleErrorBudgets, rules["burnRate"][window])
+		}
 	}
 
 	rulesByType := make(map[string][]monitoringv1.Rule)
@@ -326,47 +325,79 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		{Name: fmt.Sprintf("%s_sli_measurement", sloName), Rules: rulesByType["sliMeasurement"]},
 		{Name: fmt.Sprintf("%s_error_budget", sloName), Rules: rulesByType["errorBudgetValue"]},
 		{Name: fmt.Sprintf("%s_burn_rate", sloName), Rules: rulesByType["burnRate"]},
-		{Name: fmt.Sprintf("%s_alert", sloName), Rules: rulesByType["alert"]},
 	}
 
+	if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
+		duration := monitoringv1.Duration("5m")
+		var alertRules []monitoringv1.Rule
+		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, "page"))
+		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, "ticket"))
+		ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{
+			Name: fmt.Sprintf("%s_slo_alert", sloName), Rules: alertRules,
+		})
+	}
 	return ruleGroups, nil
 }
 
-// createPageSeverityExpr generates the PromQL expression for page severity
-func (mrs *MonitoringRuleSet) createPageSeverityExpr(serviceName string) string {
-	return fmt.Sprintf(`
-        (
-          job:slo_errors_per_request:ratio_rate1h{job="%s"} > (14.4*0.001)
-          and
-          job:slo_errors_per_request:ratio_rate5m{job="%s"} > (14.4*0.001)
-        )
-        or
-        (
-          job:slo_errors_per_request:ratio_rate6h{job="%s"} > (6*0.001)
-          and
-          job:slo_errors_per_request:ratio_rate30m{job="%s"} > (6*0.001)
-        )`, serviceName, serviceName, serviceName, serviceName)
-}
-
-func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRate monitoringv1.Rule, threshold string, duration *monitoringv1.Duration, severity string) monitoringv1.Rule {
+// createMagicMultiBurnRateAlert creates a Prometheus alert rule for multi-burn rate alerting.
+func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitoringv1.Rule, threshold string, duration *monitoringv1.Duration, severity string) monitoringv1.Rule {
 	log := ctrllog.FromContext(context.Background())
 	cfg := config.NewConfig()
 
-	alertExpression := fmt.Sprintf("%s{%s} > (%.1f * %s)", burnRate.Record, mapToColonSeparatedString(burnRate.Labels), cfg.AlertingBurnRates.PageShortWindow, threshold)
+	alertingPageWindowsOrder := []string{"1h", "5m", "6h", "30m", "24h", "2h", "3d"}
 
-	log.Info("Alert Expression", "Expression", alertExpression)
+	alertingPageWindows := map[string]monitoringv1.Rule{
+		"1h":  {},
+		"5m":  {},
+		"6h":  {},
+		"30m": {},
+		"24h": {},
+		"2h":  {},
+		"3d":  {},
+	}
+
+	// Populate the alertingPageWindows map with the actual burn rates
+	for _, br := range burnRates {
+		if _, exists := alertingPageWindows[br.Labels["window"]]; exists {
+			alertingPageWindows[br.Labels["window"]] = br
+		}
+	}
+
+	// Define the alert expressions for different severities and durations
+	var alertExpression string
+	if severity == "page" {
+		alertExpression = fmt.Sprintf(
+			"(%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s)) or (%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s))",
+			alertingPageWindows[alertingPageWindowsOrder[2]].Record, mapToColonSeparatedString(burnRates[2].Labels), cfg.AlertingBurnRates.PageShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[0]].Record, mapToColonSeparatedString(burnRates[0].Labels), cfg.AlertingBurnRates.PageShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), cfg.AlertingBurnRates.PageLongWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[1]].Record, mapToColonSeparatedString(burnRates[1].Labels), cfg.AlertingBurnRates.PageLongWindow, threshold,
+		)
+	} else if severity == "ticket" {
+		alertExpression = fmt.Sprintf(
+			"(%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s)) or (%s{%s} > %.3f and %s{%s} > %.3f)",
+			alertingPageWindows[alertingPageWindowsOrder[4]].Record, mapToColonSeparatedString(burnRates[4].Labels), cfg.AlertingBurnRates.TicketShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[5]].Record, mapToColonSeparatedString(burnRates[5].Labels), cfg.AlertingBurnRates.TicketShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[6]].Record, mapToColonSeparatedString(burnRates[6].Labels), cfg.AlertingBurnRates.TicketLongWindow,
+			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), cfg.AlertingBurnRates.TicketLongWindow,
+		)
+	}
+
+	if alertExpression == "" {
+		log.Info("Creation of alerting rule failed", "EmptyExpression", "Failed to create the alert expression, expression is empty")
+		return monitoringv1.Rule{}
+	}
 
 	return monitoringv1.Rule{
-		Alert: fmt.Sprintf("%s_alert", RecordPrefix),
+		Alert: fmt.Sprintf("%s_alert_%s", burnRates[0].Record, severity),
 		Expr:  intstr.FromString(alertExpression),
 		For:   duration,
 		Labels: map[string]string{
-			// TODO: Come up with a better way to mke this more dynamic in this ticket: https://github.com/oskoperator/osko/issues/103
 			"severity": severity,
 		},
 		Annotations: map[string]string{
 			"summary":     "SLO Burn Rate Alert",
-			"description": fmt.Sprintf("The burn rate of the SLO %s is higher than the %s", mrs.Slo.Name, threshold),
+			"description": fmt.Sprintf("The burn rate of the SLO %s is higher than the %s threshold", mrs.Slo.Name, threshold),
 		},
 	}
 }

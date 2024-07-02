@@ -1,10 +1,13 @@
-# TODO: heureka-specific sample, should be replaced in the further-future with a more comprehensive dev environment
-# ref.: https://github.com/oskoperator/osko/issues/45
 apiVersion: openslo.com/v1
 kind: SLO
 metadata:
+  labels:
+    label.osko.dev/team: "infrastructure"
+    label.osko.dev/system: "gatekeeper"
+    label.osko.dev/domain: "security"
   annotations:
     osko.dev/datasourceRef: "mimir-infra-ds"
+    osko.dev/magicAlerting: "true"
   name: gatekeeper-webhook-response-time
 spec:
   budgetingMethod: Occurrences

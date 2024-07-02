@@ -227,18 +227,34 @@ func (r *MimirRuleReconciler) newMimirClient(connectionDetails *oskov1alpha1.Con
 
 func (r *MimirRuleReconciler) createMimirRuleGroupAPI(log logr.Logger, rule *oskov1alpha1.RuleGroup) error {
 	var mimirRuleNodes []rulefmt.RuleNode
+	mimirRuleNode := rulefmt.RuleNode{}
 	for _, r := range rule.Rules {
-		mimirRuleNode := rulefmt.RuleNode{
-			Record: yaml.Node{
-				Kind:  8,
-				Value: r.Record,
-			},
-			Alert: yaml.Node{},
-			Expr: yaml.Node{
-				Kind:  8,
-				Value: r.Expr,
-			},
-			Labels: r.Labels,
+		if r.Alert == "" {
+			mimirRuleNode = rulefmt.RuleNode{
+				Record: yaml.Node{
+					Kind:  8,
+					Value: r.Record,
+				},
+				Alert: yaml.Node{},
+				Expr: yaml.Node{
+					Kind:  8,
+					Value: r.Expr,
+				},
+				Labels: r.Labels,
+			}
+		} else {
+			mimirRuleNode = rulefmt.RuleNode{
+				Alert: yaml.Node{
+					Kind:  8,
+					Value: r.Alert,
+				},
+				Expr: yaml.Node{
+					Kind:  8,
+					Value: r.Expr,
+				},
+				For:    r.For,
+				Labels: r.Labels,
+			}
 		}
 		mimirRuleNodes = append(mimirRuleNodes, mimirRuleNode)
 	}

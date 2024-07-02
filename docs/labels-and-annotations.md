@@ -6,12 +6,12 @@ and what they are used for.
 
 ## Labels
 
-### `labels.osko.dev/<key>`
+### `label.osko.dev/<key>`
 
 Enables labeling of Prometheus recording and alerting rules, for example for alert routing purposes.
 
 ```yaml
-labels.osko.dev/team: "infrastructure"
+label.osko.dev/team: "infrastructure"
 ```
 
 ## Annotations

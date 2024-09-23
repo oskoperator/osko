@@ -8,10 +8,8 @@ spec:
   description: Mimir Datasource for logging tenant
   type: mimir
   connectionDetails:
-    address: https://mimir.monitoring.dev.heu.group/
     address: http://localhost:9009/
     sourceTenants:
       - gatekeeper-system
-    targetTenant: gatekeeper-system
       - monitoring
     targetTenant: monitoring

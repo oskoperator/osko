@@ -327,11 +327,13 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		{Name: fmt.Sprintf("%s_burn_rate", sloName), Rules: rulesByType["burnRate"]},
 	}
 
+	// TODO: having the magic alerting we still need to figure out how to pass the severity into the alerting rule when we have more than one alerting tool.
+	// The idea is to have a map of the alerting tool and the severity and then iterate over all connected AlertNotificationTargets.
+
 	if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
 		duration := monitoringv1.Duration("5m")
 		var alertRules []monitoringv1.Rule
-		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, "page"))
-		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, "ticket"))
+		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, config.GetAlertingSeveritiesMap(config.AlertingTool{Name: "opsgenie"}).HighFast))
 		ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{
 			Name: fmt.Sprintf("%s_slo_alert", sloName), Rules: alertRules,
 		})

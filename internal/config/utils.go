@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -42,4 +43,27 @@ func GetEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
 		}
 	}
 	return defaultValue
+}
+
+func GetAlertingSeveritiesMap(tool AlertingTool) *AlertSeverities {
+	switch strings.ToLower(tool.Name) {
+	case "opsgenie":
+		return &AlertSeverities{
+			Critical: "P1",
+			HighFast: "P2",
+			HighSlow: "P3",
+			Low:      "P4",
+			NoSlo:    "P5",
+		}
+
+	case "pagerduty":
+		return &AlertSeverities{
+			Critical: "SEV-1",
+			HighFast: "SEV-2",
+			HighSlow: "SEV-3",
+			Low:      "SEV-4",
+			NoSlo:    "SEV-5",
+		}
+	}
+	return &AlertSeverities{}
 }

@@ -45,10 +45,10 @@ func GetEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
 	return defaultValue
 }
 
-func GetAlertingSeveritiesMap(tool AlertingTool) *AlertSeverities {
-	switch strings.ToLower(tool.Name) {
+func GetAlertingSeveritiesMap(tool string) AlertSeverities {
+	switch strings.ToLower(tool) {
 	case "opsgenie":
-		return &AlertSeverities{
+		return AlertSeverities{
 			Critical: "P1",
 			HighFast: "P2",
 			HighSlow: "P3",
@@ -57,13 +57,17 @@ func GetAlertingSeveritiesMap(tool AlertingTool) *AlertSeverities {
 		}
 
 	case "pagerduty":
-		return &AlertSeverities{
+		return AlertSeverities{
 			Critical: "SEV-1",
 			HighFast: "SEV-2",
 			HighSlow: "SEV-3",
 			Low:      "SEV-4",
 			NoSlo:    "SEV-5",
 		}
+	case "custom":
+		return AlertSeverities{
+			// fill out from environment variables
+		}
 	}
-	return &AlertSeverities{}
+	return AlertSeverities{}
 }

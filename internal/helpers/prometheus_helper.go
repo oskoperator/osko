@@ -333,7 +333,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
 		duration := monitoringv1.Duration("5m")
 		var alertRules []monitoringv1.Rule
-		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, config.GetAlertingSeveritiesMap(config.AlertingTool{Name: "opsgenie"}).HighFast))
+		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, config.NewConfig().AlertSeverities.HighFast)) // idk we should probably create the config once somewhere instead of calling NewConfig() all the time? :D
 		ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{
 			Name: fmt.Sprintf("%s_slo_alert", sloName), Rules: alertRules,
 		})

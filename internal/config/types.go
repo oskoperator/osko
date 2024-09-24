@@ -25,8 +25,3 @@ type AlertSeverities struct {
 	Low      string
 	NoSlo    string
 }
-
-type AlertingTool struct {
-	Name        string
-	SeverityMap map[string]string
-}

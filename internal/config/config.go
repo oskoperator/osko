@@ -14,6 +14,7 @@ func NewConfig() Config {
 			TicketLongWindow:  GetEnvAsFloat64("ABR_TICKET_LONG_WINDOW", 1),
 		},
 		DefaultBaseWindow: GetEnvAsDuration("DEFAULT_BASE_WINDOW", 5*time.Minute),
+		AlertSeverities:   GetAlertingSeveritiesMap(GetEnv("OSKO_ALERTING_TOOL", "opsgenie")),
 	}
 	return config
 }

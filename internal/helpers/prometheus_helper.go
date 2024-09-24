@@ -333,7 +333,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
 		duration := monitoringv1.Duration("5m")
 		var alertRules []monitoringv1.Rule
-		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, config.NewConfig().AlertSeverities.HighFast)) // idk we should probably create the config once somewhere instead of calling NewConfig() all the time? :D
+		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, config.Cfg.AlertSeverities.HighFast))
 		ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{
 			Name: fmt.Sprintf("%s_slo_alert", sloName), Rules: alertRules,
 		})
@@ -344,7 +344,6 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 // createMagicMultiBurnRateAlert creates a Prometheus alert rule for multi-burn rate alerting.
 func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitoringv1.Rule, threshold string, duration *monitoringv1.Duration, severity string) monitoringv1.Rule {
 	log := ctrllog.FromContext(context.Background())
-	cfg := config.NewConfig()
 
 	alertingPageWindowsOrder := []string{"1h", "5m", "6h", "30m", "24h", "2h", "3d"}
 
@@ -370,18 +369,18 @@ func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitori
 	if severity == "page" {
 		alertExpression = fmt.Sprintf(
 			"(%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s)) or (%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s))",
-			alertingPageWindows[alertingPageWindowsOrder[2]].Record, mapToColonSeparatedString(burnRates[2].Labels), cfg.AlertingBurnRates.PageShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[0]].Record, mapToColonSeparatedString(burnRates[0].Labels), cfg.AlertingBurnRates.PageShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), cfg.AlertingBurnRates.PageLongWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[1]].Record, mapToColonSeparatedString(burnRates[1].Labels), cfg.AlertingBurnRates.PageLongWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[2]].Record, mapToColonSeparatedString(burnRates[2].Labels), config.Cfg.AlertingBurnRates.PageShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[0]].Record, mapToColonSeparatedString(burnRates[0].Labels), config.Cfg.AlertingBurnRates.PageShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), config.Cfg.AlertingBurnRates.PageLongWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[1]].Record, mapToColonSeparatedString(burnRates[1].Labels), config.Cfg.AlertingBurnRates.PageLongWindow, threshold,
 		)
 	} else if severity == "ticket" {
 		alertExpression = fmt.Sprintf(
 			"(%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s)) or (%s{%s} > %.3f and %s{%s} > %.3f)",
-			alertingPageWindows[alertingPageWindowsOrder[4]].Record, mapToColonSeparatedString(burnRates[4].Labels), cfg.AlertingBurnRates.TicketShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[5]].Record, mapToColonSeparatedString(burnRates[5].Labels), cfg.AlertingBurnRates.TicketShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[6]].Record, mapToColonSeparatedString(burnRates[6].Labels), cfg.AlertingBurnRates.TicketLongWindow,
-			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), cfg.AlertingBurnRates.TicketLongWindow,
+			alertingPageWindows[alertingPageWindowsOrder[4]].Record, mapToColonSeparatedString(burnRates[4].Labels), config.Cfg.AlertingBurnRates.TicketShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[5]].Record, mapToColonSeparatedString(burnRates[5].Labels), config.Cfg.AlertingBurnRates.TicketShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[6]].Record, mapToColonSeparatedString(burnRates[6].Labels), config.Cfg.AlertingBurnRates.TicketLongWindow,
+			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), config.Cfg.AlertingBurnRates.TicketLongWindow,
 		)
 	}
 
@@ -409,8 +408,7 @@ func CreateAlertingRule() (*monitoringv1.PrometheusRule, error) {
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
-	cfg := config.NewConfig()
-	baseWindow := cfg.DefaultBaseWindow.String()
+	baseWindow := config.Cfg.DefaultBaseWindow.String()
 	if slo.ObjectMeta.Annotations["osko.dev/baseWindow"] != "" {
 		baseWindow = slo.ObjectMeta.Annotations["osko.dev/baseWindow"]
 	}

@@ -23,5 +23,4 @@ type AlertSeverities struct {
 	HighFast string
 	HighSlow string
 	Low      string
-	NoSlo    string
 }

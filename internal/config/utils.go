@@ -53,7 +53,6 @@ func GetAlertingSeveritiesMap(tool string) AlertSeverities {
 			HighFast: "P2",
 			HighSlow: "P3",
 			Low:      "P4",
-			NoSlo:    "P5",
 		}
 
 	case "pagerduty":
@@ -62,7 +61,6 @@ func GetAlertingSeveritiesMap(tool string) AlertSeverities {
 			HighFast: "SEV-2",
 			HighSlow: "SEV-3",
 			Low:      "SEV-4",
-			NoSlo:    "SEV-5",
 		}
 	case "custom":
 		return AlertSeverities{

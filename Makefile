@@ -170,7 +170,15 @@ $(ENVTEST): $(LOCALBIN)
 deploydev:
 	@$(KUBECTL) apply -R -f devel/
 	@echo "Waiting for services to come online for the port-forwards..."
-	@sleep 5
+	@until [ "$$($(KUBECTL) get pods -l app=grafana -o jsonpath='{.items}')}" != "[]" ] && \
+			[ "$$($(KUBECTL) get pods -l app=grafana -o jsonpath='{.items[0].status.containerStatuses[0].ready}')" == "true" ]; do \
+			echo "Waiting for Grafana to be ready..." && sleep 2; \
+		done
+	@until [ "$$($(KUBECTL) get pods -l app=mimir -o jsonpath='{.items}')}" != "[]" ] && \
+		[ "$$($(KUBECTL) get pods -l app=mimir -o jsonpath='{.items[0].status.containerStatuses[0].ready}')" == "true" ]; do \
+		echo "Waiting for Mimir to be ready..." && sleep 2; \
+	done
+	@echo "Services are ready. Setting up port-forwards..."
 	@$(KUBECTL) port-forward svc/grafana 3000:3000 > /dev/null 2>&1 &
 	@$(KUBECTL) port-forward svc/mimir-service 9009:9009 >/dev/null 2>&1 &
 	@echo "Port-forwards activated. Reach Grafana on port 3000 and Mimir on port 9009."

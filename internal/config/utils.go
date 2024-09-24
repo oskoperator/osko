@@ -45,7 +45,7 @@ func GetEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
 	return defaultValue
 }
 
-func GetAlertingSeveritiesMap(tool string) AlertSeverities {
+func AlertSeveritiesByTool(tool string) AlertSeverities {
 	switch strings.ToLower(tool) {
 	case "opsgenie":
 		return AlertSeverities{

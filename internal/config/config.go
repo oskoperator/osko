@@ -4,8 +4,10 @@ import (
 	"time"
 )
 
-func NewConfig() Config {
-	return Config{
+var Cfg Config
+
+func NewConfig() {
+	Cfg = Config{
 		MimirRuleRequeuePeriod: GetEnvAsDuration("MIMIR_RULE_REQUEUE_PERIOD", 60*time.Second),
 		AlertingBurnRates: AlertingBurnRates{
 			PageShortWindow:   GetEnvAsFloat64("ABR_PAGE_SHORT_WINDOW", 14.4),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -78,13 +79,13 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	if err := r.newMimirClient(&mimirRule.Spec.ConnectionDetails); err != nil {
+	if err := r.newMimirClient(mimirRule.Spec.ConnectionDetails); err != nil {
 		log.Error(err, "Failed to create MimirClient")
 		return ctrl.Result{}, err
 	}
 
 	// TODO: This logic is total bullshit. We should revise the reconciliation logic and make it more clear.
-	rgs, err := helpers.NewMimirRuleGroups(prometheusRule, &mimirRule.Spec.ConnectionDetails)
+	rgs, err := helpers.NewMimirRuleGroups(prometheusRule, mimirRule.Spec.ConnectionDetails)
 	if err != nil {
 		log.Error(err, "Failed to convert MimirRuleGroup")
 	}
@@ -116,7 +117,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if apierrors.IsNotFound(err) {
 		log.V(1).Info("MimirRule not found. Let's make one.")
-		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &mimirRule.Spec.ConnectionDetails)
+		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, mimirRule.Spec.ConnectionDetails)
 
 		if err = r.Create(ctx, mimirRule); err != nil {
 			r.Recorder.Event(mimirRule, "Error", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
@@ -174,7 +175,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	log.V(1).Info("MimirRule already exists, we should update it.")
-	newMimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &mimirRule.Spec.ConnectionDetails)
+	newMimirRule, err = helpers.NewMimirRule(slo, prometheusRule, mimirRule.Spec.ConnectionDetails)
 	if err != nil {
 		log.Error(err, "Failed to create new MimirRule")
 		return ctrl.Result{}, err
@@ -209,10 +210,10 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 }
 
-func (r *MimirRuleReconciler) newMimirClient(connectionDetails *oskov1alpha1.ConnectionDetails) error {
+func (r *MimirRuleReconciler) newMimirClient(connectionDetails map[string]string) error {
 	mClientConfig := helpers.MimirClientConfig{
-		Address:  connectionDetails.Address,
-		TenantId: connectionDetails.TargetTenant,
+		Address:  connectionDetails["address"],
+		TenantId: connectionDetails["targetTenant"],
 	}
 
 	mimirClient, err := mClientConfig.NewMimirClient()
@@ -261,11 +262,16 @@ func (r *MimirRuleReconciler) createMimirRuleGroupAPI(log logr.Logger, rule *osk
 
 	log.V(1).Info("Source tenants", "SourceTenants", rule.SourceTenants)
 
+	var sourceTenants []string
+	for _, tenant := range strings.Split(rule.SourceTenants, ",") {
+		sourceTenants = append(sourceTenants, tenant)
+	}
+
 	mimirRule := rwrulefmt.RuleGroup{
 		RuleGroup: rulefmt.RuleGroup{
 			Name:          rule.Name,
 			Rules:         mimirRuleNodes,
-			SourceTenants: rule.SourceTenants,
+			SourceTenants: sourceTenants,
 		},
 	}
 

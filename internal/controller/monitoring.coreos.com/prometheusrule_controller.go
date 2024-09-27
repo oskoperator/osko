@@ -2,6 +2,7 @@ package monitoringcoreoscom
 
 import (
 	"context"
+	realopenslov1 "github.com/OpenSLO/OpenSLO/pkg/openslo/v1"
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/helpers"
 	"github.com/oskoperator/osko/internal/utils"
@@ -97,7 +98,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		log.V(1).Info("SLO has an inline SLI")
 		sli.Name = slo.Spec.Indicator.Metadata.Name
 		sli.Spec.Description = slo.Spec.Indicator.Spec.Description
-		if slo.Spec.Indicator.Spec.RatioMetric != (openslov1.RatioMetricSpec{}) {
+		if slo.Spec.Indicator.Spec.RatioMetric != (&realopenslov1.RatioMetric{}) {
 			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
 		}
 	} else {

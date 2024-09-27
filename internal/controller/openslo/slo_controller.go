@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	realopenslov1 "github.com/OpenSLO/OpenSLO/pkg/openslo/v1"
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
 	"github.com/oskoperator/osko/internal/helpers"
@@ -94,7 +95,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		log.V(1).Info("SLO has an inline SLI")
 		sli.Name = slo.Spec.Indicator.Metadata.Name
 		sli.Spec.Description = slo.Spec.Indicator.Spec.Description
-		if slo.Spec.Indicator.Spec.RatioMetric != (openslov1.RatioMetricSpec{}) {
+		if slo.Spec.Indicator.Spec.RatioMetric != (&realopenslov1.RatioMetric{}) {
 			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
 		}
 	} else {
@@ -159,7 +160,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if apierrors.IsNotFound(err) {
 		log.V(1).Info("MimirRule not found. Let's make one.")
-		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &ds.Spec.ConnectionDetails)
+		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, ds.Spec.ConnectionDetails)
 		if err != nil {
 			if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule Object"); err != nil {
 				log.Error(err, "Failed to update SLO status")

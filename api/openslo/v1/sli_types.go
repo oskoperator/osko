@@ -1,6 +1,7 @@
 package v1
 
 import (
+	openslov1 "github.com/OpenSLO/OpenSLO/pkg/openslo/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -43,8 +44,8 @@ type SLI struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   SLISpec   `json:"spec,omitempty"`
-	Status SLIStatus `json:"status,omitempty"`
+	Spec   openslov1.SLISpec `json:"spec,omitempty"`
+	Status SLIStatus         `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -37,26 +37,16 @@ spec:
           metadata:
             type: object
           spec:
-            description: DatasourceSpec defines the desired state of Datasource
             properties:
               connectionDetails:
-                properties:
-                  address:
-                    type: string
-                  sourceTenants:
-                    items:
-                      type: string
-                    type: array
-                  syncPrometheusRules:
-                    type: boolean
-                  targetTenant:
-                    type: string
+                additionalProperties:
+                  type: string
                 type: object
-              description:
-                maxLength: 1050
-                type: string
               type:
                 type: string
+            required:
+            - connectionDetails
+            - type
             type: object
           status:
             description: DatasourceStatus defines the observed state of Datasource

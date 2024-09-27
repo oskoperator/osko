@@ -3,15 +3,18 @@ package utils
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+	"time"
+
 	"github.com/go-logr/logr"
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
+	"github.com/oskoperator/osko/internal/helpers"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
-	"time"
 )
 
 type MetricLabel struct {
@@ -156,11 +159,11 @@ func (m MetricLabel) NewMetricLabelGenerator() map[string]string {
 func (c Rule) getFieldsByType() (string, error) {
 	switch c.RuleType {
 	case TypeTotal:
-		return c.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, nil
+		return helpers.GetQuery(c.Sli.Spec.RatioMetric.Total.MetricSource), nil
 	case TypeBad:
-		return c.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query, nil
+		return helpers.GetQuery(c.Sli.Spec.ThresholdMetric.MetricSource), nil
 	case TypeGood:
-		return c.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, nil
+		return helpers.GetQuery(c.Sli.Spec.ThresholdMetric.MetricSource), nil
 	default:
 		return "", fmt.Errorf("invalid RuleType: %s", c.RuleType)
 	}
@@ -211,8 +214,8 @@ func (c Rule) NewTargetRule() (rule monitoringv1.Rule) {
 func (b BudgetRule) NewBudgetRule() (budgetRule monitoringv1.Rule, sliMeasurement monitoringv1.Rule) {
 	log := ctrllog.FromContext(context.Background())
 
-	goodRuleSpec := b.GoodRuleConfig.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query
-	sloIndicatorSpec := b.GoodRuleConfig.Slo.Spec.Indicator.Spec.RatioMetric.Good.MetricSource.Spec.Query
+	goodRuleSpec := helpers.GetQuery(b.GoodRuleConfig.Sli.Spec.RatioMetric.Good.MetricSource)
+	sloIndicatorSpec := helpers.GetQuery(b.GoodRuleConfig.Slo.Spec.Indicator.Spec.RatioMetric.Good.MetricSource)
 	gbRule := getRelevantRule(b, goodRuleSpec, sloIndicatorSpec, log)
 
 	//sliMeasurement = createSLIMeasurement(gbRule, b.TotalRuleConfig)
@@ -251,10 +254,9 @@ func createBudgetRule(b BudgetRule, gbRule *Rule) monitoringv1.Rule {
 }
 
 func (d DataSourceConfig) ParseTenantAnnotation() (tenants []string) {
-	if len(d.DataSource.Spec.ConnectionDetails.SourceTenants) != 0 {
-		for _, tenant := range d.DataSource.Spec.ConnectionDetails.SourceTenants {
-			tenants = append(tenants, tenant)
-		}
+	var sourceTenants []string
+	for _, tenant := range strings.Split(d.DataSource.Spec.ConnectionDetails["sourceTenants"], ",") {
+		sourceTenants = append(sourceTenants, tenant)
 	}
 	return tenants
 }

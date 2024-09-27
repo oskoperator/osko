@@ -56,14 +56,14 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 	switch ds.Spec.Type {
 	case "mimir":
-		log.Info("Datasource Type is Mimir", "address", ds.Spec.ConnectionDetails.Address)
+		log.Info("Datasource Type is Mimir", "address", ds.Spec.ConnectionDetails["address"])
 		err = r.connectDatasource(ctx, ds)
 		if err != nil {
 			log.Error(err, errConnectDS)
 			return ctrl.Result{}, err
 		}
 	case "cortex":
-		log.Info("Datasource Type is Cortex", "address", ds.Spec.ConnectionDetails.Address)
+		log.Info("Datasource Type is Cortex", "address", ds.Spec.ConnectionDetails["address"])
 		r.Recorder.Event(ds, "Warning", "NotImplemented", "Cortex support is not implemented yet")
 	}
 
@@ -79,12 +79,12 @@ func (r *DatasourceReconciler) connectDatasource(ctx context.Context, ds *opensl
 	if ds.Spec.Type != "mimir" {
 		return fmt.Errorf("unsupported datasource type: %s", ds.Spec.Type)
 	} else {
-		datasourceAddress = ds.Spec.ConnectionDetails.Address + "/prometheus"
+		datasourceAddress = ds.Spec.ConnectionDetails["address"] + "/prometheus"
 	}
 
 	customRoundtripper := &CustomRoundTripper{
 		Transport: api.DefaultRoundTripper,
-		TenantID:  ds.Spec.ConnectionDetails.TargetTenant,
+		TenantID:  ds.Spec.ConnectionDetails["targetTenant"],
 	}
 
 	newDsClient, err := api.NewClient(api.Config{

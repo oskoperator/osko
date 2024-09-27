@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -262,13 +263,13 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	var alertRuleErrorBudgets []monitoringv1.Rule
 
 	// BASE WINDOW
-	rules["targetRule"][baseWindow] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
-	rules["totalRule"][baseWindow] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", baseWindow, false)
+	rules["targetRule"][baseWindow] = mrs.createRecordingRule(strconv.FormatFloat(mrs.Slo.Spec.Objectives[0].Target, 'f', -1, 64), "slo_target", baseWindow, false)
+	rules["totalRule"][baseWindow] = mrs.createRecordingRule(GetQuery(mrs.Sli.Spec.RatioMetric.Total.MetricSource), "sli_total", baseWindow, false)
 
-	if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
-		rules["goodRule"][baseWindow] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, "sli_good", baseWindow, false)
+	if GetQuery(mrs.Sli.Spec.RatioMetric.Good.MetricSource) != "" {
+		rules["goodRule"][baseWindow] = mrs.createRecordingRule(GetQuery(mrs.Sli.Spec.RatioMetric.Good.MetricSource), "sli_good", baseWindow, false)
 	} else {
-		rules["badRule"][baseWindow] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query, "sli_bad", baseWindow, false)
+		rules["badRule"][baseWindow] = mrs.createRecordingRule(GetQuery(mrs.Sli.Spec.RatioMetric.Bad.MetricSource), "sli_bad", baseWindow, false)
 		rules["goodRule"][baseWindow] = mrs.createAntecedentRule(
 			fmt.Sprintf("%v - %v",
 				rules["totalRule"][baseWindow].Record,
@@ -288,7 +289,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		// rules["targetRule"][window] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", window, true)
 		rules["totalRule"][window] = mrs.createRecordingRule(rules["totalRule"][baseWindow].Record, "sli_total", window, true)
 
-		if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
+		if GetQuery(mrs.Sli.Spec.RatioMetric.Good.MetricSource) != "" {
 			rules["goodRule"][window] = mrs.createRecordingRule(rules["goodRule"][baseWindow].Record, "sli_good", window, true)
 		} else {
 			rules["badRule"][window] = mrs.createRecordingRule(rules["badRule"][baseWindow].Record, "sli_bad", window, true)

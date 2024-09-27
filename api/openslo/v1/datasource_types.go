@@ -1,24 +1,9 @@
 package v1
 
 import (
-	osko "github.com/oskoperator/osko/api/osko/v1alpha1"
+	openslov1 "github.com/OpenSLO/OpenSLO/pkg/openslo/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// ConnectionDetails specify how to connect to your metrics data provider
-// +kubebuilder:validation:MinProperties=1
-// +kubebuilder:validation:MaxProperties=1
-type ConnectionDetails struct {
-	Mimir  *osko.Mimir  `json:"mimir,omitempty"`
-	Cortex *osko.Cortex `json:"cortex,omitempty"`
-}
-
-// DatasourceSpec defines the desired state of Datasource
-type DatasourceSpec struct {
-	Description       Description            `json:"description,omitempty"`
-	Type              string                 `json:"type,omitempty"`
-	ConnectionDetails osko.ConnectionDetails `json:"connectionDetails,omitempty"`
-}
 
 // DatasourceStatus defines the observed state of Datasource
 type DatasourceStatus struct {
@@ -35,8 +20,8 @@ type Datasource struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   DatasourceSpec   `json:"spec,omitempty"`
-	Status DatasourceStatus `json:"status,omitempty"`
+	Spec   openslov1.DataSourceSpec `json:"spec,omitempty"`
+	Status DatasourceStatus         `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

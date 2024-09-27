@@ -114,8 +114,8 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	mClient := helpers.MimirClientConfig{
-		Address:  ds.Spec.ConnectionDetails.Address,
-		TenantId: ds.Spec.ConnectionDetails.TargetTenant,
+		Address:  ds.Spec.ConnectionDetails["address"],
+		TenantId: ds.Spec.ConnectionDetails["targetTenant"],
 	}
 
 	r.MimirClient, err = mClient.NewMimirClient()

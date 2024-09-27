@@ -31,7 +31,7 @@ func (m *MimirClientConfig) NewMimirClient() (*mimirclient.MimirClient, error) {
 	)
 }
 
-func NewMimirRule(slo *openslov1.SLO, rule *monitoringv1.PrometheusRule, connectionDetails *oskov1alpha1.ConnectionDetails) (mimirRule *oskov1alpha1.MimirRule, err error) {
+func NewMimirRule(slo *openslov1.SLO, rule *monitoringv1.PrometheusRule, connectionDetails map[string]string) (mimirRule *oskov1alpha1.MimirRule, err error) {
 	ownerRef := []metav1.OwnerReference{
 		*metav1.NewControllerRef(
 			slo,
@@ -55,19 +55,19 @@ func NewMimirRule(slo *openslov1.SLO, rule *monitoringv1.PrometheusRule, connect
 	mimirRule = &oskov1alpha1.MimirRule{
 		ObjectMeta: objectMeta,
 		Spec: oskov1alpha1.MimirRuleSpec{
-			ConnectionDetails: *connectionDetails,
+			ConnectionDetails: connectionDetails,
 			Groups:            ruleGroups},
 	}
 	return mimirRule, nil
 }
 
-func NewMimirRuleGroups(rule *monitoringv1.PrometheusRule, connectionDetails *oskov1alpha1.ConnectionDetails) ([]oskov1alpha1.RuleGroup, error) {
+func NewMimirRuleGroups(rule *monitoringv1.PrometheusRule, connectionDetails map[string]string) ([]oskov1alpha1.RuleGroup, error) {
 	var ruleGroups []oskov1alpha1.RuleGroup
 	for _, group := range rule.Spec.Groups {
 		var mimirRules []oskov1alpha1.Rule
 		rg := oskov1alpha1.RuleGroup{
 			Name:          group.Name,
-			SourceTenants: connectionDetails.SourceTenants,
+			SourceTenants: connectionDetails["sourceTenants"],
 		}
 		mimirRuleNode := oskov1alpha1.Rule{}
 

@@ -4,6 +4,8 @@ go 1.22.0
 
 toolchain go1.22.2
 
+replace github.com/OpenSLO/OpenSLO => ./openslo
+
 require (
 	github.com/go-logr/logr v1.4.1
 	github.com/grafana/mimir v0.0.0-20231101181902-68d120862184
@@ -26,6 +28,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.8.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.2.2 // indirect
 	github.com/DmitriyVTitov/size v1.5.0 // indirect
+	github.com/OpenSLO/OpenSLO v1.0.1-0.20240902204215-525dc600fe17 // indirect
 	github.com/alecthomas/units v0.0.0-20231202071711-9a357b53e9c9 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/aws/aws-sdk-go v1.51.25 // indirect

@@ -1,6 +1,7 @@
 package v1
 
 import (
+	openslov1 "github.com/OpenSLO/OpenSLO/pkg/openslo/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -16,7 +17,7 @@ type SLOAlertPolicy struct {
 
 type Indicator struct {
 	Metadata metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec     SLISpec           `json:"spec,omitempty"`
+	Spec     openslov1.SLISpec `json:"spec,omitempty"`
 }
 
 type ObjectivesSpec struct {
@@ -84,8 +85,9 @@ type SLOStatus struct {
 type SLO struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              SLOSpec   `json:"spec,omitempty"`
-	Status            SLOStatus `json:"status,omitempty"`
+
+	Spec   openslov1.SLOSpec `json:"spec,omitempty"`
+	Status SLOStatus         `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

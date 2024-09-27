@@ -108,26 +108,15 @@ spec:
                         type: object
                       type: array
                     source_tenants:
-                      items:
-                        type: string
-                      type: array
+                      type: string
                   required:
                   - name
                   - rules
                   type: object
                 type: array
               mimirConnectionDetails:
-                properties:
-                  address:
-                    type: string
-                  sourceTenants:
-                    items:
-                      type: string
-                    type: array
-                  syncPrometheusRules:
-                    type: boolean
-                  targetTenant:
-                    type: string
+                additionalProperties:
+                  type: string
                 type: object
             required:
             - groups

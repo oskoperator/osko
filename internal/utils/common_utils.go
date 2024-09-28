@@ -254,9 +254,5 @@ func createBudgetRule(b BudgetRule, gbRule *Rule) monitoringv1.Rule {
 }
 
 func (d DataSourceConfig) ParseTenantAnnotation() (tenants []string) {
-	// var sourceTenants []string
-	// for _, tenant := range strings.Split(d.DataSource.Spec.ConnectionDetails["sourceTenants"], ",") {
-	// 	sourceTenants = append(sourceTenants, tenant)
-	// }
-	return tenants
+	return helpers.ConstructConnectionDetails(d.DataSource).SourceTenants
 }

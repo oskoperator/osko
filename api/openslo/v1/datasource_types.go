@@ -13,12 +13,11 @@ type DatasourceStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:resource:scope=Namespaced
 
 // Datasource is the Schema for the datasources API
 type Datasource struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	ObjectMetaOpenSLO `json:"metadata,omitempty"`
 
 	Spec   openslov1.DataSourceSpec `json:"spec,omitempty"`
 	Status DatasourceStatus         `json:"status,omitempty"`

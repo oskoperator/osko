@@ -1,25 +1,9 @@
 package v1
 
 import (
+	openslov1 "github.com/OpenSLO/OpenSLO/pkg/openslo/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-type ConditionSpec struct {
-	// +kubebuilder:validation:Enum=Burnrate
-	Kind string `json:"kind,omitempty"`
-	// +kubebuilder:validation:Enum=lte;gte;lt;gt
-	Op             string   `json:"op,omitempty"`
-	Threshold      string   `json:"threshold,omitempty"`
-	LookbackWindow Duration `json:"lookbackWindow,omitempty"`
-	AlertAfter     Duration `json:"alertAfter,omitempty"`
-}
-
-// AlertConditionSpec defines the desired state of AlertCondition
-type AlertConditionSpec struct {
-	Description Description   `json:"description,omitempty"`
-	Severity    string        `json:"severity,omitempty"`
-	Condition   ConditionSpec `json:"condition,omitempty"`
-}
 
 // AlertConditionStatus defines the observed state of AlertCondition
 type AlertConditionStatus struct {
@@ -35,8 +19,8 @@ type AlertCondition struct {
 	metav1.TypeMeta   `json:",inline"`
 	ObjectMetaOpenSLO `json:"metadata,omitempty"`
 
-	Spec   AlertConditionSpec   `json:"spec,omitempty"`
-	Status AlertConditionStatus `json:"status,omitempty"`
+	Spec   openslov1.AlertConditionSpec `json:"spec,omitempty"`
+	Status AlertConditionStatus         `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

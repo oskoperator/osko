@@ -1,14 +1,9 @@
 package v1
 
 import (
+	openslov1 "github.com/OpenSLO/OpenSLO/pkg/openslo/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// AlertNotificationTargetSpec defines the desired state of AlertNotificationTarget
-type AlertNotificationTargetSpec struct {
-	Description Description `json:"description,omitempty"`
-	Target      string      `json:"target,omitempty"`
-}
 
 // AlertNotificationTargetStatus defines the observed state of AlertNotificationTarget
 type AlertNotificationTargetStatus struct {
@@ -24,8 +19,8 @@ type AlertNotificationTarget struct {
 	metav1.TypeMeta   `json:",inline"`
 	ObjectMetaOpenSLO `json:"metadata,omitempty"`
 
-	Spec   AlertNotificationTargetSpec   `json:"spec,omitempty"`
-	Status AlertNotificationTargetStatus `json:"status,omitempty"`
+	Spec   openslov1.AlertNotificationTargetSpec `json:"spec,omitempty"`
+	Status AlertNotificationTargetStatus         `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

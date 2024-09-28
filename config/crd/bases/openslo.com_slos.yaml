@@ -97,9 +97,12 @@ spec:
                                   metricSourceRef:
                                     type: string
                                   spec:
-                                    additionalProperties:
-                                      type: object
-                                    type: object
+                                    description: |-
+                                      RawMessage is a raw encoded JSON value.
+                                      It implements [Marshaler] and [Unmarshaler] and can
+                                      be used to delay JSON decoding or precompute a JSON encoding.
+                                    format: byte
+                                    type: string
                                   type:
                                     type: string
                                 required:
@@ -117,9 +120,12 @@ spec:
                                   metricSourceRef:
                                     type: string
                                   spec:
-                                    additionalProperties:
-                                      type: object
-                                    type: object
+                                    description: |-
+                                      RawMessage is a raw encoded JSON value.
+                                      It implements [Marshaler] and [Unmarshaler] and can
+                                      be used to delay JSON decoding or precompute a JSON encoding.
+                                    format: byte
+                                    type: string
                                   type:
                                     type: string
                                 required:
@@ -135,9 +141,12 @@ spec:
                                   metricSourceRef:
                                     type: string
                                   spec:
-                                    additionalProperties:
-                                      type: object
-                                    type: object
+                                    description: |-
+                                      RawMessage is a raw encoded JSON value.
+                                      It implements [Marshaler] and [Unmarshaler] and can
+                                      be used to delay JSON decoding or precompute a JSON encoding.
+                                    format: byte
+                                    type: string
                                   type:
                                     type: string
                                 required:
@@ -155,9 +164,12 @@ spec:
                                   metricSourceRef:
                                     type: string
                                   spec:
-                                    additionalProperties:
-                                      type: object
-                                    type: object
+                                    description: |-
+                                      RawMessage is a raw encoded JSON value.
+                                      It implements [Marshaler] and [Unmarshaler] and can
+                                      be used to delay JSON decoding or precompute a JSON encoding.
+                                    format: byte
+                                    type: string
                                   type:
                                     type: string
                                 required:
@@ -176,9 +188,12 @@ spec:
                               metricSourceRef:
                                 type: string
                               spec:
-                                additionalProperties:
-                                  type: object
-                                type: object
+                                description: |-
+                                  RawMessage is a raw encoded JSON value.
+                                  It implements [Marshaler] and [Unmarshaler] and can
+                                  be used to delay JSON decoding or precompute a JSON encoding.
+                                format: byte
+                                type: string
                               type:
                                 type: string
                             required:

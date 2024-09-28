@@ -5,31 +5,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type MetricSpec struct {
-	MetricSource MetricSource `json:"metricSource,omitempty"`
-}
-
-type RatioMetricSpec struct {
-	Raw MetricSpec `json:"raw,omitempty"`
-	// +kubebuilder:validation:Enum=success;failure
-	RawType string     `json:"rawType,omitempty"`
-	Good    MetricSpec `json:"good,omitempty"`
-	Bad     MetricSpec `json:"bad,omitempty"`
-	Total   MetricSpec `json:"total,omitempty"`
-	Counter bool       `json:"counter,omitempty"`
-}
-
-type ThresholdMetricSpec struct {
-	MetricSource MetricSource `json:"metricSource,omitempty"`
-}
-
-// SLISpec defines the desired state of SLI
-type SLISpec struct {
-	Description     Description         `json:"description,omitempty"`
-	ThresholdMetric ThresholdMetricSpec `json:"thresholdMetric,omitempty"`
-	RatioMetric     RatioMetricSpec     `json:"ratioMetric,omitempty"`
-}
-
 // SLIStatus defines the observed state of SLI
 type SLIStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
@@ -42,7 +17,7 @@ type SLIStatus struct {
 // SLI is the Schema for the slis API
 type SLI struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	ObjectMetaOpenSLO `json:"metadata,omitempty"`
 
 	Spec   openslov1.SLISpec `json:"spec,omitempty"`
 	Status SLIStatus         `json:"status,omitempty"`

@@ -56,7 +56,8 @@ func NewMimirRule(slo *openslov1.SLO, rule *monitoringv1.PrometheusRule, connect
 		ObjectMeta: objectMeta,
 		Spec: oskov1alpha1.MimirRuleSpec{
 			ConnectionDetails: connectionDetails,
-			Groups:            ruleGroups},
+			Groups:            ruleGroups,
+		},
 	}
 	return mimirRule, nil
 }

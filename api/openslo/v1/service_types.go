@@ -1,13 +1,9 @@
 package v1
 
 import (
+	openslov1 "github.com/OpenSLO/OpenSLO/pkg/openslo/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// ServiceSpec defines the desired state of Service
-type ServiceSpec struct {
-	Description Description `json:"description,omitempty"`
-}
 
 type ServiceStatus struct{}
 
@@ -17,10 +13,10 @@ type ServiceStatus struct{}
 // Service is the Schema for the services API
 type Service struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	ObjectMetaOpenSLO `json:"metadata,omitempty"`
 
-	Spec   ServiceSpec   `json:"spec,omitempty"`
-	Status ServiceStatus `json:"status,omitempty"`
+	Spec   openslov1.ServiceSpec `json:"spec,omitempty"`
+	Status ServiceStatus         `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

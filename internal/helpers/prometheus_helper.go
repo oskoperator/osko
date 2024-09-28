@@ -144,7 +144,7 @@ func (mrs *MonitoringRuleSet) createErrorBudgetValueRecordingRule(sliMeasurement
 func (mrs *MonitoringRuleSet) createErrorBudgetTargetRecordingRule(window string) monitoringv1.Rule {
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_error_budget_target", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("1 - %s", mrs.Slo.Spec.Objectives[0].Target)),
+		Expr:   intstr.FromString(fmt.Sprintf("1 - %s", strconv.FormatFloat(mrs.Slo.Spec.Objectives[0].Target, 'f', -1, 64))),
 		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 }

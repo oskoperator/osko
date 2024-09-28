@@ -76,6 +76,8 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	connectionDetails := helpers.ConstructConnectionDetails(ds)
+
 	// Get SLI from SLO's ref
 	if slo.Spec.IndicatorRef != nil {
 		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, sli)
@@ -160,7 +162,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if apierrors.IsNotFound(err) {
 		log.V(1).Info("MimirRule not found. Let's make one.")
-		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, ds.Spec.ConnectionDetails)
+		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, connectionDetails)
 		if err != nil {
 			if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule Object"); err != nil {
 				log.Error(err, "Failed to update SLO status")

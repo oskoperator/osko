@@ -10,7 +10,7 @@ import (
 
 // MimirRuleSpec defines the desired state of MimirRule
 type MimirRuleSpec struct {
-	ConnectionDetails map[string]string `json:"mimirConnectionDetails,omitempty"`
+	ConnectionDetails ConnectionDetails `json:"mimirConnectionDetails,omitempty"`
 	// Groups is an example field of MimirRule. Edit mimirrule_types.go to remove/update
 	Groups []RuleGroup `json:"groups"`
 }
@@ -24,7 +24,7 @@ type MimirRuleStatus struct {
 
 type RuleGroup struct {
 	Name                          string          `json:"name"`
-	SourceTenants                 string          `json:"source_tenants,omitempty"`
+	SourceTenants                 []string        `json:"source_tenants,omitempty"`
 	Rules                         []Rule          `json:"rules"`
 	Interval                      model.Duration  `json:"interval,omitempty"`
 	EvaluationDelay               *model.Duration `json:"evaluation_delay,omitempty"`

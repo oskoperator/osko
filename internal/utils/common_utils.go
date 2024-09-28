@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -206,7 +206,7 @@ func (c Rule) NewSupportiveRule(baseRule monitoringv1.Rule) (rule monitoringv1.R
 
 func (c Rule) NewTargetRule() (rule monitoringv1.Rule) {
 	rule.Record = fmt.Sprintf("%s_%s", RecordPrefix, c.Record)
-	rule.Expr = intstr.Parse(fmt.Sprintf("vector(%s)", c.Slo.Spec.Objectives[0].Target))
+	rule.Expr = intstr.Parse(fmt.Sprintf("vector(%s)", strconv.FormatFloat(c.Slo.Spec.Objectives[0].Target, 'f', -1, 64)))
 	rule.Labels = c.MetricLabelCompiler.NewMetricLabelGenerator()
 	return rule
 }
@@ -254,9 +254,9 @@ func createBudgetRule(b BudgetRule, gbRule *Rule) monitoringv1.Rule {
 }
 
 func (d DataSourceConfig) ParseTenantAnnotation() (tenants []string) {
-	var sourceTenants []string
-	for _, tenant := range strings.Split(d.DataSource.Spec.ConnectionDetails["sourceTenants"], ",") {
-		sourceTenants = append(sourceTenants, tenant)
-	}
+	// var sourceTenants []string
+	// for _, tenant := range strings.Split(d.DataSource.Spec.ConnectionDetails["sourceTenants"], ",") {
+	// 	sourceTenants = append(sourceTenants, tenant)
+	// }
 	return tenants
 }

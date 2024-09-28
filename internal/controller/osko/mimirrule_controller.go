@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -210,10 +209,10 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 }
 
-func (r *MimirRuleReconciler) newMimirClient(connectionDetails map[string]string) error {
+func (r *MimirRuleReconciler) newMimirClient(connectionDetails oskov1alpha1.ConnectionDetails) error {
 	mClientConfig := helpers.MimirClientConfig{
-		Address:  connectionDetails["address"],
-		TenantId: connectionDetails["targetTenant"],
+		Address:  connectionDetails.Address,
+		TenantId: connectionDetails.TargetTenant,
 	}
 
 	mimirClient, err := mClientConfig.NewMimirClient()
@@ -262,16 +261,11 @@ func (r *MimirRuleReconciler) createMimirRuleGroupAPI(log logr.Logger, rule *osk
 
 	log.V(1).Info("Source tenants", "SourceTenants", rule.SourceTenants)
 
-	var sourceTenants []string
-	for _, tenant := range strings.Split(rule.SourceTenants, ",") {
-		sourceTenants = append(sourceTenants, tenant)
-	}
-
 	mimirRule := rwrulefmt.RuleGroup{
 		RuleGroup: rulefmt.RuleGroup{
 			Name:          rule.Name,
 			Rules:         mimirRuleNodes,
-			SourceTenants: sourceTenants,
+			SourceTenants: rule.SourceTenants,
 		},
 	}
 

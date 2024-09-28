@@ -50,6 +50,199 @@ spec:
           metadata:
             type: object
           spec:
+            properties:
+              alertPolicies:
+                description: |-
+                  We don't make clear in the spec if this is a ref or inline.
+                  We will make it a ref for now.
+                  https://github.com/OpenSLO/OpenSLO/issues/133
+                items:
+                  type: string
+                type: array
+              budgetingMethod:
+                type: string
+              description:
+                type: string
+              indicator:
+                properties:
+                  metadata:
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      displayName:
+                        type: string
+                      labels:
+                        additionalProperties:
+                          items:
+                            type: string
+                          type: array
+                        type: object
+                      name:
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  spec:
+                    properties:
+                      description:
+                        type: string
+                      ratioMetric:
+                        properties:
+                          bad:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    additionalProperties:
+                                      type: object
+                                    type: object
+                                  type:
+                                    type: string
+                                required:
+                                - spec
+                                type: object
+                            required:
+                            - metricSource
+                            type: object
+                          counter:
+                            type: boolean
+                          good:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    additionalProperties:
+                                      type: object
+                                    type: object
+                                  type:
+                                    type: string
+                                required:
+                                - spec
+                                type: object
+                            required:
+                            - metricSource
+                            type: object
+                          raw:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    additionalProperties:
+                                      type: object
+                                    type: object
+                                  type:
+                                    type: string
+                                required:
+                                - spec
+                                type: object
+                            required:
+                            - metricSource
+                            type: object
+                          rawType:
+                            type: string
+                          total:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    additionalProperties:
+                                      type: object
+                                    type: object
+                                  type:
+                                    type: string
+                                required:
+                                - spec
+                                type: object
+                            required:
+                            - metricSource
+                            type: object
+                        required:
+                        - counter
+                        type: object
+                      thresholdMetric:
+                        properties:
+                          metricSource:
+                            properties:
+                              metricSourceRef:
+                                type: string
+                              spec:
+                                additionalProperties:
+                                  type: object
+                                type: object
+                              type:
+                                type: string
+                            required:
+                            - spec
+                            type: object
+                        required:
+                        - metricSource
+                        type: object
+                    type: object
+                required:
+                - metadata
+                - spec
+                type: object
+              indicatorRef:
+                type: string
+              objectives:
+                items:
+                  properties:
+                    displayName:
+                      type: string
+                    op:
+                      type: string
+                    target:
+                      type: number
+                    timeSliceTarget:
+                      type: number
+                    timeSliceWindow:
+                      type: string
+                    value:
+                      type: number
+                  required:
+                  - target
+                  type: object
+                type: array
+              service:
+                type: string
+              timeWindow:
+                items:
+                  properties:
+                    calendar:
+                      properties:
+                        startTime:
+                          type: string
+                        timeZone:
+                          type: string
+                      required:
+                      - startTime
+                      - timeZone
+                      type: object
+                    duration:
+                      type: string
+                    isRolling:
+                      type: boolean
+                  required:
+                  - duration
+                  - isRolling
+                  type: object
+                type: array
+            required:
+            - alertPolicies
+            - budgetingMethod
+            - objectives
+            - service
+            - timeWindow
             type: object
           status:
             description: SLOStatus defines the observed state of SLO

@@ -37,6 +37,108 @@ spec:
           metadata:
             type: object
           spec:
+            properties:
+              description:
+                type: string
+              ratioMetric:
+                properties:
+                  bad:
+                    properties:
+                      metricSource:
+                        properties:
+                          metricSourceRef:
+                            type: string
+                          spec:
+                            additionalProperties:
+                              type: object
+                            type: object
+                          type:
+                            type: string
+                        required:
+                        - spec
+                        type: object
+                    required:
+                    - metricSource
+                    type: object
+                  counter:
+                    type: boolean
+                  good:
+                    properties:
+                      metricSource:
+                        properties:
+                          metricSourceRef:
+                            type: string
+                          spec:
+                            additionalProperties:
+                              type: object
+                            type: object
+                          type:
+                            type: string
+                        required:
+                        - spec
+                        type: object
+                    required:
+                    - metricSource
+                    type: object
+                  raw:
+                    properties:
+                      metricSource:
+                        properties:
+                          metricSourceRef:
+                            type: string
+                          spec:
+                            additionalProperties:
+                              type: object
+                            type: object
+                          type:
+                            type: string
+                        required:
+                        - spec
+                        type: object
+                    required:
+                    - metricSource
+                    type: object
+                  rawType:
+                    type: string
+                  total:
+                    properties:
+                      metricSource:
+                        properties:
+                          metricSourceRef:
+                            type: string
+                          spec:
+                            additionalProperties:
+                              type: object
+                            type: object
+                          type:
+                            type: string
+                        required:
+                        - spec
+                        type: object
+                    required:
+                    - metricSource
+                    type: object
+                required:
+                - counter
+                type: object
+              thresholdMetric:
+                properties:
+                  metricSource:
+                    properties:
+                      metricSourceRef:
+                        type: string
+                      spec:
+                        additionalProperties:
+                          type: object
+                        type: object
+                      type:
+                        type: string
+                    required:
+                    - spec
+                    type: object
+                required:
+                - metricSource
+                type: object
             type: object
           status:
             description: SLIStatus defines the observed state of SLI

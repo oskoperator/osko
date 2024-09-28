@@ -85,6 +85,8 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	connectionDetails := helpers.ConstructConnectionDetails(ds)
+
 	if amc.Spec.ConfigSecretRef.Namespace == "" {
 		amc.Spec.ConfigSecretRef.Namespace = req.Namespace
 	}
@@ -114,8 +116,8 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	mClient := helpers.MimirClientConfig{
-		Address:  ds.Spec.ConnectionDetails["address"],
-		TenantId: ds.Spec.ConnectionDetails["targetTenant"],
+		Address:  connectionDetails.Address,
+		TenantId: connectionDetails.TargetTenant,
 	}
 
 	r.MimirClient, err = mClient.NewMimirClient()

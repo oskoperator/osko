@@ -36,13 +36,6 @@ type CustomRoundTripper struct {
 	TenantID  string
 }
 
-type ConnectionDetails struct {
-	Address             string   `json:"address,omitempty"`
-	TargetTenant        string   `json:"targetTenant,omitempty"`
-	SourceTenants       []string `json:"sourceTenants,omitempty"`
-	SyncPrometheusRules bool     `json:"syncPrometheusRules,omitempty"`
-}
-
 //+kubebuilder:rbac:groups=openslo.com,resources=datasources,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=openslo.com,resources=datasources/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=openslo.com,resources=datasources/finalizers,verbs=update

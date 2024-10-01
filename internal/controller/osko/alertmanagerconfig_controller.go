@@ -85,11 +85,11 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	if amc.Spec.SecretRef.Namespace == "" {
-		amc.Spec.SecretRef.Namespace = req.Namespace
+	if amc.Spec.ConfigSecretRef.Namespace == "" {
+		amc.Spec.ConfigSecretRef.Namespace = req.Namespace
 	}
 
-	err = r.Get(ctx, client.ObjectKey{Namespace: amc.Spec.SecretRef.Namespace, Name: amc.Spec.SecretRef.Name}, secret)
+	err = r.Get(ctx, client.ObjectKey{Namespace: amc.Spec.ConfigSecretRef.Namespace, Name: amc.Spec.ConfigSecretRef.Name}, secret)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			if err = utils.UpdateStatus(ctx, amc, r.Client, "Ready", metav1.ConditionFalse, "Secret from secretRef not found"); err != nil {
@@ -150,12 +150,12 @@ func (r *AlertManagerConfigReconciler) findObjectsForSecret() func(ctx context.C
 			log.Error(err, errGetAMC)
 			return []reconcile.Request{}
 		}
-		if amc.Spec.SecretRef.Namespace == "" {
-			amc.Spec.SecretRef.Namespace = a.GetNamespace()
+		if amc.Spec.ConfigSecretRef.Namespace == "" {
+			amc.Spec.ConfigSecretRef.Namespace = a.GetNamespace()
 		}
 		secretNamespacedName := types.NamespacedName{
-			Name:      amc.Spec.SecretRef.Name,
-			Namespace: amc.Spec.SecretRef.Namespace,
+			Name:      amc.Spec.ConfigSecretRef.Name,
+			Namespace: amc.Spec.ConfigSecretRef.Namespace,
 		}
 
 		return []reconcile.Request{{NamespacedName: secretNamespacedName}}

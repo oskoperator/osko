@@ -333,7 +333,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
 		duration := monitoringv1.Duration("5m")
 		var alertRules []monitoringv1.Rule
-		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, config.Cfg.AlertSeverities.HighFast))
+		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, fmt.Sprintf("1-%s", mrs.Slo.Spec.Objectives[0].Target), &duration, config.Cfg.AlertSeverities.HighFast))
 		ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{
 			Name: fmt.Sprintf("%s_slo_alert", sloName), Rules: alertRules,
 		})

@@ -12,12 +12,13 @@ type AlertNotificationTargetStatus struct {
 }
 
 //+kubebuilder:object:root=true
+//+kubebuilder:storageversion
 //+kubebuilder:subresource:status
 
 // AlertNotificationTarget is the Schema for the alertnotificationtargets API
 type AlertNotificationTarget struct {
 	metav1.TypeMeta   `json:",inline"`
-	ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   openslov1.AlertNotificationTargetSpec `json:"spec,omitempty"`
 	Status AlertNotificationTargetStatus         `json:"status,omitempty"`

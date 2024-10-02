@@ -12,12 +12,13 @@ type AlertPolicyStatus struct {
 }
 
 //+kubebuilder:object:root=true
+//+kubebuilder:storageversion
 //+kubebuilder:subresource:status
 
 // AlertPolicy is the Schema for the alertpolicies API
 type AlertPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
-	ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   openslov1.AlertPolicySpec `json:"spec,omitempty"`
 	Status AlertPolicyStatus         `json:"status,omitempty"`

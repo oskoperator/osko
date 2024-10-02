@@ -97,7 +97,6 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	} else if slo.Spec.Indicator != nil {
 		log.V(1).Info("SLO has an inline SLI")
 		sli.Name = slo.Spec.Indicator.Metadata.Name
-		sli.Spec.Description = slo.Spec.Indicator.Spec.Description
 		if slo.Spec.Indicator.Spec.RatioMetric != (&realopenslov1.RatioMetric{}) {
 			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
 		}

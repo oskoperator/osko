@@ -38,8 +38,6 @@ spec:
             type: object
           spec:
             properties:
-              description:
-                type: string
               ratioMetric:
                 properties:
                   bad:
@@ -163,3 +161,142 @@ spec:
     storage: true
     subresources:
       status: {}
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: Version represents a version of the OpenSLO specification.
+            type: string
+          kind:
+            description: |-
+              Kind represents all the object kinds defined by OpenSLO specification.
+              Keep in mind not all specification versions support every [Kind].
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              ratioMetric:
+                properties:
+                  bad:
+                    properties:
+                      metricSource:
+                        properties:
+                          metricSourceRef:
+                            type: string
+                          spec:
+                            description: |-
+                              RawMessage is a raw encoded JSON value.
+                              It implements [Marshaler] and [Unmarshaler] and can
+                              be used to delay JSON decoding or precompute a JSON encoding.
+                            format: byte
+                            type: string
+                          type:
+                            type: string
+                        required:
+                        - spec
+                        type: object
+                    required:
+                    - metricSource
+                    type: object
+                  counter:
+                    type: boolean
+                  good:
+                    properties:
+                      metricSource:
+                        properties:
+                          metricSourceRef:
+                            type: string
+                          spec:
+                            description: |-
+                              RawMessage is a raw encoded JSON value.
+                              It implements [Marshaler] and [Unmarshaler] and can
+                              be used to delay JSON decoding or precompute a JSON encoding.
+                            format: byte
+                            type: string
+                          type:
+                            type: string
+                        required:
+                        - spec
+                        type: object
+                    required:
+                    - metricSource
+                    type: object
+                  raw:
+                    properties:
+                      metricSource:
+                        properties:
+                          metricSourceRef:
+                            type: string
+                          spec:
+                            description: |-
+                              RawMessage is a raw encoded JSON value.
+                              It implements [Marshaler] and [Unmarshaler] and can
+                              be used to delay JSON decoding or precompute a JSON encoding.
+                            format: byte
+                            type: string
+                          type:
+                            type: string
+                        required:
+                        - spec
+                        type: object
+                    required:
+                    - metricSource
+                    type: object
+                  rawType:
+                    type: string
+                  total:
+                    properties:
+                      metricSource:
+                        properties:
+                          metricSourceRef:
+                            type: string
+                          spec:
+                            description: |-
+                              RawMessage is a raw encoded JSON value.
+                              It implements [Marshaler] and [Unmarshaler] and can
+                              be used to delay JSON decoding or precompute a JSON encoding.
+                            format: byte
+                            type: string
+                          type:
+                            type: string
+                        required:
+                        - spec
+                        type: object
+                    required:
+                    - metricSource
+                    type: object
+                required:
+                - counter
+                type: object
+              thresholdMetric:
+                properties:
+                  metricSource:
+                    properties:
+                      metricSourceRef:
+                        type: string
+                      spec:
+                        description: |-
+                          RawMessage is a raw encoded JSON value.
+                          It implements [Marshaler] and [Unmarshaler] and can
+                          be used to delay JSON decoding or precompute a JSON encoding.
+                        format: byte
+                        type: string
+                      type:
+                        type: string
+                    required:
+                    - spec
+                    type: object
+                required:
+                - metricSource
+                type: object
+            type: object
+        required:
+        - apiVersion
+        - kind
+        - metadata
+        - spec
+        type: object
+    served: true
+    storage: false

@@ -1,14 +1,5 @@
 package v1
 
-import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-type ObjectMetaOpenSLO struct {
-	metav1.ObjectMeta `json:",inline"`
-	DisplayName       string `json:"displayName,omitempty"`
-}
-
 // +kubebuilder:validation:MaxLength=1050
 type Description string
 

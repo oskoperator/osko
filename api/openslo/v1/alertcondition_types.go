@@ -12,12 +12,13 @@ type AlertConditionStatus struct {
 }
 
 //+kubebuilder:object:root=true
+//+kubebuilder:storageversion
 //+kubebuilder:subresource:status
 
 // AlertCondition is the Schema for the alertconditions API
 type AlertCondition struct {
 	metav1.TypeMeta   `json:",inline"`
-	ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   openslov1.AlertConditionSpec `json:"spec,omitempty"`
 	Status AlertConditionStatus         `json:"status,omitempty"`

@@ -27,6 +27,18 @@ spec:
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - description: The reason for the current status of the SLO resource
+      jsonPath: .status.ready
+      name: Ready
+      type: string
+    - description: The time window for the SLO resource
+      jsonPath: .spec.timeWindow[0].duration
+      name: Window
+      type: string
+    - description: The time when the SLO resource was created
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1
     schema:
       openAPIV3Schema:
@@ -86,8 +98,6 @@ spec:
                     type: object
                   spec:
                     properties:
-                      description:
-                        type: string
                       ratioMetric:
                         properties:
                           bad:
@@ -246,6 +256,7 @@ spec:
                     duration:
                       type: string
                     isRolling:
+                      default: true
                       type: boolean
                   required:
                   - duration
@@ -347,3 +358,319 @@ spec:
     storage: true
     subresources:
       status: {}
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              alertPolicies:
+                description: |-
+                  We don't make clear in the spec if this is a ref or inline.
+                  We will make it a ref for now.
+                  https://github.com/OpenSLO/OpenSLO/issues/133
+                items:
+                  type: string
+                type: array
+              budgetingMethod:
+                type: string
+              description:
+                type: string
+              indicator:
+                properties:
+                  metadata:
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      displayName:
+                        type: string
+                      labels:
+                        additionalProperties:
+                          items:
+                            type: string
+                          type: array
+                        type: object
+                      name:
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  spec:
+                    properties:
+                      ratioMetric:
+                        properties:
+                          bad:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    description: |-
+                                      RawMessage is a raw encoded JSON value.
+                                      It implements [Marshaler] and [Unmarshaler] and can
+                                      be used to delay JSON decoding or precompute a JSON encoding.
+                                    format: byte
+                                    type: string
+                                  type:
+                                    type: string
+                                required:
+                                - spec
+                                type: object
+                            required:
+                            - metricSource
+                            type: object
+                          counter:
+                            type: boolean
+                          good:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    description: |-
+                                      RawMessage is a raw encoded JSON value.
+                                      It implements [Marshaler] and [Unmarshaler] and can
+                                      be used to delay JSON decoding or precompute a JSON encoding.
+                                    format: byte
+                                    type: string
+                                  type:
+                                    type: string
+                                required:
+                                - spec
+                                type: object
+                            required:
+                            - metricSource
+                            type: object
+                          raw:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    description: |-
+                                      RawMessage is a raw encoded JSON value.
+                                      It implements [Marshaler] and [Unmarshaler] and can
+                                      be used to delay JSON decoding or precompute a JSON encoding.
+                                    format: byte
+                                    type: string
+                                  type:
+                                    type: string
+                                required:
+                                - spec
+                                type: object
+                            required:
+                            - metricSource
+                            type: object
+                          rawType:
+                            type: string
+                          total:
+                            properties:
+                              metricSource:
+                                properties:
+                                  metricSourceRef:
+                                    type: string
+                                  spec:
+                                    description: |-
+                                      RawMessage is a raw encoded JSON value.
+                                      It implements [Marshaler] and [Unmarshaler] and can
+                                      be used to delay JSON decoding or precompute a JSON encoding.
+                                    format: byte
+                                    type: string
+                                  type:
+                                    type: string
+                                required:
+                                - spec
+                                type: object
+                            required:
+                            - metricSource
+                            type: object
+                        required:
+                        - counter
+                        type: object
+                      thresholdMetric:
+                        properties:
+                          metricSource:
+                            properties:
+                              metricSourceRef:
+                                type: string
+                              spec:
+                                description: |-
+                                  RawMessage is a raw encoded JSON value.
+                                  It implements [Marshaler] and [Unmarshaler] and can
+                                  be used to delay JSON decoding or precompute a JSON encoding.
+                                format: byte
+                                type: string
+                              type:
+                                type: string
+                            required:
+                            - spec
+                            type: object
+                        required:
+                        - metricSource
+                        type: object
+                    type: object
+                required:
+                - metadata
+                - spec
+                type: object
+              indicatorRef:
+                type: string
+              objectives:
+                items:
+                  properties:
+                    displayName:
+                      type: string
+                    op:
+                      type: string
+                    target:
+                      type: number
+                    timeSliceTarget:
+                      type: number
+                    timeSliceWindow:
+                      type: string
+                    value:
+                      type: number
+                  required:
+                  - target
+                  type: object
+                type: array
+              service:
+                type: string
+              timeWindow:
+                items:
+                  properties:
+                    calendar:
+                      properties:
+                        startTime:
+                          type: string
+                        timeZone:
+                          type: string
+                      required:
+                      - startTime
+                      - timeZone
+                      type: object
+                    duration:
+                      type: string
+                    isRolling:
+                      default: true
+                      type: boolean
+                  required:
+                  - duration
+                  - isRolling
+                  type: object
+                type: array
+            required:
+            - alertPolicies
+            - budgetingMethod
+            - objectives
+            - service
+            - timeWindow
+            type: object
+          status:
+            description: SLOStatus defines the observed state of SLO
+            properties:
+              conditions:
+                description: |-
+                  INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+                  Important: Run "make" to regenerate code after modifying this file
+                items:
+                  description: "Condition contains details for one aspect of the current
+                    state of this API Resource.\n---\nThis struct is intended for
+                    direct use as an array at the field path .status.conditions.  For
+                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
+                    observations of a foo's current state.\n\t    // Known .status.conditions.type
+                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
+                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
+                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
+                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                    \   // other fields\n\t}"
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: |-
+                        type of condition in CamelCase or in foo.example.com/CamelCase.
+                        ---
+                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                        useful (see .node.status.conditions), the ability to deconflict is important.
+                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              currentSLO:
+                type: string
+              lastEvaluationTime:
+                format: date-time
+                type: string
+              ready:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: false

@@ -16,6 +16,7 @@ type SLOStatus struct {
 }
 
 //+kubebuilder:object:root=true
+//+kubebuilder:storageversion
 //+kubebuilder:subresource:status
 //+kubebuilder:printcolumn:name="Ready",type=string,JSONPath=.status.ready,description="The reason for the current status of the SLO resource"
 //+kubebuilder:printcolumn:name="Window",type=string,JSONPath=.spec.timeWindow[0].duration,description="The time window for the SLO resource"
@@ -24,7 +25,7 @@ type SLOStatus struct {
 // SLO is the Schema for the slos API
 type SLO struct {
 	metav1.TypeMeta   `json:",inline"`
-	ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   openslov1.SLOSpec `json:"spec,omitempty"`
 	Status SLOStatus         `json:"status,omitempty"`

@@ -12,12 +12,13 @@ type SLIStatus struct {
 }
 
 //+kubebuilder:object:root=true
+//+kubebuilder:storageversion
 //+kubebuilder:subresource:status
 
 // SLI is the Schema for the slis API
 type SLI struct {
 	metav1.TypeMeta   `json:",inline"`
-	ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   openslov1.SLISpec `json:"spec,omitempty"`
 	Status SLIStatus         `json:"status,omitempty"`

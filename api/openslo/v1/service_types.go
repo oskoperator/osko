@@ -8,12 +8,13 @@ import (
 type ServiceStatus struct{}
 
 //+kubebuilder:object:root=true
+//+kubebuilder:storageversion
 //+kubebuilder:subresource:status
 
 // Service is the Schema for the services API
 type Service struct {
 	metav1.TypeMeta   `json:",inline"`
-	ObjectMetaOpenSLO `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   openslov1.ServiceSpec `json:"spec,omitempty"`
 	Status ServiceStatus         `json:"status,omitempty"`

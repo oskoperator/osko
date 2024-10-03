@@ -17,6 +17,39 @@ spec:
   - name: v1
     schema:
       openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: Version represents a version of the OpenSLO specification.
+            type: string
+          kind:
+            description: |-
+              Kind represents all the object kinds defined by OpenSLO specification.
+              Keep in mind not all specification versions support every [Kind].
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              description:
+                type: string
+              target:
+                type: string
+            required:
+            - target
+            type: object
+        required:
+        - apiVersion
+        - kind
+        - metadata
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+  - name: v1
+    schema:
+      openAPIV3Schema:
         description: AlertNotificationTarget is the Schema for the alertnotificationtargets
           API
         properties:
@@ -50,39 +83,6 @@ spec:
             description: AlertNotificationTargetStatus defines the observed state
               of AlertNotificationTarget
             type: object
-        type: object
-    served: true
-    storage: true
-    subresources:
-      status: {}
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        properties:
-          apiVersion:
-            description: Version represents a version of the OpenSLO specification.
-            type: string
-          kind:
-            description: |-
-              Kind represents all the object kinds defined by OpenSLO specification.
-              Keep in mind not all specification versions support every [Kind].
-            type: string
-          metadata:
-            type: object
-          spec:
-            properties:
-              description:
-                type: string
-              target:
-                type: string
-            required:
-            - target
-            type: object
-        required:
-        - apiVersion
-        - kind
-        - metadata
-        - spec
         type: object
     served: true
     storage: false

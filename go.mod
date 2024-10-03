@@ -2,8 +2,6 @@ module github.com/oskoperator/osko
 
 go 1.23.0
 
-replace github.com/OpenSLO/OpenSLO => ./openslo
-
 require (
 	github.com/OpenSLO/OpenSLO v1.0.1-0.20240902204215-525dc600fe17
 	github.com/go-logr/logr v1.4.2
@@ -157,3 +155,5 @@ require (
 )
 
 replace github.com/prometheus/prometheus => github.com/grafana/mimir-prometheus v0.0.0-20231101140207-5f9db04c2d53
+
+replace github.com/OpenSLO/OpenSLO => ../OpenSLO

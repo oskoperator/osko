@@ -49,8 +49,21 @@ spec:
           spec:
             description: AlertManagerConfigSpec defines the desired state of AlertManagerConfig
             properties:
+<<<<<<< HEAD
               configSecretRef:
                 $ref: '#/definitions/k8s.io~1api~1core~1v1~0SecretReference'
+=======
+              secretRef:
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+                - namespace
+                type: object
+>>>>>>> f8098d7 (fix(alertmanagerconfig): custom made SecretRef)
             type: object
           status:
             description: AlertManagerConfigStatus defines the observed state of AlertManagerConfig

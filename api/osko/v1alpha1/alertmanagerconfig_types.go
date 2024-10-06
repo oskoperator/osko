@@ -1,13 +1,18 @@
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // AlertManagerConfigSpec defines the desired state of AlertManagerConfig
 type AlertManagerConfigSpec struct {
-	ConfigSecretRef v1.SecretReference `json:"configSecretRef,omitempty"`
+	// +kubebuilder:validation:Optional
+	SecretRef AlertManagerSecretRef `json:"secretRef,omitempty"`
+}
+
+type AlertManagerSecretRef struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
 }
 
 // AlertManagerConfigStatus defines the observed state of AlertManagerConfig

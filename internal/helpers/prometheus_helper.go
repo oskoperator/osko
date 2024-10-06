@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -143,7 +144,7 @@ func (mrs *MonitoringRuleSet) createErrorBudgetValueRecordingRule(sliMeasurement
 func (mrs *MonitoringRuleSet) createErrorBudgetTargetRecordingRule(window string) monitoringv1.Rule {
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_error_budget_target", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("1 - %s", mrs.Slo.Spec.Objectives[0].Target)),
+		Expr:   intstr.FromString(fmt.Sprintf("1 - %s", strconv.FormatFloat(mrs.Slo.Spec.Objectives[0].Target, 'f', -1, 64))),
 		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
 	}
 }
@@ -262,13 +263,13 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	var alertRuleErrorBudgets []monitoringv1.Rule
 
 	// BASE WINDOW
-	rules["targetRule"][baseWindow] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", baseWindow, false)
-	rules["totalRule"][baseWindow] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", baseWindow, false)
+	rules["targetRule"][baseWindow] = mrs.createRecordingRule(strconv.FormatFloat(mrs.Slo.Spec.Objectives[0].Target, 'f', -1, 64), "slo_target", baseWindow, false)
+	rules["totalRule"][baseWindow] = mrs.createRecordingRule(GetQuery(mrs.Sli.Spec.RatioMetric.Total.MetricSource), "sli_total", baseWindow, false)
 
-	if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
-		rules["goodRule"][baseWindow] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, "sli_good", baseWindow, false)
+	if GetQuery(mrs.Sli.Spec.RatioMetric.Good.MetricSource) != "" {
+		rules["goodRule"][baseWindow] = mrs.createRecordingRule(GetQuery(mrs.Sli.Spec.RatioMetric.Good.MetricSource), "sli_good", baseWindow, false)
 	} else {
-		rules["badRule"][baseWindow] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query, "sli_bad", baseWindow, false)
+		rules["badRule"][baseWindow] = mrs.createRecordingRule(GetQuery(mrs.Sli.Spec.RatioMetric.Bad.MetricSource), "sli_bad", baseWindow, false)
 		rules["goodRule"][baseWindow] = mrs.createAntecedentRule(
 			fmt.Sprintf("%v - %v",
 				rules["totalRule"][baseWindow].Record,
@@ -288,7 +289,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		// rules["targetRule"][window] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", window, true)
 		rules["totalRule"][window] = mrs.createRecordingRule(rules["totalRule"][baseWindow].Record, "sli_total", window, true)
 
-		if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
+		if GetQuery(mrs.Sli.Spec.RatioMetric.Good.MetricSource) != "" {
 			rules["goodRule"][window] = mrs.createRecordingRule(rules["goodRule"][baseWindow].Record, "sli_good", window, true)
 		} else {
 			rules["badRule"][window] = mrs.createRecordingRule(rules["badRule"][baseWindow].Record, "sli_bad", window, true)
@@ -327,11 +328,13 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		{Name: fmt.Sprintf("%s_burn_rate", sloName), Rules: rulesByType["burnRate"]},
 	}
 
+	// TODO: having the magic alerting we still need to figure out how to pass the severity into the alerting rule when we have more than one alerting tool.
+	// The idea is to have a map of the alerting tool and the severity and then iterate over all connected AlertNotificationTargets.
+
 	if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
 		duration := monitoringv1.Duration("5m")
 		var alertRules []monitoringv1.Rule
-		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, "page"))
-		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, "ticket"))
+		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, config.Cfg.AlertSeverities.HighFast))
 		ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{
 			Name: fmt.Sprintf("%s_slo_alert", sloName), Rules: alertRules,
 		})
@@ -342,7 +345,6 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 // createMagicMultiBurnRateAlert creates a Prometheus alert rule for multi-burn rate alerting.
 func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitoringv1.Rule, threshold string, duration *monitoringv1.Duration, severity string) monitoringv1.Rule {
 	log := ctrllog.FromContext(context.Background())
-	cfg := config.NewConfig()
 
 	alertingPageWindowsOrder := []string{"1h", "5m", "6h", "30m", "24h", "2h", "3d"}
 
@@ -368,18 +370,18 @@ func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitori
 	if severity == "page" {
 		alertExpression = fmt.Sprintf(
 			"(%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s)) or (%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s))",
-			alertingPageWindows[alertingPageWindowsOrder[2]].Record, mapToColonSeparatedString(burnRates[2].Labels), cfg.AlertingBurnRates.PageShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[0]].Record, mapToColonSeparatedString(burnRates[0].Labels), cfg.AlertingBurnRates.PageShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), cfg.AlertingBurnRates.PageLongWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[1]].Record, mapToColonSeparatedString(burnRates[1].Labels), cfg.AlertingBurnRates.PageLongWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[2]].Record, mapToColonSeparatedString(burnRates[2].Labels), config.Cfg.AlertingBurnRates.PageShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[0]].Record, mapToColonSeparatedString(burnRates[0].Labels), config.Cfg.AlertingBurnRates.PageShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), config.Cfg.AlertingBurnRates.PageLongWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[1]].Record, mapToColonSeparatedString(burnRates[1].Labels), config.Cfg.AlertingBurnRates.PageLongWindow, threshold,
 		)
 	} else if severity == "ticket" {
 		alertExpression = fmt.Sprintf(
 			"(%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s)) or (%s{%s} > %.3f and %s{%s} > %.3f)",
-			alertingPageWindows[alertingPageWindowsOrder[4]].Record, mapToColonSeparatedString(burnRates[4].Labels), cfg.AlertingBurnRates.TicketShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[5]].Record, mapToColonSeparatedString(burnRates[5].Labels), cfg.AlertingBurnRates.TicketShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[6]].Record, mapToColonSeparatedString(burnRates[6].Labels), cfg.AlertingBurnRates.TicketLongWindow,
-			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), cfg.AlertingBurnRates.TicketLongWindow,
+			alertingPageWindows[alertingPageWindowsOrder[4]].Record, mapToColonSeparatedString(burnRates[4].Labels), config.Cfg.AlertingBurnRates.TicketShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[5]].Record, mapToColonSeparatedString(burnRates[5].Labels), config.Cfg.AlertingBurnRates.TicketShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[6]].Record, mapToColonSeparatedString(burnRates[6].Labels), config.Cfg.AlertingBurnRates.TicketLongWindow,
+			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), config.Cfg.AlertingBurnRates.TicketLongWindow,
 		)
 	}
 
@@ -407,8 +409,7 @@ func CreateAlertingRule() (*monitoringv1.PrometheusRule, error) {
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
-	cfg := config.NewConfig()
-	baseWindow := cfg.DefaultBaseWindow.String()
+	baseWindow := config.Cfg.DefaultBaseWindow.String()
 	if slo.ObjectMeta.Annotations["osko.dev/baseWindow"] != "" {
 		baseWindow = slo.ObjectMeta.Annotations["osko.dev/baseWindow"]
 	}

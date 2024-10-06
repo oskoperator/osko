@@ -37,7 +37,6 @@ spec:
           metadata:
             type: object
           spec:
-            description: AlertPolicySpec defines the desired state of AlertPolicy
             properties:
               alertWhenBreaching:
                 type: boolean
@@ -51,8 +50,6 @@ spec:
                     conditionRef:
                       type: string
                     kind:
-                      enum:
-                      - AlertCondition
                       type: string
                     metadata:
                       properties:
@@ -62,97 +59,70 @@ spec:
                           type: object
                         displayName:
                           type: string
-                        finalizers:
-                          items:
-                            type: string
-                          type: array
                         labels:
                           additionalProperties:
-                            type: string
+                            items:
+                              type: string
+                            type: array
                           type: object
                         name:
                           type: string
-                        namespace:
-                          type: string
+                      required:
+                      - name
                       type: object
                     spec:
-                      description: AlertConditionSpec defines the desired state of
-                        AlertCondition
                       properties:
                         condition:
                           properties:
                             alertAfter:
-                              pattern: ^[1-9]\d*[s m h d]$
                               type: string
                             kind:
-                              enum:
-                              - Burnrate
                               type: string
                             lookbackWindow:
-                              pattern: ^[1-9]\d*[s m h d]$
                               type: string
                             op:
-                              enum:
-                              - lte
-                              - gte
-                              - lt
-                              - gt
                               type: string
                             threshold:
-                              type: string
+                              type: number
+                          required:
+                          - alertAfter
+                          - kind
+                          - lookbackWindow
+                          - op
+                          - threshold
                           type: object
                         description:
-                          maxLength: 1050
                           type: string
                         severity:
                           type: string
+                      required:
+                      - condition
+                      - severity
                       type: object
+                  required:
+                  - conditionRef
+                  - kind
+                  - metadata
+                  - spec
                   type: object
-                maxItems: 1
                 type: array
               description:
-                maxLength: 1050
                 type: string
               notificationTargets:
                 items:
                   properties:
-                    kind:
-                      enum:
-                      - AlertNotificationTarget
-                      type: string
-                    metadata:
-                      properties:
-                        annotations:
-                          additionalProperties:
-                            type: string
-                          type: object
-                        finalizers:
-                          items:
-                            type: string
-                          type: array
-                        labels:
-                          additionalProperties:
-                            type: string
-                          type: object
-                        name:
-                          type: string
-                        namespace:
-                          type: string
-                      type: object
-                    spec:
-                      description: AlertNotificationTargetSpec defines the desired
-                        state of AlertNotificationTarget
-                      properties:
-                        description:
-                          maxLength: 1050
-                          type: string
-                        target:
-                          type: string
-                      type: object
                     targetRef:
                       type: string
+                  required:
+                  - targetRef
                   type: object
                 type: array
+            required:
+            - alertWhenBreaching
+            - alertWhenNoData
+            - alertWhenResolved
+            - conditions
+            - notificationTargets
             type: object
           status:
             description: AlertPolicyStatus defines the observed state of AlertPolicy
@@ -162,3 +132,113 @@ spec:
     storage: true
     subresources:
       status: {}
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: Version represents a version of the OpenSLO specification.
+            type: string
+          kind:
+            description: |-
+              Kind represents all the object kinds defined by OpenSLO specification.
+              Keep in mind not all specification versions support every [Kind].
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              alertWhenBreaching:
+                type: boolean
+              alertWhenNoData:
+                type: boolean
+              alertWhenResolved:
+                type: boolean
+              conditions:
+                items:
+                  properties:
+                    conditionRef:
+                      type: string
+                    kind:
+                      type: string
+                    metadata:
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        displayName:
+                          type: string
+                        labels:
+                          additionalProperties:
+                            items:
+                              type: string
+                            type: array
+                          type: object
+                        name:
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    spec:
+                      properties:
+                        condition:
+                          properties:
+                            alertAfter:
+                              type: string
+                            kind:
+                              type: string
+                            lookbackWindow:
+                              type: string
+                            op:
+                              type: string
+                            threshold:
+                              type: number
+                          required:
+                          - alertAfter
+                          - kind
+                          - lookbackWindow
+                          - op
+                          - threshold
+                          type: object
+                        description:
+                          type: string
+                        severity:
+                          type: string
+                      required:
+                      - condition
+                      - severity
+                      type: object
+                  required:
+                  - conditionRef
+                  - kind
+                  - metadata
+                  - spec
+                  type: object
+                type: array
+              description:
+                type: string
+              notificationTargets:
+                items:
+                  properties:
+                    targetRef:
+                      type: string
+                  required:
+                  - targetRef
+                  type: object
+                type: array
+            required:
+            - alertWhenBreaching
+            - alertWhenNoData
+            - alertWhenResolved
+            - conditions
+            - notificationTargets
+            type: object
+        required:
+        - apiVersion
+        - kind
+        - metadata
+        - spec
+        type: object
+    served: true
+    storage: false

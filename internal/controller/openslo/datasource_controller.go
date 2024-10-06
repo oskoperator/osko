@@ -3,17 +3,19 @@ package controller
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
+
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
+	"github.com/oskoperator/osko/internal/helpers"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	"net/http"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"time"
 )
 
 const (
@@ -54,16 +56,19 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Error(err, errGetDS)
 		return ctrl.Result{}, nil
 	}
+
+	connectionDetails := helpers.ConstructConnectionDetails(ds)
+
 	switch ds.Spec.Type {
 	case "mimir":
-		log.Info("Datasource Type is Mimir", "address", ds.Spec.ConnectionDetails.Address)
+		log.Info("Datasource Type is Mimir", "address", connectionDetails.Address)
 		err = r.connectDatasource(ctx, ds)
 		if err != nil {
 			log.Error(err, errConnectDS)
 			return ctrl.Result{}, err
 		}
 	case "cortex":
-		log.Info("Datasource Type is Cortex", "address", ds.Spec.ConnectionDetails.Address)
+		log.Info("Datasource Type is Cortex", "address", connectionDetails.Address)
 		r.Recorder.Event(ds, "Warning", "NotImplemented", "Cortex support is not implemented yet")
 	}
 
@@ -76,15 +81,17 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func (r *DatasourceReconciler) connectDatasource(ctx context.Context, ds *openslov1.Datasource) error {
 	datasourceAddress := ""
 
+	connectionDetails := helpers.ConstructConnectionDetails(ds)
+
 	if ds.Spec.Type != "mimir" {
 		return fmt.Errorf("unsupported datasource type: %s", ds.Spec.Type)
 	} else {
-		datasourceAddress = ds.Spec.ConnectionDetails.Address + "/prometheus"
+		datasourceAddress = connectionDetails.Address + "/prometheus"
 	}
 
 	customRoundtripper := &CustomRoundTripper{
 		Transport: api.DefaultRoundTripper,
-		TenantID:  ds.Spec.ConnectionDetails.TargetTenant,
+		TenantID:  connectionDetails.TargetTenant,
 	}
 
 	newDsClient, err := api.NewClient(api.Config{

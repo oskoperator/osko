@@ -49,7 +49,7 @@ spec:
           spec:
             description: AlertManagerConfigSpec defines the desired state of AlertManagerConfig
             properties:
-              secretRef:
+              configSecretRef:
                 description: |-
                   SecretReference represents a Secret Reference. It has enough information to retrieve secret
                   in any namespace

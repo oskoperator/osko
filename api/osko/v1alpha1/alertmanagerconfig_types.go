@@ -7,7 +7,7 @@ import (
 
 // AlertManagerConfigSpec defines the desired state of AlertManagerConfig
 type AlertManagerConfigSpec struct {
-	SecretRef v1.SecretReference `json:"secretRef,omitempty"`
+	ConfigSecretRef v1.SecretReference `json:"configSecretRef,omitempty"`
 }
 
 // AlertManagerConfigStatus defines the observed state of AlertManagerConfig

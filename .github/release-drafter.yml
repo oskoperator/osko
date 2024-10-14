@@ -1,0 +1,90 @@
+category-template: '## $TITLE'
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+tag-prefix: ''
+version-template: $MAJOR.$MINOR.$PATCH
+change-template: '* $TITLE (#$NUMBER) by @$AUTHOR'
+change-title-escapes: ''
+no-changes-template: 'No changes were made in this version. Stay tuned for upcoming updates!'
+categories:
+  - title: '⚡ Breaking Changes'
+    labels:
+      - 'breaking-change'
+  - title: '🌟 New Features'
+    labels:
+      - 'feature'
+  - title: '🔧 Improvements'
+    labels:
+      - 'enhancement'
+  - title: '📜 Documentation Updates'
+    labels:
+      - 'documentation'
+  - title: '🐛 Bug Fixes'
+    labels:
+      - 'bug'
+  - title: '🚒 Deprecations'
+    labels:
+      - 'deprecation'
+  - title: '🔧 Maintenance'
+    labels:
+      - 'chore'
+  - title: '📦 Dependency Updates'
+    collapse-after: 10
+    labels:
+      - 'dependencies'
+version-resolver:
+  major:
+    labels:
+      - 'major'
+      - 'breaking-change'
+  minor:
+    labels:
+      - 'minor'
+      - 'feature'
+      - 'enhancement'
+      - 'deprecation'
+  patch:
+    labels:
+      - 'patch'
+      - 'documentation'
+      - 'bug'
+      - 'bugfix'
+      - 'fix'
+      - 'chore'
+      - 'internal'
+      - 'dependencies'
+  default: patch
+autolabeler:
+  - label: 'breaking-change'
+    title:
+      - '/.*!:.*/'
+  - label: 'feature'
+    title:
+      - '/feat.*: /i'
+  - label: 'bug'
+    title:
+      - '/fix.*: /i'
+      - '/bug.*: /i'
+  - label: 'dependencies'
+    branch:
+      - '/dependabot\/.*/'
+  - label: 'documentation'
+    files:
+      - '*.md'
+  - label: 'chore'
+    files:
+      - '*.md'
+exclude-labels:
+  - 'skip-changelog'
+template: |
+  ## Summary
+
+  **[Human readable summary of changes]**
+
+  ## Changes
+
+  $CHANGES
+
+  ## This release was made possible by the following contributors:
+
+  $CONTRIBUTORS

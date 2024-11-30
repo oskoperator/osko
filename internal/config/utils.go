@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -45,27 +44,31 @@ func GetEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
 	return defaultValue
 }
 
-func AlertSeveritiesByTool(tool string) AlertSeverities {
-	switch strings.ToLower(tool) {
-	case "opsgenie":
-		return AlertSeverities{
-			Critical: "P1",
-			HighFast: "P2",
-			HighSlow: "P3",
-			Low:      "P4",
-		}
-
-	case "pagerduty":
-		return AlertSeverities{
-			Critical: "SEV-1",
-			HighFast: "SEV-2",
-			HighSlow: "SEV-3",
-			Low:      "SEV-4",
-		}
-	case "custom":
-		return AlertSeverities{
-			// fill out from environment variables
-		}
+func AlertSeveritiesByTool(tool string) AlertToolSeverityMap {
+	severityMaps := map[string]AlertToolSeverityMap{
+		"opsgenie": {
+			PageCritical: "P1",
+			PageHigh:     "P2",
+			TicketHigh:   "P3",
+			TicketMedium: "P4",
+		},
+		"pagerduty": {
+			PageCritical: "SEV_1",
+			PageHigh:     "SEV_2",
+			TicketHigh:   "SEV_3",
+			TicketMedium: "SEV_4",
+		},
+		"custom": {
+			PageCritical: GetEnv("OSKO_ALERTING_SEVERITY_CRITICAL", "critical"),
+			PageHigh:     GetEnv("OSKO_ALERTING_SEVERITY_HIGH", "high"),
+			TicketHigh:   GetEnv("OSKO_ALERTING_SEVERITY_HIGH", "medium"),
+			TicketMedium: GetEnv("OSKO_ALERTING_SEVERITY_LOW", "low"),
+		},
 	}
-	return AlertSeverities{}
+
+	if toolMap, exists := severityMaps[tool]; exists {
+		return toolMap
+	}
+
+	return severityMaps["custom"]
 }

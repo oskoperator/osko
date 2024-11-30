@@ -234,7 +234,7 @@ func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window str
 
 // SetupRules constructs rule groups for monitoring based on SLO and SLI configurations.
 func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
-	//log := ctrllog.FromContext(context.Background())
+	log := ctrllog.FromContext(context.Background())
 
 	baseWindow := mrs.BaseWindow //Should configurable somewhere as agreed on product workshop
 	extendedWindow := "28d"      //Default to 28d if not specified in the SLO
@@ -329,20 +329,49 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 
 	// TODO: having the magic alerting we still need to figure out how to pass the severity into the alerting rule when we have more than one alerting tool.
 	// The idea is to have a map of the alerting tool and the severity and then iterate over all connected AlertNotificationTargets.
-
+	log.V(1).Info("Magic alerting", "SLO", sloName, "enabled", mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"])
 	if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
 		duration := monitoringv1.Duration("5m")
 		var alertRules []monitoringv1.Rule
-		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, fmt.Sprintf("1-%s", mrs.Slo.Spec.Objectives[0].Target), &duration, config.Cfg.AlertSeverities.HighFast))
+
+		alertRules = append(alertRules,
+			mrs.createMagicMultiBurnRateAlert(
+				alertRuleErrorBudgets,
+				fmt.Sprintf("1-%s", mrs.Slo.Spec.Objectives[0].Target),
+				&duration,
+				config.PageCritical, // Fast burn rate, short window
+			),
+			mrs.createMagicMultiBurnRateAlert(
+				alertRuleErrorBudgets,
+				fmt.Sprintf("1-%s", mrs.Slo.Spec.Objectives[0].Target),
+				&duration,
+				config.PageHigh, // Fast burn rate, long window
+			),
+			mrs.createMagicMultiBurnRateAlert(
+				alertRuleErrorBudgets,
+				fmt.Sprintf("1-%s", mrs.Slo.Spec.Objectives[0].Target),
+				&duration,
+				config.TicketHigh, // Slow burn rate, short window
+			),
+			mrs.createMagicMultiBurnRateAlert(
+				alertRuleErrorBudgets,
+				fmt.Sprintf("1-%s", mrs.Slo.Spec.Objectives[0].Target),
+				&duration,
+				config.TicketMedium, // Slow burn rate, long window
+			),
+		)
+
+		// log.V(1).Info("Alerting rules to be created", "alertRules", alertRules)
 		ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{
-			Name: fmt.Sprintf("%s_slo_alert", sloName), Rules: alertRules,
+			Name:  fmt.Sprintf("%s_slo_alert", sloName),
+			Rules: alertRules,
 		})
 	}
 	return ruleGroups, nil
 }
 
 // createMagicMultiBurnRateAlert creates a Prometheus alert rule for multi-burn rate alerting.
-func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitoringv1.Rule, threshold string, duration *monitoringv1.Duration, severity string) monitoringv1.Rule {
+func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitoringv1.Rule, threshold string, duration *monitoringv1.Duration, sreSeverity config.SREAlertSeverity) monitoringv1.Rule {
 	log := ctrllog.FromContext(context.Background())
 
 	alertingPageWindowsOrder := []string{"1h", "5m", "6h", "30m", "24h", "2h", "3d"}
@@ -364,9 +393,12 @@ func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitori
 		}
 	}
 
+	//TODO: Create severity mapping between alerting tool and SRE book severity
+
 	// Define the alert expressions for different severities and durations
 	var alertExpression string
-	if severity == "page" {
+	switch sreSeverity {
+	case config.PageCritical, config.PageHigh:
 		alertExpression = fmt.Sprintf(
 			"(%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s)) or (%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s))",
 			alertingPageWindows[alertingPageWindowsOrder[2]].Record, mapToColonSeparatedString(burnRates[2].Labels), config.Cfg.AlertingBurnRates.PageShortWindow, threshold,
@@ -374,7 +406,7 @@ func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitori
 			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), config.Cfg.AlertingBurnRates.PageLongWindow, threshold,
 			alertingPageWindows[alertingPageWindowsOrder[1]].Record, mapToColonSeparatedString(burnRates[1].Labels), config.Cfg.AlertingBurnRates.PageLongWindow, threshold,
 		)
-	} else if severity == "ticket" {
+	case config.TicketHigh, config.TicketMedium:
 		alertExpression = fmt.Sprintf(
 			"(%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s)) or (%s{%s} > %.3f and %s{%s} > %.3f)",
 			alertingPageWindows[alertingPageWindowsOrder[4]].Record, mapToColonSeparatedString(burnRates[4].Labels), config.Cfg.AlertingBurnRates.TicketShortWindow, threshold,
@@ -384,17 +416,28 @@ func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitori
 		)
 	}
 
+	alertingTool := mrs.Slo.ObjectMeta.Annotations["osko.dev/alertingTool"]
+	if alertingTool == "" {
+		alertingTool = config.Cfg.AlertingTool
+	}
+
+	severities := config.AlertSeveritiesByTool(alertingTool)
+
+	toolSeverity := severities.GetSeverity(sreSeverity)
+
+	log.V(1).Info("Alerting rule", "sreSeverity", sreSeverity, "toolSeverity", toolSeverity)
+
 	if alertExpression == "" {
 		log.Info("Creation of alerting rule failed", "EmptyExpression", "Failed to create the alert expression, expression is empty")
 		return monitoringv1.Rule{}
 	}
 
 	return monitoringv1.Rule{
-		Alert: fmt.Sprintf("%s_alert_%s", burnRates[0].Record, severity),
+		Alert: fmt.Sprintf("%s_alert_%s", burnRates[0].Record, sreSeverity),
 		Expr:  intstr.FromString(alertExpression),
 		For:   duration,
 		Labels: map[string]string{
-			"severity": severity,
+			"severity": toolSeverity,
 		},
 		Annotations: map[string]string{
 			"summary":     "SLO Burn Rate Alert",

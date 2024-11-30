@@ -7,6 +7,8 @@ import (
 var Cfg Config
 
 func NewConfig() {
+	alertingTool := GetEnv("OSKO_ALERTING_TOOL", "opsgenie")
+
 	Cfg = Config{
 		MimirRuleRequeuePeriod: GetEnvAsDuration("MIMIR_RULE_REQUEUE_PERIOD", 60*time.Second),
 		AlertingBurnRates: AlertingBurnRates{
@@ -16,6 +18,7 @@ func NewConfig() {
 			TicketLongWindow:  GetEnvAsFloat64("ABR_TICKET_LONG_WINDOW", 1),
 		},
 		DefaultBaseWindow: GetEnvAsDuration("DEFAULT_BASE_WINDOW", 5*time.Minute),
-		AlertSeverities:   AlertSeveritiesByTool(GetEnv("OSKO_ALERTING_TOOL", "opsgenie")), // I wouldn't default to opsgenie here, maybe better to default to custom and error on startup if no custom variables or valid tool is selected
+		AlertingTool:      alertingTool,
+		// AlertSeverities:   AlertSeveritiesByTool(alertingTool), // I wouldn't default to opsgenie here, maybe better to default to custom and error on startup if no custom variables or valid tool is selected
 	}
 }

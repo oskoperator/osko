@@ -12,9 +12,18 @@ data:
         }
       }
     }
-    prometheus.scrape "static" {
+    prometheus.relabel "cluster" {
+      rule {
+        target_label = "cluster"
+        replacement = "local"
+      }
       forward_to = [
         prometheus.remote_write.local.receiver,
+      ]
+    }
+    prometheus.scrape "static" {
+      forward_to = [
+        prometheus.relabel.cluster.receiver,
       ]
       targets = [
         {

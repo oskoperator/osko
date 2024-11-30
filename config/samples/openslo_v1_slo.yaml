@@ -1,39 +1,39 @@
 apiVersion: openslo.com/v1
 kind: SLO
 metadata:
+  name: mimir-ingestion-latency
   labels:
-    label.osko.dev/team: "infrastructure"
-    label.osko.dev/system: "gatekeeper"
-    label.osko.dev/domain: "security"
+    label.osko.dev/team: "infra"
+    label.osko.dev/system: "monitoring"
+    label.osko.dev/domain: "observability"
+    label.osko.dev/service: "mimir"
   annotations:
     osko.dev/datasourceRef: "mimir-infra-ds"
     osko.dev/magicAlerting: "true"
-  name: gatekeeper-webhook-response-time
 spec:
   budgetingMethod: Occurrences
-  description: 99% of Gatekeeper webhook requests return in less than 0.5s
+  description: 95% of all queries should have a latency of less than 300 milliseconds
   indicator:
     metadata:
-      name: gatekeeper-webhook-less-than-05s
+      name: distributor-query-success-latency
     spec:
-      description: 99% of Gatekeeper webhook requests return in less than 0.5s
+      description: 95% of all queries should have a latency of less than 500 milliseconds
       ratioMetric:
         good:
           metricSource:
             metricSourceRef: mimir-infra-ds
             type: Mimir
             spec:
-              query: controller_runtime_webhook_latency_seconds_bucket{le="0.5", job="gatekeeper-metrics"}
+              query: cortex_distributor_query_duration_seconds_bucket{le="0.5", method="Distributor.QueryStream", status_code="200"}
         total:
           metricSource:
             metricSourceRef: mimir-infra-ds
             type: Mimir
             spec:
-              query: controller_runtime_webhook_latency_seconds_count{job="gatekeeper-metrics"}
+              query: cortex_distributor_query_duration_seconds_count{method="Distributor.QueryStream"}
   objectives:
-  - displayName: gatekeeper-webhook-less-than-05s
-    target: '0.99'
-  service: testing
+    - target: "0.99"
+  service: mimir
   timeWindow:
-  - duration: 28d
-    isRolling: true
+    - duration: 28d
+      isRolling: true

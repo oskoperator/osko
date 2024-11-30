@@ -1,0 +1,464 @@
+{
+   "description": "Look at specific SLOs",
+   "graphTooltip": 1,
+   "panels": [
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+         },
+         "id": 1,
+         "panels": [ ],
+         "repeat": "slo",
+         "title": "$slo SLO",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "thresholds": {
+                  "steps": [
+                     {
+                        "color": "red",
+                        "value": null
+                     },
+                     {
+                        "color": "green",
+                        "value": 1
+                     }
+                  ]
+               },
+               "unit": "bool_yes_no"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 4,
+            "x": 0,
+            "y": 1
+         },
+         "id": 2,
+         "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ]
+            }
+         },
+         "pluginVersion": "v10.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$env"
+               },
+               "expr": "sum(\n    osko_sli_measurement{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n) by (slo_name)\n> bool\nsum(\n    osko_slo_target{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n) by (slo_name)\n"
+            }
+         ],
+         "title": "Passing",
+         "type": "stat"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "showPoints": "never"
+               },
+               "decimals": 3,
+               "max": 1,
+               "unit": "percentunit"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 4,
+            "x": 4,
+            "y": 1
+         },
+         "id": 3,
+         "pluginVersion": "v10.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$env"
+               },
+               "expr": "min(\n    osko_sli_measurement{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n) by (slo_name)\n",
+               "legendFormat": "Measurement"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$env"
+               },
+               "expr": "min(\n    osko_slo_target{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n) by (slo_name)\n",
+               "legendFormat": "Target"
+            }
+         ],
+         "title": "SLI vs SLO",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "showPoints": "never"
+               },
+               "unit": "short"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 4,
+            "x": 8,
+            "y": 1
+         },
+         "id": 4,
+         "pluginVersion": "v10.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$env"
+               },
+               "expr": "min(\n    osko_error_budget_burn_rate{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n) by (slo_name)\n",
+               "legendFormat": "Burn rate {{ window }}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$env"
+               },
+               "expr": "vector(1)\n",
+               "legendFormat": "Threshold {{ window }}"
+            }
+         ],
+         "title": "Error Budget burn rate",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+               },
+               "thresholds": {
+                  "mode": "absolute"
+               },
+               "unit": "short"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 4,
+            "x": 12,
+            "y": 1
+         },
+         "id": 5,
+         "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ]
+            }
+         },
+         "pluginVersion": "v10.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$env"
+               },
+               "expr": "sum(osko_sli_total{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"})\n"
+            }
+         ],
+         "title": "Total events",
+         "type": "stat"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "red",
+                        "value": null
+                     },
+                     {
+                        "color": "green",
+                        "value": 1
+                     }
+                  ]
+               },
+               "unit": "short"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 4,
+            "x": 16,
+            "y": 1
+         },
+         "id": 6,
+         "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ]
+            }
+         },
+         "pluginVersion": "v10.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$env"
+               },
+               "expr": "sum(\n    osko_error_budget_target{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n    *\n    osko_sli_total{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n)\n",
+               "legendFormat": "Budget"
+            }
+         ],
+         "title": "Errors budget",
+         "type": "stat"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "red",
+                        "value": null
+                     },
+                     {
+                        "color": "green",
+                        "value": 1
+                     }
+                  ]
+               },
+               "unit": "short"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 4,
+            "x": 20,
+            "y": 1
+         },
+         "id": 7,
+         "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ]
+            }
+         },
+         "pluginVersion": "v10.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$env"
+               },
+               "expr": "sum(\n    (\n        osko_error_budget_target{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n        - osko_error_budget_available{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n    ) *\n    osko_sli_total{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n)\n",
+               "legendFormat": "Remaining"
+            }
+         ],
+         "title": "Errors remaining",
+         "type": "stat"
+      }
+   ],
+   "schemaVersion": 36,
+   "tags": [
+      "osko"
+   ],
+   "templating": {
+      "list": [
+         {
+            "description": "Environment",
+            "label": "Env",
+            "name": "env",
+            "query": "prometheus",
+            "regex": "mimir-.*",
+            "type": "datasource"
+         },
+         {
+            "current": {
+               "selected": false,
+               "text": "28d",
+               "value": "28d"
+            },
+            "datasource": {
+               "type": "prometheus",
+               "uid": "${env}"
+            },
+            "description": "Window",
+            "label": "Window",
+            "name": "window",
+            "query": "label_values(osko_slo_target, window)",
+            "refresh": 2,
+            "type": "query"
+         },
+         {
+            "current": {
+               "selected": false,
+               "text": [
+                  "All"
+               ],
+               "value": [
+                  "$__all"
+               ]
+            },
+            "datasource": {
+               "type": "prometheus",
+               "uid": "${env}"
+            },
+            "description": "Team",
+            "includeAll": true,
+            "label": "Team",
+            "multi": true,
+            "name": "team",
+            "query": "label_values(osko_slo_target, team)",
+            "refresh": 2,
+            "type": "query"
+         },
+         {
+            "current": {
+               "selected": false,
+               "text": [
+                  "All"
+               ],
+               "value": [
+                  "$__all"
+               ]
+            },
+            "datasource": {
+               "type": "prometheus",
+               "uid": "${env}"
+            },
+            "description": "Domain",
+            "includeAll": true,
+            "label": "Domain",
+            "multi": true,
+            "name": "domain",
+            "query": "label_values(osko_slo_target{team=~\"$team\"}, domain)",
+            "refresh": 2,
+            "type": "query"
+         },
+         {
+            "current": {
+               "selected": false,
+               "text": [
+                  "All"
+               ],
+               "value": [
+                  "$__all"
+               ]
+            },
+            "datasource": {
+               "type": "prometheus",
+               "uid": "${env}"
+            },
+            "description": "System",
+            "includeAll": true,
+            "label": "System",
+            "multi": true,
+            "name": "system",
+            "query": "label_values(osko_slo_target{team=~\"$team\", domain=~\"$domain\"}, system)",
+            "refresh": 2,
+            "type": "query"
+         },
+         {
+            "current": {
+               "selected": false,
+               "text": [
+                  "All"
+               ],
+               "value": [
+                  "$__all"
+               ]
+            },
+            "datasource": {
+               "type": "prometheus",
+               "uid": "${env}"
+            },
+            "description": "Service",
+            "includeAll": true,
+            "label": "Service",
+            "multi": true,
+            "name": "service",
+            "query": "label_values(osko_slo_target{team=~\"$team\", domain=~\"$domain\", system=~\"$system\"}, service)",
+            "refresh": 2,
+            "type": "query"
+         },
+         {
+            "current": {
+               "selected": false,
+               "text": [
+                  "All"
+               ],
+               "value": [
+                  "$__all"
+               ]
+            },
+            "datasource": {
+               "type": "prometheus",
+               "uid": "${env}"
+            },
+            "description": "SLO",
+            "includeAll": true,
+            "label": "SLO",
+            "multi": true,
+            "name": "slo",
+            "query": "label_values(osko_slo_target{team=~\"$team\", domain=~\"$domain\", system=~\"$system\", service=~\"$service\"}, slo_name)",
+            "refresh": 2,
+            "type": "query"
+         }
+      ]
+   },
+   "time": {
+      "from": "now-6h",
+      "to": "now"
+   },
+   "timezone": "utc",
+   "title": "OSKO / SLOs",
+   "uid": "osko-slos"
+}

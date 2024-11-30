@@ -12,6 +12,7 @@ import (
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/helpers"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"gopkg.in/yaml.v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -243,6 +244,14 @@ func (r *MimirRuleReconciler) createMimirRuleGroupAPI(log logr.Logger, rule *osk
 				Labels: r.Labels,
 			}
 		} else {
+			var modelDuration model.Duration
+			if r.For != nil {
+				parsedDuration, err := model.ParseDuration(string(*r.For))
+				if err != nil {
+					return nil
+				}
+				modelDuration = parsedDuration
+			}
 			mimirRuleNode = rulefmt.RuleNode{
 				Alert: yaml.Node{
 					Kind:  8,
@@ -252,7 +261,7 @@ func (r *MimirRuleReconciler) createMimirRuleGroupAPI(log logr.Logger, rule *osk
 					Kind:  8,
 					Value: r.Expr,
 				},
-				For:    r.For,
+				For:    modelDuration,
 				Labels: r.Labels,
 			}
 		}

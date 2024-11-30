@@ -85,11 +85,11 @@ spec:
                             type: string
                           for:
                             description: |-
-                              Duration wraps time.Duration. It is used to parse the custom duration format
-                              from YAML.
-                              This type should not propagate beyond the scope of input/output processing.
-                            format: int64
-                            type: integer
+                              Duration is a valid time duration that can be parsed by Prometheus model.ParseDuration() function.
+                              Supported units: y, w, d, h, m, s, ms
+                              Examples: `30s`, `1m`, `1h20m15s`, `15d`
+                            pattern: ^(0|(([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$
+                            type: string
                           keep_firing_for:
                             description: |-
                               Duration wraps time.Duration. It is used to parse the custom duration format

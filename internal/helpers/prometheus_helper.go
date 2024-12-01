@@ -12,6 +12,7 @@ import (
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/config"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/prometheus/common/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -237,7 +238,8 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	log := ctrllog.FromContext(context.Background())
 
 	baseWindow := mrs.BaseWindow //Should configurable somewhere as agreed on product workshop
-	extendedWindow := "28d"      //Default to 28d if not specified in the SLO
+	log.V(1).Info("Starting SetupRules", "baseWindow", baseWindow)
+	extendedWindow := "28d" //Default to 28d if not specified in the SLO
 
 	if len(mrs.Slo.Spec.TimeWindow) > 0 && mrs.Slo.Spec.TimeWindow[0].Duration != "" {
 		extendedWindow = string(mrs.Slo.Spec.TimeWindow[0].Duration)
@@ -258,7 +260,19 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		"burnRate":          {},
 	}
 
+	windowSet := make(map[string]bool)
 	windows := []string{baseWindow, extendedWindow, "5m", "30m", "1h", "2h", "6h", "24h", "3d"}
+
+	var uniqueWindows []string
+	for _, w := range windows {
+		if !windowSet[w] {
+			windowSet[w] = true
+			uniqueWindows = append(uniqueWindows, w)
+		}
+	}
+
+	log.V(1).Info("Windows after deduplication", "uniqueWindows", uniqueWindows)
+
 	var alertRuleErrorBudgets []monitoringv1.Rule
 
 	// BASE WINDOW
@@ -280,12 +294,19 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	rules["errorBudgetValue"][baseWindow] = mrs.createErrorBudgetValueRecordingRule(rules["sliMeasurement"][baseWindow], baseWindow)
 	rules["errorBudgetTarget"][baseWindow] = mrs.createErrorBudgetTargetRecordingRule(baseWindow)
 	rules["burnRate"][baseWindow] = mrs.createBurnRateRecordingRule(rules["errorBudgetValue"][baseWindow], rules["errorBudgetTarget"][baseWindow], baseWindow)
+	if baseWindow == "5m" || baseWindow == "30m" || baseWindow == "1h" || baseWindow == "6h" ||
+		baseWindow == "24h" || baseWindow == "3d" || baseWindow == "2h" {
+		alertRuleErrorBudgets = append(alertRuleErrorBudgets, rules["burnRate"][baseWindow])
+	}
 
-	for _, window := range windows {
+	for _, window := range uniqueWindows {
 		if window == baseWindow {
+			log.V(1).Info("Skipping base window in loop", "window", window)
 			continue
 		}
-		// rules["targetRule"][window] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", window, true)
+
+		log.V(1).Info("Processing window", "window", window)
+
 		rules["totalRule"][window] = mrs.createRecordingRule(rules["totalRule"][baseWindow].Record, "sli_total", window, true)
 
 		if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
@@ -303,14 +324,34 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		rules["errorBudgetValue"][window] = mrs.createErrorBudgetValueRecordingRule(rules["sliMeasurement"][window], window)
 		rules["errorBudgetTarget"][window] = mrs.createErrorBudgetTargetRecordingRule(window)
 		rules["burnRate"][window] = mrs.createBurnRateRecordingRule(rules["errorBudgetValue"][window], rules["errorBudgetTarget"][window], window)
+
 		if window == "5m" || window == "30m" || window == "1h" || window == "6h" || window == "24h" || window == "3d" || window == "2h" {
+			log.V(1).Info("Adding burn rate rule", "window", window)
 			alertRuleErrorBudgets = append(alertRuleErrorBudgets, rules["burnRate"][window])
 		}
 	}
 
+	log.V(1).Info("Final burn rates collection",
+		"count", len(alertRuleErrorBudgets),
+		"windows", func() []string {
+			windows := make([]string, 0)
+			for _, r := range alertRuleErrorBudgets {
+				windows = append(windows, r.Labels["window"])
+			}
+			return windows
+		}())
+
 	rulesByType := make(map[string][]monitoringv1.Rule)
+
+	if rule, exists := rules["targetRule"][baseWindow]; exists {
+		rulesByType["targetRule"] = []monitoringv1.Rule{rule}
+	}
+
 	for ruleKey, nestedMap := range rules {
-		for _, window := range windows {
+		if ruleKey == "targetRule" {
+			continue
+		}
+		for _, window := range uniqueWindows {
 			if rule, exists := nestedMap[window]; exists {
 				rulesByType[ruleKey] = append(rulesByType[ruleKey], rule)
 			}
@@ -451,7 +492,7 @@ func CreateAlertingRule() (*monitoringv1.PrometheusRule, error) {
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
-	baseWindow := config.Cfg.DefaultBaseWindow.String()
+	baseWindow := model.Duration(config.Cfg.DefaultBaseWindow).String()
 	if slo.ObjectMeta.Annotations["osko.dev/baseWindow"] != "" {
 		baseWindow = slo.ObjectMeta.Annotations["osko.dev/baseWindow"]
 	}

@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 	"text/template"
@@ -108,6 +107,19 @@ func mergeLabels(ms ...map[string]string) map[string]string {
 	}
 
 	return labels
+}
+
+func uniqueStrings(input []string) []string {
+	seen := make(map[string]bool)
+	result := []string{}
+
+	for _, v := range input {
+		if !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 func (mrs *MonitoringRuleSet) createBaseRuleLabels(window string) map[string]string {
@@ -262,7 +274,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	}
 
 	windows := []string{baseWindow, extendedWindow, "5m", "30m", "1h", "2h", "6h", "24h", "3d"}
-	windows = slices.Compact(windows)
+	windows = uniqueStrings(windows)
 
 	var alertRuleErrorBudgets []monitoringv1.Rule
 

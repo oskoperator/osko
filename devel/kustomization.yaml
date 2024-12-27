@@ -1,0 +1,10 @@
+resources:
+  - grafana/deployment.yaml
+  - grafana/service.yaml
+  - grafana/mimir-datasource.yaml
+  - mimir/deployment.yaml
+  - mimir/service.yaml
+  - mimir/configmap.yaml
+  - mimir/alertmanager-default-config.yaml
+  - grafana-agent/deployment.yaml
+  - grafana-agent/configmap.yaml

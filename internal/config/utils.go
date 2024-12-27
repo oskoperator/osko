@@ -43,3 +43,32 @@ func GetEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
 	}
 	return defaultValue
 }
+
+func AlertSeveritiesByTool(tool string) AlertToolSeverityMap {
+	severityMaps := map[string]AlertToolSeverityMap{
+		"opsgenie": {
+			PageCritical: "P1",
+			PageHigh:     "P2",
+			TicketHigh:   "P3",
+			TicketMedium: "P4",
+		},
+		"pagerduty": {
+			PageCritical: "SEV_1",
+			PageHigh:     "SEV_2",
+			TicketHigh:   "SEV_3",
+			TicketMedium: "SEV_4",
+		},
+		"custom": {
+			PageCritical: GetEnv("OSKO_ALERTING_SEVERITY_CRITICAL", "critical"),
+			PageHigh:     GetEnv("OSKO_ALERTING_SEVERITY_HIGH", "high"),
+			TicketHigh:   GetEnv("OSKO_ALERTING_SEVERITY_HIGH", "medium"),
+			TicketMedium: GetEnv("OSKO_ALERTING_SEVERITY_LOW", "low"),
+		},
+	}
+
+	if toolMap, exists := severityMaps[tool]; exists {
+		return toolMap
+	}
+
+	return severityMaps["custom"]
+}

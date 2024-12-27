@@ -16,11 +16,11 @@ spec:
         - name: grafana-agent
           image: grafana/agent:latest
           args:
-            - 'run'
-            - '/etc/agent/agent.river'
-            - '--storage.path=/tmp/agent'
-            - '--server.http.listen-addr=127.0.0.1:80'
-            - '--server.http.ui-path-prefix=/'
+            - "run"
+            - "/etc/agent/agent.river"
+            - "--storage.path=/tmp/agent"
+            - "--server.http.listen-addr=127.0.0.1:12345"
+            - "--server.http.ui-path-prefix=/"
           volumeMounts:
             - name: config-volume
               mountPath: /etc/agent
@@ -31,6 +31,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+          ports:
+            - containerPort: 12345
+              name: http-agent
 
       volumes:
         - name: config-volume

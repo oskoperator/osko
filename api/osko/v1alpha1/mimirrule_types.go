@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/prometheus/common/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -33,13 +34,13 @@ type RuleGroup struct {
 }
 
 type Rule struct {
-	Record        string            `json:"record,omitempty"`
-	Alert         string            `json:"alert,omitempty"`
-	Expr          string            `json:"expr"`
-	For           model.Duration    `json:"for,omitempty"`
-	KeepFiringFor model.Duration    `json:"keep_firing_for,omitempty"`
-	Labels        map[string]string `json:"labels,omitempty"`
-	Annotations   map[string]string `json:"annotations,omitempty"`
+	Record        string                 `json:"record,omitempty"`
+	Alert         string                 `json:"alert,omitempty"`
+	Expr          string                 `json:"expr"`
+	For           *monitoringv1.Duration `json:"for,omitempty"`
+	KeepFiringFor model.Duration         `json:"keep_firing_for,omitempty"`
+	Labels        map[string]string      `json:"labels,omitempty"`
+	Annotations   map[string]string      `json:"annotations,omitempty"`
 }
 
 //+kubebuilder:object:root=true

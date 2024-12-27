@@ -168,7 +168,7 @@ $(ENVTEST): $(LOCALBIN)
 
 .PHONY: deploydev
 deploydev:
-	@$(KUBECTL) apply -R -f devel/
+	@$(KUBECTL) apply -k devel/
 	@echo "Waiting for services to come online for the port-forwards..."
 	@until [ "$$($(KUBECTL) get pods -l app=grafana -o jsonpath='{.items}')}" != "[]" ] && \
 			[ "$$($(KUBECTL) get pods -l app=grafana -o jsonpath='{.items[0].status.containerStatuses[0].ready}')" == "true" ]; do \

@@ -1,4 +1,7 @@
 ## Append samples of your project ##
 resources:
-- osko_v1alpha1_alertmanagerconfig.yaml
+  - openslo_v1_datasource.yaml
+  - openslo_v1_slo.yaml
+  - config_secret.yaml
+  - osko_v1alpha1_alertmanagerconfig.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

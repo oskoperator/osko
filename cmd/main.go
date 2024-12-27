@@ -57,7 +57,7 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 
 	flag.Parse()
-	cfg := config.NewConfig()
+	config.NewConfig()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -141,7 +141,7 @@ func main() {
 		Client:             mgr.GetClient(),
 		Scheme:             mgr.GetScheme(),
 		Recorder:           mgr.GetEventRecorderFor("mimirrule-controller"),
-		RequeueAfterPeriod: cfg.MimirRuleRequeuePeriod,
+		RequeueAfterPeriod: config.Cfg.MimirRuleRequeuePeriod,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MimirRule")
 		os.Exit(1)

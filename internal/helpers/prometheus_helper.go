@@ -12,6 +12,7 @@ import (
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/config"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/prometheus/common/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -106,6 +107,19 @@ func mergeLabels(ms ...map[string]string) map[string]string {
 	}
 
 	return labels
+}
+
+func uniqueStrings(input []string) []string {
+	seen := make(map[string]bool)
+	result := []string{}
+
+	for _, v := range input {
+		if !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 func (mrs *MonitoringRuleSet) createBaseRuleLabels(window string) map[string]string {
@@ -234,10 +248,11 @@ func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window str
 
 // SetupRules constructs rule groups for monitoring based on SLO and SLI configurations.
 func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
-	//log := ctrllog.FromContext(context.Background())
+	log := ctrllog.FromContext(context.Background())
 
 	baseWindow := mrs.BaseWindow //Should configurable somewhere as agreed on product workshop
-	extendedWindow := "28d"      //Default to 28d if not specified in the SLO
+	log.V(1).Info("Starting SetupRules", "baseWindow", baseWindow)
+	extendedWindow := "28d" //Default to 28d if not specified in the SLO
 
 	if len(mrs.Slo.Spec.TimeWindow) > 0 && mrs.Slo.Spec.TimeWindow[0].Duration != "" {
 		extendedWindow = string(mrs.Slo.Spec.TimeWindow[0].Duration)
@@ -259,6 +274,8 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	}
 
 	windows := []string{baseWindow, extendedWindow, "5m", "30m", "1h", "2h", "6h", "24h", "3d"}
+	windows = uniqueStrings(windows)
+
 	var alertRuleErrorBudgets []monitoringv1.Rule
 
 	// BASE WINDOW
@@ -280,12 +297,19 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	rules["errorBudgetValue"][baseWindow] = mrs.createErrorBudgetValueRecordingRule(rules["sliMeasurement"][baseWindow], baseWindow)
 	rules["errorBudgetTarget"][baseWindow] = mrs.createErrorBudgetTargetRecordingRule(baseWindow)
 	rules["burnRate"][baseWindow] = mrs.createBurnRateRecordingRule(rules["errorBudgetValue"][baseWindow], rules["errorBudgetTarget"][baseWindow], baseWindow)
+	if baseWindow == "5m" || baseWindow == "30m" || baseWindow == "1h" || baseWindow == "6h" ||
+		baseWindow == "24h" || baseWindow == "3d" || baseWindow == "2h" {
+		alertRuleErrorBudgets = append(alertRuleErrorBudgets, rules["burnRate"][baseWindow])
+	}
 
 	for _, window := range windows {
 		if window == baseWindow {
+			log.V(1).Info("Skipping base window in loop", "window", window)
 			continue
 		}
-		// rules["targetRule"][window] = mrs.createRecordingRule(mrs.Slo.Spec.Objectives[0].Target, "slo_target", window, true)
+
+		log.V(1).Info("Processing window", "window", window)
+
 		rules["totalRule"][window] = mrs.createRecordingRule(rules["totalRule"][baseWindow].Record, "sli_total", window, true)
 
 		if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
@@ -303,13 +327,33 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		rules["errorBudgetValue"][window] = mrs.createErrorBudgetValueRecordingRule(rules["sliMeasurement"][window], window)
 		rules["errorBudgetTarget"][window] = mrs.createErrorBudgetTargetRecordingRule(window)
 		rules["burnRate"][window] = mrs.createBurnRateRecordingRule(rules["errorBudgetValue"][window], rules["errorBudgetTarget"][window], window)
+
 		if window == "5m" || window == "30m" || window == "1h" || window == "6h" || window == "24h" || window == "3d" || window == "2h" {
+			log.V(1).Info("Adding burn rate rule", "window", window)
 			alertRuleErrorBudgets = append(alertRuleErrorBudgets, rules["burnRate"][window])
 		}
 	}
 
+	log.V(1).Info("Final burn rates collection",
+		"count", len(alertRuleErrorBudgets),
+		"windows", func() []string {
+			windows := make([]string, 0)
+			for _, r := range alertRuleErrorBudgets {
+				windows = append(windows, r.Labels["window"])
+			}
+			return windows
+		}())
+
 	rulesByType := make(map[string][]monitoringv1.Rule)
+
+	if rule, exists := rules["targetRule"][baseWindow]; exists {
+		rulesByType["targetRule"] = []monitoringv1.Rule{rule}
+	}
+
 	for ruleKey, nestedMap := range rules {
+		if ruleKey == "targetRule" {
+			continue
+		}
 		for _, window := range windows {
 			if rule, exists := nestedMap[window]; exists {
 				rulesByType[ruleKey] = append(rulesByType[ruleKey], rule)
@@ -327,22 +371,52 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		{Name: fmt.Sprintf("%s_burn_rate", sloName), Rules: rulesByType["burnRate"]},
 	}
 
+	// TODO: having the magic alerting we still need to figure out how to pass the severity into the alerting rule when we have more than one alerting tool.
+	// The idea is to have a map of the alerting tool and the severity and then iterate over all connected AlertNotificationTargets.
+	log.V(1).Info("Magic alerting", "SLO", sloName, "enabled", mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"])
 	if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
 		duration := monitoringv1.Duration("5m")
 		var alertRules []monitoringv1.Rule
-		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, "page"))
-		alertRules = append(alertRules, mrs.createMagicMultiBurnRateAlert(alertRuleErrorBudgets, "0.001", &duration, "ticket"))
+
+		alertRules = append(alertRules,
+			mrs.createMagicMultiBurnRateAlert(
+				alertRuleErrorBudgets,
+				fmt.Sprintf("1-%s", mrs.Slo.Spec.Objectives[0].Target),
+				&duration,
+				config.PageCritical, // Fast burn rate, short window
+			),
+			mrs.createMagicMultiBurnRateAlert(
+				alertRuleErrorBudgets,
+				fmt.Sprintf("1-%s", mrs.Slo.Spec.Objectives[0].Target),
+				&duration,
+				config.PageHigh, // Fast burn rate, long window
+			),
+			mrs.createMagicMultiBurnRateAlert(
+				alertRuleErrorBudgets,
+				fmt.Sprintf("1-%s", mrs.Slo.Spec.Objectives[0].Target),
+				&duration,
+				config.TicketHigh, // Slow burn rate, short window
+			),
+			mrs.createMagicMultiBurnRateAlert(
+				alertRuleErrorBudgets,
+				fmt.Sprintf("1-%s", mrs.Slo.Spec.Objectives[0].Target),
+				&duration,
+				config.TicketMedium, // Slow burn rate, long window
+			),
+		)
+
+		// log.V(1).Info("Alerting rules to be created", "alertRules", alertRules)
 		ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{
-			Name: fmt.Sprintf("%s_slo_alert", sloName), Rules: alertRules,
+			Name:  fmt.Sprintf("%s_slo_alert", sloName),
+			Rules: alertRules,
 		})
 	}
 	return ruleGroups, nil
 }
 
 // createMagicMultiBurnRateAlert creates a Prometheus alert rule for multi-burn rate alerting.
-func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitoringv1.Rule, threshold string, duration *monitoringv1.Duration, severity string) monitoringv1.Rule {
+func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitoringv1.Rule, threshold string, duration *monitoringv1.Duration, sreSeverity config.SREAlertSeverity) monitoringv1.Rule {
 	log := ctrllog.FromContext(context.Background())
-	cfg := config.NewConfig()
 
 	alertingPageWindowsOrder := []string{"1h", "5m", "6h", "30m", "24h", "2h", "3d"}
 
@@ -363,25 +437,39 @@ func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitori
 		}
 	}
 
+	//TODO: Create severity mapping between alerting tool and SRE book severity
+
 	// Define the alert expressions for different severities and durations
 	var alertExpression string
-	if severity == "page" {
+	switch sreSeverity {
+	case config.PageCritical, config.PageHigh:
 		alertExpression = fmt.Sprintf(
 			"(%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s)) or (%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s))",
-			alertingPageWindows[alertingPageWindowsOrder[2]].Record, mapToColonSeparatedString(burnRates[2].Labels), cfg.AlertingBurnRates.PageShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[0]].Record, mapToColonSeparatedString(burnRates[0].Labels), cfg.AlertingBurnRates.PageShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), cfg.AlertingBurnRates.PageLongWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[1]].Record, mapToColonSeparatedString(burnRates[1].Labels), cfg.AlertingBurnRates.PageLongWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[2]].Record, mapToColonSeparatedString(burnRates[2].Labels), config.Cfg.AlertingBurnRates.PageShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[0]].Record, mapToColonSeparatedString(burnRates[0].Labels), config.Cfg.AlertingBurnRates.PageShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), config.Cfg.AlertingBurnRates.PageLongWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[1]].Record, mapToColonSeparatedString(burnRates[1].Labels), config.Cfg.AlertingBurnRates.PageLongWindow, threshold,
 		)
-	} else if severity == "ticket" {
+	case config.TicketHigh, config.TicketMedium:
 		alertExpression = fmt.Sprintf(
 			"(%s{%s} > (%.1f * %s) and %s{%s} > (%.1f * %s)) or (%s{%s} > %.3f and %s{%s} > %.3f)",
-			alertingPageWindows[alertingPageWindowsOrder[4]].Record, mapToColonSeparatedString(burnRates[4].Labels), cfg.AlertingBurnRates.TicketShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[5]].Record, mapToColonSeparatedString(burnRates[5].Labels), cfg.AlertingBurnRates.TicketShortWindow, threshold,
-			alertingPageWindows[alertingPageWindowsOrder[6]].Record, mapToColonSeparatedString(burnRates[6].Labels), cfg.AlertingBurnRates.TicketLongWindow,
-			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), cfg.AlertingBurnRates.TicketLongWindow,
+			alertingPageWindows[alertingPageWindowsOrder[4]].Record, mapToColonSeparatedString(burnRates[4].Labels), config.Cfg.AlertingBurnRates.TicketShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[5]].Record, mapToColonSeparatedString(burnRates[5].Labels), config.Cfg.AlertingBurnRates.TicketShortWindow, threshold,
+			alertingPageWindows[alertingPageWindowsOrder[6]].Record, mapToColonSeparatedString(burnRates[6].Labels), config.Cfg.AlertingBurnRates.TicketLongWindow,
+			alertingPageWindows[alertingPageWindowsOrder[3]].Record, mapToColonSeparatedString(burnRates[3].Labels), config.Cfg.AlertingBurnRates.TicketLongWindow,
 		)
 	}
+
+	alertingTool := mrs.Slo.ObjectMeta.Annotations["osko.dev/alertingTool"]
+	if alertingTool == "" {
+		alertingTool = config.Cfg.AlertingTool
+	}
+
+	severities := config.AlertSeveritiesByTool(alertingTool)
+
+	toolSeverity := severities.GetSeverity(sreSeverity)
+
+	log.V(1).Info("Alerting rule", "sreSeverity", sreSeverity, "toolSeverity", toolSeverity)
 
 	if alertExpression == "" {
 		log.Info("Creation of alerting rule failed", "EmptyExpression", "Failed to create the alert expression, expression is empty")
@@ -389,11 +477,11 @@ func (mrs *MonitoringRuleSet) createMagicMultiBurnRateAlert(burnRates []monitori
 	}
 
 	return monitoringv1.Rule{
-		Alert: fmt.Sprintf("%s_alert_%s", burnRates[0].Record, severity),
+		Alert: fmt.Sprintf("%s_alert_%s", burnRates[0].Record, sreSeverity),
 		Expr:  intstr.FromString(alertExpression),
 		For:   duration,
 		Labels: map[string]string{
-			"severity": severity,
+			"severity": toolSeverity,
 		},
 		Annotations: map[string]string{
 			"summary":     "SLO Burn Rate Alert",
@@ -407,8 +495,7 @@ func CreateAlertingRule() (*monitoringv1.PrometheusRule, error) {
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
-	cfg := config.NewConfig()
-	baseWindow := cfg.DefaultBaseWindow.String()
+	baseWindow := model.Duration(config.Cfg.DefaultBaseWindow).String()
 	if slo.ObjectMeta.Annotations["osko.dev/baseWindow"] != "" {
 		baseWindow = slo.ObjectMeta.Annotations["osko.dev/baseWindow"]
 	}

@@ -38,8 +38,8 @@ type MimirRuleReconciler struct {
 
 const (
 	mimirRuleNamespace      = "osko"
-	mimirRuleFinalizer      = "finalizer.mimir.osko.dev"
-	prometheusRuleFinalizer = "finalizer.prometheusrule.osko.dev"
+	mimirRuleFinalizer      = "finalizer.osko.dev/mimir"
+	prometheusRuleFinalizer = "finalizer.osko.dev/prometheusrule"
 
 	errFinalizerAddFailed    = "Failed to add the finalizer to the"
 	errFinalizerRemoveFailed = "Failed to remove the finalizer from the"

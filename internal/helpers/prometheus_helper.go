@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"text/template"
@@ -260,18 +261,8 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		"burnRate":          {},
 	}
 
-	windowSet := make(map[string]bool)
 	windows := []string{baseWindow, extendedWindow, "5m", "30m", "1h", "2h", "6h", "24h", "3d"}
-
-	var uniqueWindows []string
-	for _, w := range windows {
-		if !windowSet[w] {
-			windowSet[w] = true
-			uniqueWindows = append(uniqueWindows, w)
-		}
-	}
-
-	log.V(1).Info("Windows after deduplication", "uniqueWindows", uniqueWindows)
+	windows = slices.Compact(windows)
 
 	var alertRuleErrorBudgets []monitoringv1.Rule
 
@@ -299,7 +290,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		alertRuleErrorBudgets = append(alertRuleErrorBudgets, rules["burnRate"][baseWindow])
 	}
 
-	for _, window := range uniqueWindows {
+	for _, window := range windows {
 		if window == baseWindow {
 			log.V(1).Info("Skipping base window in loop", "window", window)
 			continue
@@ -351,7 +342,7 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 		if ruleKey == "targetRule" {
 			continue
 		}
-		for _, window := range uniqueWindows {
+		for _, window := range windows {
 			if rule, exists := nestedMap[window]; exists {
 				rulesByType[ruleKey] = append(rulesByType[ruleKey], rule)
 			}

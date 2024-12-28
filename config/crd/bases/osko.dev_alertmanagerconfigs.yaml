@@ -49,21 +49,15 @@ spec:
           spec:
             description: AlertManagerConfigSpec defines the desired state of AlertManagerConfig
             properties:
-              configSecretRef:
-                description: |-
-                  SecretReference represents a Secret Reference. It has enough information to retrieve secret
-                  in any namespace
+              secretRef:
                 properties:
                   name:
-                    description: name is unique within a namespace to reference a
-                      secret resource.
                     type: string
                   namespace:
-                    description: namespace defines the space within which the secret
-                      name must be unique.
                     type: string
+                required:
+                - name
                 type: object
-                x-kubernetes-map-type: atomic
             type: object
           status:
             description: AlertManagerConfigStatus defines the observed state of AlertManagerConfig

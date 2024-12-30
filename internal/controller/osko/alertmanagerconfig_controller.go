@@ -90,7 +90,6 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 				return ctrl.Result{}, err
 			}
 		}
-		log.V(1).Info("AlertmanagerConfig marked for deletion")
 		return ctrl.Result{}, nil
 	}
 

@@ -3,11 +3,13 @@ package osko
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/oskoperator/osko/internal/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"time"
 
 	mimirclient "github.com/grafana/mimir/pkg/mimirtool/client"
 	"github.com/oskoperator/osko/internal/helpers"
@@ -33,7 +35,8 @@ type AlertManagerConfigReconciler struct {
 }
 
 const (
-	errGetAMC = "Failed to get AlertmanagerConfig"
+	errGetAMC                   = "Failed to get AlertmanagerConfig"
+	alertmanagerConfigFinalizer = "alertmanagerconfig.osko.dev/finalizer"
 )
 
 // +kubebuilder:rbac:groups=osko.dev,resources=alertmanagerconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -64,6 +67,31 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 		}
 		log.Error(err, errGetAMC)
 		return ctrl.Result{}, err
+	}
+
+	if !controllerutil.ContainsFinalizer(amc, alertmanagerConfigFinalizer) {
+		controllerutil.AddFinalizer(amc, alertmanagerConfigFinalizer)
+		if err := r.Update(ctx, amc); err != nil {
+			log.Error(err, "Failed to update AlertmanagerConfig finalizer")
+			return ctrl.Result{}, err
+		}
+	}
+
+	isAlertmanagerConfigMarkedForDeletion := amc.GetDeletionTimestamp() != nil
+	if isAlertmanagerConfigMarkedForDeletion {
+		if controllerutil.ContainsFinalizer(amc, alertmanagerConfigFinalizer) {
+			if err := r.deleteAlertmanagerConfigAPI(); err != nil {
+				log.Error(err, "Failed to delete AlertmanagerConfig")
+				return ctrl.Result{}, err
+			}
+			controllerutil.RemoveFinalizer(amc, alertmanagerConfigFinalizer)
+			if err := r.Update(ctx, amc); err != nil {
+				log.Error(err, "Failed to update AlertmanagerConfig finalizer")
+				return ctrl.Result{}, err
+			}
+		}
+		log.V(1).Info("AlertmanagerConfig marked for deletion")
+		return ctrl.Result{}, nil
 	}
 
 	log.V(1).Info("Getting datasourceRef", "datasourceRef", amc.ObjectMeta.Annotations["osko.dev/datasourceRef"])
@@ -160,6 +188,13 @@ func (r *AlertManagerConfigReconciler) findObjectsForSecret() func(ctx context.C
 
 		return []reconcile.Request{{NamespacedName: secretNamespacedName}}
 	}
+}
+
+func (r *AlertManagerConfigReconciler) deleteAlertmanagerConfigAPI() error {
+	if err := r.MimirClient.DeleteAlermanagerConfig(context.Background()); err != nil {
+		return err
+	}
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

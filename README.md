@@ -27,7 +27,13 @@ make install
 helm install prometheus-operator-crds prometheus-community/prometheus-operator-crds
 ```
 
-4. Run your controller (this will run in the foreground, so switch to a new terminal if you want to leave it running):
+4. Install sample CRDs into the cluster, so `osko` has resources to work with:
+
+```sh
+kubectl apply -k config/samples/
+```
+
+5. Run your controller (this will run in the foreground, so switch to a new terminal if you want to leave it running):
 
 ```sh
 make run

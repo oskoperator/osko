@@ -79,7 +79,78 @@ sliObject --> |Reference| dataSourceObject
 %% hnusnej graf :D, kdyztak zkus odkomentovat
 %%  sloObject --> |Reference| dataSourceObject
 %%  prometheusRuleObject --> |Reference| dataSourceObject
+```
 
+## Resource Lifecycle
 
+```mermaid
+flowchart TD
+    subgraph "User-Created Resources"
+        DS[Datasource]
+        SLI[SLI]
+        SLO[SLO]
+    end
 
+    subgraph "Controller-Created Resources"
+        PR[PrometheusRule]
+        MR[MimirRule]
+        AMC[AlertManagerConfig]
+    end
+
+    subgraph "External Systems"
+        Mimir[(Mimir/Cortex)]
+        AlertManager[(AlertManager)]
+    end
+
+    %% User resource relationships
+    SLO -->|references| SLI
+    SLO -->|references via annotation| DS
+    SLI -->|references| DS
+
+    %% Controller relationships
+    SLOController[SLO Controller]
+    MimirRuleController[MimirRule Controller]
+    AMCController[AlertManagerConfig Controller]
+    PRController[PrometheusRule Controller]
+
+    %% Controller watches and creates
+    SLOController -->|watches| SLO
+    SLOController -->|creates/owns| PR
+    SLOController -->|creates/owns| MR
+
+    MimirRuleController -->|watches| MR
+    MimirRuleController -->|submits rules to| Mimir
+
+    AMCController -->|watches| AMC
+    AMCController -->|submits config to| AlertManager
+
+    PRController -->|watches| PR
+
+    %% Resource lifecycle with finalizers
+    SLO -->|deletes with finalizer| PR
+    SLO -->|deletes with finalizer| MR
+
+    MR -->|has finalizer| MimirRule_Finalizer[MimirRule Finalizer]
+    MimirRule_Finalizer -->|cleanup rules in| Mimir
+
+    AMC -->|has finalizer| AMC_Finalizer[AlertManagerConfig Finalizer]
+    AMC_Finalizer -->|cleanup config in| AlertManager
+
+    %% Status updates
+    SLOController -->|updates status| SLO
+    MimirRuleController -->|updates status| MR
+    AMCController -->|updates status| AMC
+
+    %% Legend
+    classDef userResource fill:#b7e1cd,stroke:#82b366
+    classDef controllerResource fill:#d0e0e3,stroke:#6c8ebf
+    classDef controller fill:#ffe6cc,stroke:#d79b00
+    classDef external fill:#f5f5f5,stroke:#666666
+    classDef finalizer fill:#fff2cc,stroke:#d6b656
+
+    class DS,SLI,SLO userResource
+    class PR,MR,AMC controllerResource
+    class SLOController,MimirRuleController,AMCController,PRController controller
+    class Mimir,AlertManager external
+    class MimirRule_Finalizer,AMC_Finalizer finalizer
 ```

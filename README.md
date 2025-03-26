@@ -24,6 +24,8 @@ make install
 3. We also depend on Prometheus Operator CRDs (`monitoring.coreos.com` API group). Let's install that to our local cluster now:
 
 ```sh
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
 helm install prometheus-operator-crds prometheus-community/prometheus-operator-crds
 ```
 

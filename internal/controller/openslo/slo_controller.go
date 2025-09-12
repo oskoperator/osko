@@ -3,6 +3,9 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"time"
+
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
 	"github.com/oskoperator/osko/internal/helpers"
@@ -16,10 +19,10 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"time"
 )
 
 const (
@@ -27,6 +30,7 @@ const (
 	errGetSLO          = "could not get SLO Object"
 	errDatasourceRef   = "Unable to get Datasource. Check if the referenced datasource exists."
 	mimirRuleFinalizer = "finalizer.mimir.osko.dev"
+	sloFinalizer       = "finalizer.slo.osko.dev"
 )
 
 // SLOReconciler reconciles a SLO object
@@ -41,6 +45,7 @@ type SLOReconciler struct {
 //+kubebuilder:rbac:groups=openslo.com,resources=slos/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=osko.dev,resources=alertmanagerconfigs,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
@@ -56,6 +61,33 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 		log.Error(err, errGetSLO)
 		return ctrl.Result{}, nil
+	}
+
+	// Handle deletion
+	if slo.DeletionTimestamp != nil {
+		if controllerutil.ContainsFinalizer(slo, sloFinalizer) {
+			log.Info("Cleaning up SLO resources before deletion")
+			if err := r.cleanupSLOResources(ctx, slo); err != nil {
+				log.Error(err, "Failed to cleanup SLO resources")
+				return ctrl.Result{}, err
+			}
+			controllerutil.RemoveFinalizer(slo, sloFinalizer)
+			if err := r.Update(ctx, slo); err != nil {
+				log.Error(err, "Failed to remove finalizer")
+				return ctrl.Result{}, err
+			}
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// Add finalizer if not present
+	if !controllerutil.ContainsFinalizer(slo, sloFinalizer) {
+		controllerutil.AddFinalizer(slo, sloFinalizer)
+		if err := r.Update(ctx, slo); err != nil {
+			log.Error(err, "Failed to add finalizer")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	// Get DS from SLO's ref
@@ -75,13 +107,13 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	// Get SLI from SLO's ref
+	// Handle SLI - either reference existing or create inline SLI
 	if slo.Spec.IndicatorRef != nil {
+		// Reference existing SLI (don't own it)
 		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, sli)
 		if err != nil {
-			apierrors.IsNotFound(err)
-			{
-				log.Error(err, errGetSLI)
+			if apierrors.IsNotFound(err) {
+				log.Error(err, "could not get SLI Object")
 				err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
 				if err != nil {
 					log.Error(err, "Failed to update SLO status")
@@ -89,13 +121,20 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				}
 				return ctrl.Result{}, err
 			}
+			return ctrl.Result{}, err
 		}
 	} else if slo.Spec.Indicator != nil {
-		log.V(1).Info("SLO has an inline SLI")
-		sli.Name = slo.Spec.Indicator.Metadata.Name
-		sli.Spec.Description = slo.Spec.Indicator.Spec.Description
-		if slo.Spec.Indicator.Spec.RatioMetric != (openslov1.RatioMetricSpec{}) {
-			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
+		// Create inline SLI and own it
+		log.V(1).Info("SLO has an inline SLI, creating owned SLI resource")
+		sli, err = r.createOrUpdateInlineSLI(ctx, slo)
+		if err != nil {
+			log.Error(err, "Failed to create inline SLI")
+			err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create inline SLI")
+			if err != nil {
+				log.Error(err, "Failed to update SLO status")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, err
 		}
 	} else {
 		err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
@@ -140,6 +179,17 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		} else {
 			log.V(1).Info("PrometheusRule created successfully")
 			r.Recorder.Event(slo, "Normal", "PrometheusRuleCreated", "PrometheusRule created successfully")
+
+			// Set owner reference for PrometheusRule
+			if err := controllerutil.SetOwnerReference(slo, prometheusRule, r.Scheme); err != nil {
+				log.Error(err, "Failed to set owner reference for PrometheusRule")
+				return ctrl.Result{}, err
+			}
+			if err := r.Update(ctx, prometheusRule); err != nil {
+				log.Error(err, "Failed to update PrometheusRule with owner reference")
+				return ctrl.Result{}, err
+			}
+
 			slo.Status.Ready = "True"
 			if err := r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO ready status")
@@ -183,6 +233,16 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			log.V(1).Info("MimirRule created successfully")
 			r.Recorder.Event(slo, "Normal", "MimirRuleCreated", "MimirRule created successfully")
 			r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
+
+			// Set owner reference for MimirRule
+			if err := controllerutil.SetOwnerReference(slo, mimirRule, r.Scheme); err != nil {
+				log.Error(err, "Failed to set owner reference for MimirRule")
+				return ctrl.Result{}, err
+			}
+			if err := r.Update(ctx, mimirRule); err != nil {
+				log.Error(err, "Failed to update MimirRule with owner reference")
+				return ctrl.Result{}, err
+			}
 			slo.Status.Ready = "True"
 			mimirRule.Status.Ready = "True"
 			if err := r.Status().Update(ctx, slo); err != nil {
@@ -198,6 +258,52 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	log.V(1).Info("MimirRule found", "Name", mimirRule.Name, "Namespace", mimirRule.Namespace)
+
+	// Create AlertManagerConfig if magic alerting is enabled
+	if slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
+		alertManagerConfig := &oskov1alpha1.AlertManagerConfig{}
+		err = r.Get(ctx, types.NamespacedName{
+			Name:      fmt.Sprintf("%s-alerting", slo.Name),
+			Namespace: slo.Namespace,
+		}, alertManagerConfig)
+
+		if apierrors.IsNotFound(err) {
+			log.V(1).Info("AlertManagerConfig not found. Creating one for magic alerting.")
+			alertManagerConfig, err = r.createAlertManagerConfig(ctx, slo, ds)
+			if err != nil {
+				log.Error(err, "Failed to create AlertManagerConfig")
+				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create AlertManagerConfig"); err != nil {
+					log.Error(err, "Failed to update SLO status")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{}, err
+			}
+
+			if err := r.Create(ctx, alertManagerConfig); err != nil {
+				log.Error(err, "Failed to create AlertManagerConfig")
+				r.Recorder.Event(slo, "Warning", "FailedToCreateAlertManagerConfig", "Failed to create AlertManagerConfig")
+				return ctrl.Result{}, err
+			}
+
+			// Set owner reference for AlertManagerConfig
+			if err := controllerutil.SetOwnerReference(slo, alertManagerConfig, r.Scheme); err != nil {
+				log.Error(err, "Failed to set owner reference for AlertManagerConfig")
+				return ctrl.Result{}, err
+			}
+			if err := r.Update(ctx, alertManagerConfig); err != nil {
+				log.Error(err, "Failed to update AlertManagerConfig with owner reference")
+				return ctrl.Result{}, err
+			}
+
+			log.V(1).Info("AlertManagerConfig created successfully")
+			r.Recorder.Event(slo, "Normal", "AlertManagerConfigCreated", "AlertManagerConfig created successfully")
+		} else if err != nil {
+			log.Error(err, "Failed to get AlertManagerConfig")
+			return ctrl.Result{}, err
+		} else {
+			log.V(1).Info("AlertManagerConfig found", "Name", alertManagerConfig.Name, "Namespace", alertManagerConfig.Namespace)
+		}
+	}
 
 	if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionTrue, "PrometheusRule created"); err != nil {
 		log.V(1).Error(err, "Failed to update SLO status")
@@ -257,9 +363,117 @@ func (r *SLOReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&openslov1.SLO{}).
 		Owns(&monitoringv1.PrometheusRule{}).
 		Owns(&oskov1alpha1.MimirRule{}).
+		Owns(&openslov1.SLI{}).                   // Own inline SLIs
+		Owns(&oskov1alpha1.AlertManagerConfig{}). // Own AlertManagerConfigs
 		Watches(
 			&openslov1.SLI{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSli()),
 		).
 		Complete(r)
+}
+
+// createOrUpdateInlineSLI creates or updates an inline SLI resource owned by the SLO
+func (r *SLOReconciler) createOrUpdateInlineSLI(ctx context.Context, slo *openslov1.SLO) (*openslov1.SLI, error) {
+	log := ctrllog.FromContext(ctx)
+
+	// Generate SLI name based on SLO
+	sliName := fmt.Sprintf("%s-sli", slo.Name)
+	if slo.Spec.Indicator.Metadata.Name != "" {
+		sliName = slo.Spec.Indicator.Metadata.Name
+	}
+
+	sli := &openslov1.SLI{}
+	err := r.Get(ctx, types.NamespacedName{Name: sliName, Namespace: slo.Namespace}, sli)
+
+	if apierrors.IsNotFound(err) {
+		// Create new SLI
+		sli = &openslov1.SLI{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      sliName,
+				Namespace: slo.Namespace,
+			},
+			Spec: openslov1.SLISpec{
+				Description:     slo.Spec.Indicator.Spec.Description,
+				RatioMetric:     slo.Spec.Indicator.Spec.RatioMetric,
+				ThresholdMetric: slo.Spec.Indicator.Spec.ThresholdMetric,
+			},
+		}
+
+		// Set owner reference
+		if err := controllerutil.SetOwnerReference(slo, sli, r.Scheme); err != nil {
+			return nil, fmt.Errorf("failed to set owner reference: %w", err)
+		}
+
+		if err := r.Create(ctx, sli); err != nil {
+			return nil, fmt.Errorf("failed to create SLI: %w", err)
+		}
+
+		log.Info("Created inline SLI", "sli", sliName)
+		r.Recorder.Event(slo, "Normal", "SLICreated", fmt.Sprintf("Created inline SLI: %s", sliName))
+
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get SLI: %w", err)
+	} else {
+		// Update existing SLI if needed
+		updated := false
+		if sli.Spec.Description != slo.Spec.Indicator.Spec.Description {
+			sli.Spec.Description = slo.Spec.Indicator.Spec.Description
+			updated = true
+		}
+		if !reflect.DeepEqual(sli.Spec.RatioMetric, slo.Spec.Indicator.Spec.RatioMetric) {
+			sli.Spec.RatioMetric = slo.Spec.Indicator.Spec.RatioMetric
+			updated = true
+		}
+		if !reflect.DeepEqual(sli.Spec.ThresholdMetric, slo.Spec.Indicator.Spec.ThresholdMetric) {
+			sli.Spec.ThresholdMetric = slo.Spec.Indicator.Spec.ThresholdMetric
+			updated = true
+		}
+
+		if updated {
+			if err := r.Update(ctx, sli); err != nil {
+				return nil, fmt.Errorf("failed to update SLI: %w", err)
+			}
+			log.Info("Updated inline SLI", "sli", sliName)
+		}
+	}
+
+	return sli, nil
+}
+
+// cleanupSLOResources performs cleanup before SLO deletion
+func (r *SLOReconciler) cleanupSLOResources(ctx context.Context, slo *openslov1.SLO) error {
+	log := ctrllog.FromContext(ctx)
+
+	// Cleanup any external resources here (e.g., Mimir rules, AlertManager configs)
+	// The owned resources (PrometheusRule, MimirRule, inline SLI, AlertManagerConfig) will be cleaned up automatically
+	// via garbage collection due to owner references
+
+	log.Info("SLO cleanup completed", "slo", slo.Name)
+	return nil
+}
+
+// createAlertManagerConfig creates an AlertManagerConfig for SLO with magic alerting
+func (r *SLOReconciler) createAlertManagerConfig(ctx context.Context, slo *openslov1.SLO, ds *openslov1.Datasource) (*oskov1alpha1.AlertManagerConfig, error) {
+	alertManagerConfig := &oskov1alpha1.AlertManagerConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-alerting", slo.Name),
+			Namespace: slo.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":       "osko",
+				"app.kubernetes.io/managed-by": "osko-controller",
+				"osko.dev/slo":                 slo.Name,
+			},
+			Annotations: map[string]string{
+				"osko.dev/datasourceRef": slo.ObjectMeta.Annotations["osko.dev/datasourceRef"],
+			},
+		},
+		Spec: oskov1alpha1.AlertManagerConfigSpec{
+			SecretRef: oskov1alpha1.SecretRef{
+				Name:      fmt.Sprintf("%s-alerting-config", slo.Name),
+				Namespace: slo.Namespace,
+			},
+		},
+	}
+
+	return alertManagerConfig, nil
 }

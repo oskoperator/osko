@@ -1,0 +1,7 @@
+# Add patterns to ignore here, one per line
+# Example:
+# *.log
+# tmp/
+config/crd/**/*
+assets/
+repomix-output.xml

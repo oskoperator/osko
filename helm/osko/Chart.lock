@@ -1,0 +1,9 @@
+dependencies:
+- name: prometheus-operator-crds
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 8.0.1
+- name: crds
+  repository: ""
+  version: 0.0.0
+digest: sha256:ddfbe3e2e22cd500f81fe9910d0a2af266d98feeaaaed7ae1c050d5f00261220
+generated: "2024-02-16T00:20:04.957964+01:00"

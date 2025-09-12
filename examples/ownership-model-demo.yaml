@@ -1,0 +1,192 @@
+---
+# Example demonstrating the OSKO ownership model improvements
+# This file shows different resource ownership patterns
+
+# 1. SHARED INFRASTRUCTURE - NOT OWNED BY SLO
+# Datasources are shared infrastructure that can be used by multiple SLOs
+---
+apiVersion: openslo.com/v1
+kind: Datasource
+metadata:
+  name: shared-mimir-datasource
+  namespace: monitoring
+spec:
+  description: "Shared Mimir datasource for all SLOs"
+  type: mimir
+  connectionDetails:
+    address: http://mimir-query-frontend:8080/
+    sourceTenants:
+      - monitoring
+      - applications
+    targetTenant: monitoring
+
+---
+# 2. SHARED SLI - NOT OWNED BY SLO
+# This SLI can be referenced by multiple SLOs
+apiVersion: openslo.com/v1
+kind: SLI
+metadata:
+  name: http-success-rate-sli
+  namespace: monitoring
+spec:
+  description: "Shared HTTP success rate SLI"
+  ratioMetric:
+    good:
+      metricSource:
+        metricSourceRef: shared-mimir-datasource
+        type: Mimir
+        spec:
+          query: 'sum(rate(http_requests_total{status!~"5.."}[5m]))'
+    total:
+      metricSource:
+        metricSourceRef: shared-mimir-datasource
+        type: Mimir
+        spec:
+          query: 'sum(rate(http_requests_total[5m]))'
+
+---
+# 3. SLO WITH REFERENCED SLI - DOES NOT OWN THE SLI
+# This SLO references the shared SLI above - it will NOT own it
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: api-availability-slo
+  namespace: monitoring
+  annotations:
+    osko.dev/datasourceRef: "shared-mimir-datasource"
+spec:
+  description: "API availability SLO using shared SLI"
+  service: api-service
+  budgetingMethod: Occurrences
+  indicatorRef: "http-success-rate-sli"  # References shared SLI
+  objectives:
+    - target: "0.995"
+  timeWindow:
+    - duration: 30d
+      isRolling: true
+
+# Expected ownership:
+# - SLO will OWN: PrometheusRule, MimirRule
+# - SLO will NOT OWN: the referenced SLI (http-success-rate-sli)
+# - SLO will NOT OWN: the Datasource (shared-mimir-datasource)
+
+---
+# 4. SLO WITH INLINE SLI - OWNS THE SLI
+# This SLO has an inline SLI definition - it will OWN the created SLI
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: database-latency-slo
+  namespace: monitoring
+  annotations:
+    osko.dev/datasourceRef: "shared-mimir-datasource"
+spec:
+  description: "Database latency SLO with inline SLI"
+  service: database-service
+  budgetingMethod: Occurrences
+  indicator:  # Inline SLI definition
+    metadata:
+      name: db-p99-latency-sli
+    spec:
+      description: "Database P99 latency under 100ms"
+      ratioMetric:
+        good:
+          metricSource:
+            metricSourceRef: shared-mimir-datasource
+            type: Mimir
+            spec:
+              query: 'sum(rate(db_query_duration_seconds_bucket{le="0.1"}[5m]))'
+        total:
+          metricSource:
+            metricSourceRef: shared-mimir-datasource
+            type: Mimir
+            spec:
+              query: 'sum(rate(db_query_duration_seconds_count[5m]))'
+  objectives:
+    - target: "0.99"
+  timeWindow:
+    - duration: 7d
+      isRolling: true
+
+# Expected ownership:
+# - SLO will OWN: PrometheusRule, MimirRule, SLI (db-p99-latency-sli)
+# - SLO will NOT OWN: the Datasource (shared-mimir-datasource)
+
+---
+# 5. SLO WITH MAGIC ALERTING - OWNS ALERTMANAGERCONFIG
+# This SLO has magic alerting enabled - it will OWN an AlertManagerConfig
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: payment-service-slo
+  namespace: monitoring
+  annotations:
+    osko.dev/datasourceRef: "shared-mimir-datasource"
+    osko.dev/magicAlerting: "true"  # Enables automatic alerting
+spec:
+  description: "Payment service SLO with automatic alerting"
+  service: payment-service
+  budgetingMethod: Occurrences
+  indicator:
+    metadata:
+      name: payment-success-sli
+    spec:
+      description: "Payment success rate SLI"
+      ratioMetric:
+        good:
+          metricSource:
+            metricSourceRef: shared-mimir-datasource
+            type: Mimir
+            spec:
+              query: 'sum(rate(payment_requests_total{status="success"}[5m]))'
+        total:
+          metricSource:
+            metricSourceRef: shared-mimir-datasource
+            type: Mimir
+            spec:
+              query: 'sum(rate(payment_requests_total[5m]))'
+  objectives:
+    - target: "0.999"
+  timeWindow:
+    - duration: 28d
+      isRolling: true
+
+# Expected ownership:
+# - SLO will OWN: PrometheusRule, MimirRule, SLI (payment-success-sli), AlertManagerConfig (payment-service-slo-alerting)
+# - SLO will NOT OWN: the Datasource (shared-mimir-datasource)
+
+---
+# CASCADING DELETION BEHAVIOR:
+#
+# When you delete an SLO:
+# ✅ AUTOMATICALLY DELETED (via OwnerReferences):
+#   - PrometheusRule (SLO-specific monitoring rules)
+#   - MimirRule (SLO-specific Mimir rules)
+#   - Inline SLI (if created from spec.indicator)
+#   - AlertManagerConfig (if magic alerting was enabled)
+#
+# ✅ PRESERVED (shared infrastructure):
+#   - Datasource (shared across SLOs)
+#   - Referenced SLI (may be used by other SLOs)
+#   - AlertPolicy/AlertCondition/AlertNotificationTarget (shared alerting components)
+#
+# 🔧 MANUAL CLEANUP (via Finalizers):
+#   - External Mimir rules are cleaned up from Mimir instance
+#   - External AlertManager configurations are cleaned up
+#   - Any other external system integrations
+
+---
+# TESTING THE OWNERSHIP MODEL:
+#
+# 1. Apply this entire file: kubectl apply -f ownership-model-demo.yaml
+#
+# 2. Verify resources are created and owned correctly:
+#    kubectl get slo,sli,prometheusrule,mimirrule,alertmanagerconfig -n monitoring
+#    kubectl describe slo payment-service-slo -n monitoring  # Check OwnerReferences
+#
+# 3. Test cascading deletion:
+#    kubectl delete slo payment-service-slo -n monitoring
+#    # Verify owned resources are deleted but shared ones remain:
+#    kubectl get sli,prometheusrule,mimirrule,alertmanagerconfig -n monitoring
+#    kubectl get datasource -n monitoring  # Should still exist
+#    kubectl get sli http-success-rate-sli -n monitoring  # Should still exist

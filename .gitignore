@@ -23,3 +23,9 @@ Dockerfile.cross
 *.swp
 *.swo
 *~
+
+# Dashboard vendor dependencies (generated from jsonnetfile.lock.json)
+dashboards/vendor/
+
+# Repomix
+repomix-output.xml

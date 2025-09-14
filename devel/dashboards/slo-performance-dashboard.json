@@ -1,0 +1,446 @@
+{
+   "__inputs": [ ],
+   "__requires": [ ],
+   "annotations": {
+      "list": [ ]
+   },
+   "editable": true,
+   "fiscalYearStartMonth": 0,
+   "gnetId": null,
+   "graphTooltip": 1,
+   "hideControls": false,
+   "id": null,
+   "links": [ ],
+   "panels": [
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "decimals": 2,
+               "max": 100,
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "red",
+                        "value": 0
+                     },
+                     {
+                        "color": "yellow",
+                        "value": 98.5
+                     },
+                     {
+                        "color": "green",
+                        "value": 99
+                     }
+                  ]
+               },
+               "unit": "percent"
+            }
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 0,
+            "y": 0
+         },
+         "id": 2,
+         "options": {
+            "colorMode": "background",
+            "textMode": "auto",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "expr": "osko_sli_measurement{slo_name=\"$slo_name\", service=\"$service\", window=\"$window\"} * 100",
+               "instant": true,
+               "legendFormat": "SLI Success Rate"
+            }
+         ],
+         "title": "SLI Status (Current)",
+         "type": "stat"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "decimals": 1,
+               "max": 100,
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "red",
+                        "value": 0
+                     },
+                     {
+                        "color": "yellow",
+                        "value": 25
+                     },
+                     {
+                        "color": "green",
+                        "value": 50
+                     }
+                  ]
+               },
+               "unit": "percent"
+            }
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 16,
+            "x": 8,
+            "y": 0
+         },
+         "id": 3,
+         "options": {
+            "displayMode": "basic",
+            "orientation": "horizontal",
+            "showUnfilled": true
+         },
+         "targets": [
+            {
+               "expr": "(1 - osko_error_budget_value{slo_name=\"$slo_name\", service=\"$service\", window=\"$window\"}) * 100",
+               "instant": true,
+               "legendFormat": "Error Budget Remaining (28d)"
+            }
+         ],
+         "title": "Error Budget Remaining",
+         "type": "bargauge"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "fillOpacity": 10,
+                  "lineWidth": 2
+               },
+               "max": 100,
+               "min": 98,
+               "unit": "percent"
+            },
+            "overrides": [
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "SLO Target"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "fixedColor": "red",
+                           "mode": "fixed"
+                        }
+                     },
+                     {
+                        "id": "custom.lineStyle",
+                        "value": {
+                           "dash": [
+                              10,
+                              10
+                           ]
+                        }
+                     }
+                  ]
+               }
+            ]
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 6
+         },
+         "id": 4,
+         "options": {
+            "legend": {
+               "displayMode": "table",
+               "placement": "bottom"
+            }
+         },
+         "targets": [
+            {
+               "expr": "osko_sli_measurement{slo_name=\"$slo_name\", service=\"$service\", window=\"$window\"} * 100",
+               "legendFormat": "SLI Success Rate"
+            },
+            {
+               "expr": "osko_slo_target{slo_name=\"$slo_name\", service=\"$service\"} * 100",
+               "legendFormat": "SLO Target (99%)"
+            }
+         ],
+         "title": "SLI Trend",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "fillOpacity": 20,
+                  "lineWidth": 2
+               },
+               "max": 100,
+               "min": 0,
+               "unit": "percent"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 6
+         },
+         "id": 5,
+         "options": {
+            "legend": {
+               "displayMode": "table",
+               "placement": "bottom"
+            }
+         },
+         "targets": [
+            {
+               "expr": "(1 - osko_error_budget_value{slo_name=\"$slo_name\", service=\"$service\", window=\"$window\"}) * 100",
+               "legendFormat": "Error Budget Remaining ($window)"
+            }
+         ],
+         "title": "Error Budget Burndown (28d)",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "drawStyle": "bars",
+                  "fillOpacity": 80
+               },
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 14
+         },
+         "id": 6,
+         "options": {
+            "legend": {
+               "displayMode": "table",
+               "placement": "bottom"
+            }
+         },
+         "targets": [
+            {
+               "expr": "histogram_quantile(0.50, sum(rate(cortex_distributor_query_duration_seconds_bucket{method=\"Distributor.QueryStream\"}[5m])) by (le))",
+               "legendFormat": "p50"
+            },
+            {
+               "expr": "histogram_quantile(0.95, sum(rate(cortex_distributor_query_duration_seconds_bucket{method=\"Distributor.QueryStream\"}[5m])) by (le))",
+               "legendFormat": "p95"
+            },
+            {
+               "expr": "histogram_quantile(0.99, sum(rate(cortex_distributor_query_duration_seconds_bucket{method=\"Distributor.QueryStream\"}[5m])) by (le))",
+               "legendFormat": "p99"
+            }
+         ],
+         "title": "Query Latency Percentiles",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "drawStyle": "bars",
+                  "fillOpacity": 100
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": 0
+                     },
+                     {
+                        "color": "yellow",
+                        "value": 2
+                     },
+                     {
+                        "color": "red",
+                        "value": 5
+                     }
+                  ]
+               },
+               "unit": "short"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 14
+         },
+         "id": 7,
+         "options": {
+            "legend": {
+               "displayMode": "table",
+               "placement": "bottom"
+            }
+         },
+         "targets": [
+            {
+               "expr": "osko_error_budget_burn_rate{slo_name=\"$slo_name\", service=\"$service\", window=\"$window\"}",
+               "legendFormat": "Current Burn Rate"
+            }
+         ],
+         "title": "Error Budget Burn Rate",
+         "type": "timeseries"
+      }
+   ],
+   "preload": false,
+   "refresh": "30s",
+   "rows": [ ],
+   "schemaVersion": 41,
+   "style": "dark",
+   "tags": [
+      "slo",
+      "latency",
+      "mimir",
+      "performance"
+   ],
+   "templating": {
+      "list": [
+         {
+            "current": {
+               "text": "Prometheus",
+               "value": "Prometheus"
+            },
+            "hide": 1,
+            "label": null,
+            "name": "datasource",
+            "options": [ ],
+            "query": "prometheus",
+            "refresh": 1,
+            "regex": "",
+            "type": "datasource"
+         },
+         {
+            "allValue": null,
+            "current": { },
+            "datasource": "${datasource}",
+            "hide": 0,
+            "includeAll": false,
+            "label": "SLO",
+            "multi": false,
+            "name": "slo_name",
+            "options": [ ],
+            "query": "label_values(osko_slo_target,slo_name)",
+            "refresh": 1,
+            "regex": "",
+            "sort": 0,
+            "tagValuesQuery": "",
+            "tags": [ ],
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+         },
+         {
+            "allValue": null,
+            "current": { },
+            "datasource": "${datasource}",
+            "hide": 0,
+            "includeAll": false,
+            "label": "Service",
+            "multi": false,
+            "name": "service",
+            "options": [ ],
+            "query": "label_values(osko_slo_target{slo_name=\"$slo_name\"},service)",
+            "refresh": 1,
+            "regex": "",
+            "sort": 0,
+            "tagValuesQuery": "",
+            "tags": [ ],
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+         },
+         {
+            "allValue": null,
+            "current": { },
+            "datasource": "${datasource}",
+            "hide": 0,
+            "includeAll": false,
+            "label": "Window",
+            "multi": false,
+            "name": "window",
+            "options": [ ],
+            "query": "label_values(osko_sli_measurement{slo_name=\"$slo_name\", service=\"$service\"},window)",
+            "refresh": 1,
+            "regex": "",
+            "sort": 0,
+            "tagValuesQuery": "",
+            "tags": [ ],
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+         }
+      ]
+   },
+   "time": {
+      "from": "now-6h",
+      "to": "now"
+   },
+   "timepicker": {
+      "refresh_intervals": [
+         "5s",
+         "10s",
+         "30s",
+         "1m",
+         "5m",
+         "15m",
+         "30m",
+         "1h",
+         "2h",
+         "1d"
+      ],
+      "time_options": [
+         "5m",
+         "15m",
+         "1h",
+         "6h",
+         "12h",
+         "24h",
+         "2d",
+         "7d",
+         "30d"
+      ]
+   },
+   "timezone": "browser",
+   "title": "SLO Performance Dashboard - Latency",
+   "uid": "slo-performance",
+   "version": 0
+}

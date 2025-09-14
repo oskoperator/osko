@@ -96,7 +96,9 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		if apierrors.IsNotFound(err) {
 			log.V(1).Info(fmt.Sprintf("datasourceRef: %v", errGetDS))
 			slo.Status.Ready = "False"
-			r.Recorder.Event(slo, "Warning", "datasourceRef", errDatasourceRef)
+			if r.Recorder != nil {
+				r.Recorder.Event(slo, "Warning", "datasourceRef", errDatasourceRef)
+			}
 			if err := r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO ready status")
 				return ctrl.Result{}, err
@@ -167,7 +169,9 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			return ctrl.Result{}, nil
 		}
 		if err := r.Create(ctx, prometheusRule); err != nil {
-			r.Recorder.Event(slo, "Warning", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
+			if r.Recorder != nil {
+				r.Recorder.Event(slo, "Warning", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
+			}
 			if err := r.Status().Update(ctx, prometheusRule); err != nil {
 				log.Error(err, "Failed to update SLO status")
 				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule"); err != nil {
@@ -178,7 +182,9 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			}
 		} else {
 			log.V(1).Info("PrometheusRule created successfully")
-			r.Recorder.Event(slo, "Normal", "PrometheusRuleCreated", "PrometheusRule created successfully")
+			if r.Recorder != nil {
+				r.Recorder.Event(slo, "Normal", "PrometheusRuleCreated", "PrometheusRule created successfully")
+			}
 
 			// Set owner reference for PrometheusRule
 			if err := controllerutil.SetOwnerReference(slo, prometheusRule, r.Scheme); err != nil {
@@ -219,7 +225,9 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 
 		if err = r.Create(ctx, mimirRule); err != nil {
-			r.Recorder.Event(slo, "Warning", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
+			if r.Recorder != nil {
+				r.Recorder.Event(slo, "Warning", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
+			}
 			log.Error(err, "Failed to create MimirRule")
 			if err = r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO status")
@@ -231,8 +239,10 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			}
 		} else {
 			log.V(1).Info("MimirRule created successfully")
-			r.Recorder.Event(slo, "Normal", "MimirRuleCreated", "MimirRule created successfully")
-			r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
+			if r.Recorder != nil {
+				r.Recorder.Event(slo, "Normal", "MimirRuleCreated", "MimirRule created successfully")
+				r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
+			}
 
 			// Set owner reference for MimirRule
 			if err := controllerutil.SetOwnerReference(slo, mimirRule, r.Scheme); err != nil {
@@ -281,7 +291,9 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 			if err := r.Create(ctx, alertManagerConfig); err != nil {
 				log.Error(err, "Failed to create AlertManagerConfig")
-				r.Recorder.Event(slo, "Warning", "FailedToCreateAlertManagerConfig", "Failed to create AlertManagerConfig")
+				if r.Recorder != nil {
+					r.Recorder.Event(slo, "Warning", "FailedToCreateAlertManagerConfig", "Failed to create AlertManagerConfig")
+				}
 				return ctrl.Result{}, err
 			}
 
@@ -296,7 +308,9 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			}
 
 			log.V(1).Info("AlertManagerConfig created successfully")
-			r.Recorder.Event(slo, "Normal", "AlertManagerConfigCreated", "AlertManagerConfig created successfully")
+			if r.Recorder != nil {
+				r.Recorder.Event(slo, "Normal", "AlertManagerConfigCreated", "AlertManagerConfig created successfully")
+			}
 		} else if err != nil {
 			log.Error(err, "Failed to get AlertManagerConfig")
 			return ctrl.Result{}, err
@@ -409,7 +423,9 @@ func (r *SLOReconciler) createOrUpdateInlineSLI(ctx context.Context, slo *opensl
 		}
 
 		log.Info("Created inline SLI", "sli", sliName)
-		r.Recorder.Event(slo, "Normal", "SLICreated", fmt.Sprintf("Created inline SLI: %s", sliName))
+		if r.Recorder != nil {
+			r.Recorder.Event(slo, "Normal", "SLICreated", fmt.Sprintf("Created inline SLI: %s", sliName))
+		}
 
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to get SLI: %w", err)

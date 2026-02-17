@@ -8,6 +8,7 @@ import (
 
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
+	"github.com/oskoperator/osko/internal/errors"
 	"github.com/oskoperator/osko/internal/helpers"
 	"github.com/oskoperator/osko/internal/utils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -60,7 +61,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, errGetSLO)
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	// Handle deletion
@@ -101,17 +102,16 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			}
 			if err := r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO ready status")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
-			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+			return ctrl.Result{}, errors.DependencyNotReady(err)
 		}
 		log.Error(err, errGetDS)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	// Handle SLI - either reference existing or create inline SLI
 	if slo.Spec.IndicatorRef != nil {
-		// Reference existing SLI (don't own it)
 		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, sli)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -119,14 +119,13 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
 				if err != nil {
 					log.Error(err, "Failed to update SLO status")
-					return ctrl.Result{}, err
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 				}
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.DependencyNotReady(err)
 			}
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 	} else if slo.Spec.Indicator != nil {
-		// Create inline SLI and own it
 		log.V(1).Info("SLO has an inline SLI, creating owned SLI resource")
 		sli, err = r.createOrUpdateInlineSLI(ctx, slo)
 		if err != nil {
@@ -134,19 +133,19 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create inline SLI")
 			if err != nil {
 				log.Error(err, "Failed to update SLO status")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 	} else {
 		err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "SLI Object not found")
 		if err != nil {
 			log.Error(err, "Failed to update SLO status")
 			r.Recorder.Event(slo, "Warning", "SLIObjectNotFound", "SLI Object not found")
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 		log.Error(err, "SLO has no SLI reference")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Permanent(fmt.Errorf("SLO has no SLI reference"))
 	}
 
 	prometheusRule := &monitoringv1.PrometheusRule{}
@@ -163,10 +162,10 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			errUpdateStatus := utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, fmt.Sprintf("Failed to create new Prometheus Rule: %v", err))
 			if errUpdateStatus != nil {
 				log.Error(errUpdateStatus, "Failed to update SLO status")
-				return ctrl.Result{}, errUpdateStatus
+				return ctrl.Result{}, errors.Transient(errUpdateStatus, 5*time.Second)
 			}
 			log.V(3).Info(fmt.Sprintf("Failed to create new Prometheus Rule: %v", err))
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 		if err := r.Create(ctx, prometheusRule); err != nil {
 			if r.Recorder != nil {
@@ -176,10 +175,11 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				log.Error(err, "Failed to update SLO status")
 				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Prometheus Rule"); err != nil {
 					log.Error(err, "Failed to update SLO ready status")
-					return ctrl.Result{}, err
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 				}
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		} else {
 			log.V(1).Info("PrometheusRule created successfully")
 			if r.Recorder != nil {
@@ -219,9 +219,9 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		if err != nil {
 			if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule Object"); err != nil {
 				log.Error(err, "Failed to update SLO status")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 
 		if err = r.Create(ctx, mimirRule); err != nil {
@@ -233,10 +233,11 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				log.Error(err, "Failed to update SLO status")
 				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule"); err != nil {
 					log.Error(err, "Failed to update SLO ready status")
-					return ctrl.Result{}, err
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 				}
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		} else {
 			log.V(1).Info("MimirRule created successfully")
 			if r.Recorder != nil {
@@ -244,24 +245,23 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
 			}
 
-			// Set owner reference for MimirRule
 			if err := controllerutil.SetOwnerReference(slo, mimirRule, r.Scheme); err != nil {
 				log.Error(err, "Failed to set owner reference for MimirRule")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 			if err := r.Update(ctx, mimirRule); err != nil {
 				log.Error(err, "Failed to update MimirRule with owner reference")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 			slo.Status.Ready = "True"
 			mimirRule.Status.Ready = "True"
 			if err := r.Status().Update(ctx, slo); err != nil {
 				log.Error(err, "Failed to update SLO ready status")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 			if err := r.Status().Update(ctx, mimirRule); err != nil {
 				log.Error(err, "Failed to update MimirRule ready status")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 			return ctrl.Result{}, nil
 		}
@@ -284,9 +284,9 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				log.Error(err, "Failed to create AlertManagerConfig")
 				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create AlertManagerConfig"); err != nil {
 					log.Error(err, "Failed to update SLO status")
-					return ctrl.Result{}, err
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 				}
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 
 			if err := r.Create(ctx, alertManagerConfig); err != nil {
@@ -294,17 +294,16 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				if r.Recorder != nil {
 					r.Recorder.Event(slo, "Warning", "FailedToCreateAlertManagerConfig", "Failed to create AlertManagerConfig")
 				}
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 
-			// Set owner reference for AlertManagerConfig
 			if err := controllerutil.SetOwnerReference(slo, alertManagerConfig, r.Scheme); err != nil {
 				log.Error(err, "Failed to set owner reference for AlertManagerConfig")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 			if err := r.Update(ctx, alertManagerConfig); err != nil {
 				log.Error(err, "Failed to update AlertManagerConfig with owner reference")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 
 			log.V(1).Info("AlertManagerConfig created successfully")
@@ -313,7 +312,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			}
 		} else if err != nil {
 			log.Error(err, "Failed to get AlertManagerConfig")
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		} else {
 			log.V(1).Info("AlertManagerConfig found", "Name", alertManagerConfig.Name, "Namespace", alertManagerConfig.Namespace)
 		}
@@ -321,7 +320,7 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionTrue, "PrometheusRule created"); err != nil {
 		log.V(1).Error(err, "Failed to update SLO status")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	log.V(1).Info("Reconciliation completed")

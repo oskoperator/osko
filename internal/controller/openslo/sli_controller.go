@@ -2,13 +2,15 @@ package controller
 
 import (
 	"context"
+	"time"
+
+	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
+	"github.com/oskoperator/osko/internal/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 )
 
 const (
@@ -37,7 +39,7 @@ func (r *SLIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 
 		log.Error(err, errGetSLI)
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	log.V(1).Info("SLI reconciled", "SLI Name", sli.Name, "SLI Namespace", sli.Namespace)

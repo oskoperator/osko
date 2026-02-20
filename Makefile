@@ -137,6 +137,14 @@ deploy-pr: manifests kustomize ## Deploy PR image to local cluster. Usage: make 
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(PR_IMG)
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 
+.PHONY: deploy-samples
+deploy-samples: ## Deploy example resources from config/samples/
+	$(KUBECTL) apply -k config/samples/
+
+.PHONY: undeploy-samples
+undeploy-samples: ## Remove example resources from config/samples/
+	$(KUBECTL) delete -k config/samples/ --ignore-not-found
+
 ##@ Build Dependencies
 
 ## Location to install dependencies to

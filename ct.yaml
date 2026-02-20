@@ -1,7 +1,2 @@
-# See https://github.com/helm/chart-testing#configuration
-remote: origin
-target-branch: main
 chart-dirs:
-  - charts
-charts-repo: https://helm.osko.dev
-validate-maintainers: false
+  - helm

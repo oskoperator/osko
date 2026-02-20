@@ -1,10 +1,6 @@
 name: Publish Chart
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'helm/**'
     tags:
       - '*'
 
@@ -20,7 +16,7 @@ jobs:
         uses: azure/setup-helm@v3
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12.0'
           check-latest: true
@@ -34,12 +30,15 @@ jobs:
             ${{ runner.os }}-helm-${{ hashFiles('**/Chart.yaml') }}
 
       - name: Create Kind Cluster
-        uses: helm/kind-action@v1.8.0
+        uses: helm/kind-action@v1
 
       - name: Run Chart testing
-        uses: helm/chart-testing-action@v2.1.0
+        uses: helm/chart-testing-action@v2
         with:
           config: ct.yaml
+
+      - name: Lint charts
+        run: ct lint --config ct.yaml --all
 
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -60,6 +59,15 @@ jobs:
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
+      - name: Sync chart versions from tag
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" helm/osko/Chart.yaml
+          sed -i "s/^version:.*/version: ${VERSION}/" helm/osko/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" helm/osko-crds/Chart.yaml
+          sed -i "s/^version:.*/version: ${VERSION}/" helm/osko-crds/Chart.yaml
+
       - name: Copy CRDs to it's chart
         run: |
           cp -rf config/crd/bases/* helm/osko-crds/charts/crds/templates/
@@ -73,7 +81,7 @@ jobs:
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 
       - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.6.0
+        uses: helm/chart-releaser-action@v1
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:

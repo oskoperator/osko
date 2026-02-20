@@ -55,6 +55,18 @@ make manifests
 
 More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
 
+### CRD Management
+
+CRDs are generated from Go types via `controller-gen` and live in `config/crd/bases/`. The Helm chart's CRD subchart (`helm/osko/charts/crds/templates/`) is intentionally empty in the repository — CRDs are copied in automatically during the release CI pipeline.
+
+For local development with Helm, sync CRDs manually:
+
+```bash
+make helm-crds
+```
+
+> **Note:** Do not commit the copied CRDs to the Helm subchart. They are generated artifacts managed by CI.
+
 ## Contributing
 
 Feel free to open an issue or a pull (merge) request if

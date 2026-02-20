@@ -25,6 +25,12 @@ appVersion: "0.0.15"
 
 home: https://github.com/oskoperator/osko
 
+maintainers:
+  - name: fourstepper
+    email: me@robinopletal.com
+  - name: Hy3n4
+    email: hy3nk4@gmail.com
+
 dependencies:
   - name: prometheus-operator-crds
     version: 8.0.1

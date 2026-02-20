@@ -41,135 +41,10 @@ rules:
   - openslo.com
   resources:
   - alertconditions
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - openslo.com
-  resources:
-  - alertconditions/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - openslo.com
-  resources:
-  - alertconditions/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - openslo.com
-  resources:
   - alertnotificationtargets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - openslo.com
-  resources:
-  - alertnotificationtargets/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - openslo.com
-  resources:
-  - alertnotificationtargets/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - openslo.com
-  resources:
   - alertpolicies
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - openslo.com
-  resources:
-  - alertpolicies/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - openslo.com
-  resources:
-  - alertpolicies/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - openslo.com
-  resources:
   - datasources
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - openslo.com
-  resources:
-  - datasources/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - openslo.com
-  resources:
-  - datasources/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - openslo.com
-  resources:
   - slis
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - openslo.com
-  resources:
-  - slis/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - openslo.com
-  resources:
-  - slis/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - openslo.com
-  resources:
   - slos
   verbs:
   - create
@@ -182,12 +57,22 @@ rules:
 - apiGroups:
   - openslo.com
   resources:
+  - alertconditions/finalizers
+  - alertnotificationtargets/finalizers
+  - alertpolicies/finalizers
+  - datasources/finalizers
+  - slis/finalizers
   - slos/finalizers
   verbs:
   - update
 - apiGroups:
   - openslo.com
   resources:
+  - alertconditions/status
+  - alertnotificationtargets/status
+  - alertpolicies/status
+  - datasources/status
+  - slis/status
   - slos/status
   verbs:
   - get
@@ -197,31 +82,6 @@ rules:
   - osko.dev
   resources:
   - alertmanagerconfigs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - osko.dev
-  resources:
-  - alertmanagerconfigs/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - osko.dev
-  resources:
-  - alertmanagerconfigs/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - osko.dev
-  resources:
   - mimirrules
   verbs:
   - create
@@ -234,12 +94,14 @@ rules:
 - apiGroups:
   - osko.dev
   resources:
+  - alertmanagerconfigs/finalizers
   - mimirrules/finalizers
   verbs:
   - update
 - apiGroups:
   - osko.dev
   resources:
+  - alertmanagerconfigs/status
   - mimirrules/status
   verbs:
   - get

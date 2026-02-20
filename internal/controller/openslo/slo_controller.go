@@ -47,6 +47,7 @@ type SLOReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=osko.dev,resources=alertmanagerconfigs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=osko.dev,resources=alertmanagerconfigs/status,verbs=get;update;patch
 
 func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
@@ -229,15 +230,14 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				r.Recorder.Event(slo, "Warning", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
 			}
 			log.Error(err, "Failed to create MimirRule")
-			if err = r.Status().Update(ctx, slo); err != nil {
-				log.Error(err, "Failed to update SLO status")
-				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule"); err != nil {
-					log.Error(err, "Failed to update SLO ready status")
-					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+			createErr := err
+			if statusErr := r.Status().Update(ctx, slo); statusErr != nil {
+				log.Error(statusErr, "Failed to update SLO status")
+				if statusErr = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule"); statusErr != nil {
+					log.Error(statusErr, "Failed to update SLO ready status")
 				}
-				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
-			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+			return ctrl.Result{}, errors.Transient(createErr, 5*time.Second)
 		} else {
 			log.V(1).Info("MimirRule created successfully")
 			if r.Recorder != nil {

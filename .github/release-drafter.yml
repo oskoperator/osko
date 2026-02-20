@@ -1,6 +1,6 @@
 category-template: '## $TITLE'
 name-template: 'v$RESOLVED_VERSION'
-tag-template: 'v$RESOLVED_VERSION'
+tag-template: '$RESOLVED_VERSION'
 tag-prefix: ''
 version-template: $MAJOR.$MINOR.$PATCH
 change-template: '* $TITLE (#$NUMBER) by @$AUTHOR'
@@ -72,8 +72,8 @@ autolabeler:
     files:
       - '*.md'
   - label: 'chore'
-    files:
-      - '*.md'
+    title:
+      - '/chore.*: /i'
 exclude-labels:
   - 'skip-changelog'
 template: |

@@ -32,6 +32,10 @@ jobs:
       - name: Create Kind Cluster
         uses: helm/kind-action@v1
 
+      - name: Add dependency chart repos
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+
       - name: Run Chart testing
         uses: helm/chart-testing-action@v2
         with:

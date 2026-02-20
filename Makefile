@@ -145,6 +145,33 @@ deploy-samples: ## Deploy example resources from config/samples/
 undeploy-samples: ## Remove example resources from config/samples/
 	$(KUBECTL) delete -k config/samples/ --ignore-not-found
 
+##@ Release
+
+CHART_DIR ?= helm/osko
+CRDS_CHART_DIR ?= helm/osko-crds
+
+.PHONY: release
+release: ## Bump chart versions and create a git tag. Usage: make release VERSION=x.y.z
+ifndef VERSION
+	$(error VERSION is required. Usage: make release VERSION=x.y.z)
+endif
+	@echo "Bumping chart versions to $(VERSION)..."
+	@sed -i '' 's/^version:.*/version: $(VERSION)/' $(CHART_DIR)/Chart.yaml
+	@sed -i '' 's/^appVersion:.*/appVersion: "$(VERSION)"/' $(CHART_DIR)/Chart.yaml
+	@sed -i '' 's/^version:.*/version: $(VERSION)/' $(CRDS_CHART_DIR)/Chart.yaml
+	@sed -i '' 's/^appVersion:.*/appVersion: "$(VERSION)"/' $(CRDS_CHART_DIR)/Chart.yaml
+	@echo "Creating git tag $(VERSION)..."
+	@git add $(CHART_DIR)/Chart.yaml $(CRDS_CHART_DIR)/Chart.yaml
+	@git commit -s -m "release: $(VERSION)"
+	@git tag -a $(VERSION) -m "Release $(VERSION)"
+	@echo "Done. Run 'git push && git push --tags' to trigger the release pipeline."
+
+.PHONY: helm-crds
+helm-crds: manifests ## Copy generated CRDs into Helm chart subchart for local development.
+	cp -rf config/crd/bases/* $(CHART_DIR)/charts/crds/templates/
+	cp -rf config/crd/bases/* $(CRDS_CHART_DIR)/charts/crds/templates/
+	@echo "CRDs copied to Helm chart subcharts."
+
 ##@ Build Dependencies
 
 ## Location to install dependencies to

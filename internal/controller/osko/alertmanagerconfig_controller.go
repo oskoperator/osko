@@ -81,10 +81,33 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 	isAlertmanagerConfigMarkedForDeletion := amc.GetDeletionTimestamp() != nil
 	if isAlertmanagerConfigMarkedForDeletion {
 		if controllerutil.ContainsFinalizer(amc, alertmanagerConfigFinalizer) {
-			if err := r.deleteAlertmanagerConfigAPI(); err != nil {
-				log.Error(err, "Failed to delete AlertmanagerConfig")
-				return ctrl.Result{}, err
+			if r.MimirClient == nil {
+				dsRef := amc.ObjectMeta.Annotations["osko.dev/datasourceRef"]
+				if dsRef != "" {
+					if err := r.Get(ctx, client.ObjectKey{Name: dsRef, Namespace: amc.Namespace}, ds); err == nil {
+						mClient := helpers.MimirClientConfig{
+							Address:  ds.Spec.ConnectionDetails.Address,
+							TenantId: ds.Spec.ConnectionDetails.TargetTenant,
+						}
+						if mc, err := mClient.NewMimirClient(); err == nil {
+							r.MimirClient = mc
+						} else {
+							log.V(1).Info("Failed to initialize MimirClient for cleanup", "error", err)
+						}
+					} else {
+						log.V(1).Info("Datasource not found for cleanup, skipping Mimir API deletion", "datasourceRef", dsRef)
+					}
+				}
 			}
+
+			if r.MimirClient != nil {
+				if err := r.deleteAlertmanagerConfigAPI(); err != nil {
+					log.Error(err, "Failed to delete AlertmanagerConfig from Mimir API, proceeding with resource cleanup")
+				}
+			} else {
+				log.V(1).Info("MimirClient not available, skipping Mimir API cleanup")
+			}
+
 			controllerutil.RemoveFinalizer(amc, alertmanagerConfigFinalizer)
 			if err := r.Update(ctx, amc); err != nil {
 				log.Error(err, "Failed to update AlertmanagerConfig finalizer")
@@ -147,6 +170,10 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	r.MimirClient, err = mClient.NewMimirClient()
+	if err != nil {
+		log.Error(err, "Failed to create MimirClient")
+		return ctrl.Result{}, err
+	}
 
 	err = r.MimirClient.CreateAlertmanagerConfig(ctx, string(yamlData), nil)
 	if err != nil {

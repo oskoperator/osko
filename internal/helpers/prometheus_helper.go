@@ -26,11 +26,11 @@ const (
 	{{- if eq .RecordName "slo_target" -}}
 	vector({{.Metric}})
 	{{- else if eq .RecordName "sli_total" -}}
-	sum({{.Aggregation}}({{.Metric}}[{{.Window}}])) by ({{.Grouping}}) or vector(0)
+	sum({{.Aggregation}}({{.Metric}}[{{.Window}}])) by ({{.Grouping}})
 	{{- else if eq .RecordName "sli_good" -}}
-	sum({{.Aggregation}}({{.Metric}}[{{.Window}}])) by ({{.Grouping}}) or vector(0)
+	sum({{.Aggregation}}({{.Metric}}[{{.Window}}])) by ({{.Grouping}})
 	{{- else if eq .RecordName "sli_bad" -}}
-	sum({{.Aggregation}}({{.Metric}}[{{.Window}}])) by ({{.Grouping}}) or vector(0)
+	sum({{.Aggregation}}({{.Metric}}[{{.Window}}])) by ({{.Grouping}})
 	{{- end -}}
 	`
 	gaugeAggregation   = "avg_over_time"

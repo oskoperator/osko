@@ -234,9 +234,17 @@ rules:
   - apiGroups:
       - osko.dev
     resources:
+      - alertmanagerconfigs/finalizers
+    verbs:
+      - update
+  - apiGroups:
+      - osko.dev
+    resources:
       - alertmanagerconfigs/status
     verbs:
       - get
+      - patch
+      - update
   - apiGroups:
       - ""
     resources:

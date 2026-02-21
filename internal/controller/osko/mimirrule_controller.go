@@ -10,6 +10,7 @@ import (
 	mimirclient "github.com/grafana/mimir/pkg/mimirtool/client"
 	"github.com/grafana/mimir/pkg/mimirtool/rules/rwrulefmt"
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
+	"github.com/oskoperator/osko/internal/errors"
 	"github.com/oskoperator/osko/internal/helpers"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/prometheus/common/model"
@@ -62,11 +63,10 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			log.V(1).Info("PrometheusRule resource not found. Ignoring since object must be deleted")
-			return ctrl.Result{}, err
-		} else {
-			log.Error(err, "Failed to get PrometheusRule")
-			return ctrl.Result{}, err
+			return ctrl.Result{}, nil
 		}
+		log.Error(err, "Failed to get PrometheusRule")
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	err = r.Get(ctx, req.NamespacedName, mimirRule)
@@ -76,18 +76,18 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, "Failed to get MimirRule")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	if err := r.newMimirClient(&mimirRule.Spec.ConnectionDetails); err != nil {
 		log.Error(err, "Failed to create MimirClient")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
-	// TODO: This logic is total bullshit. We should revise the reconciliation logic and make it more clear.
 	rgs, err := helpers.NewMimirRuleGroups(prometheusRule, &mimirRule.Spec.ConnectionDetails)
 	if err != nil {
 		log.Error(err, "Failed to convert MimirRuleGroup")
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	isMimirRuleMarkedToBeDeleted := mimirRule.GetDeletionTimestamp() != nil
@@ -95,21 +95,21 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		for _, rg := range rgs {
 			if err := r.deleteMimirRuleGroupAPI(log, rg.Name); err != nil {
 				log.Error(err, "Failed to delete MimirRule from the Mimir API")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 		}
 		if controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
 			controllerutil.RemoveFinalizer(mimirRule, mimirRuleFinalizer)
 			if err := r.Update(ctx, mimirRule); err != nil {
 				log.Error(err, fmt.Sprintf("%s MimirRule", errFinalizerRemoveFailed))
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 		}
 		if controllerutil.ContainsFinalizer(prometheusRule, prometheusRuleFinalizer) {
 			controllerutil.RemoveFinalizer(prometheusRule, prometheusRuleFinalizer)
 			if err := r.Update(ctx, prometheusRule); err != nil {
 				log.Error(err, fmt.Sprintf("%s PrometheusRule", errFinalizerRemoveFailed))
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 		}
 		return ctrl.Result{}, nil
@@ -123,18 +123,18 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			r.Recorder.Event(mimirRule, "Error", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
 			if err = r.Status().Update(ctx, mimirRule); err != nil {
 				log.Error(err, "Failed to update MimirRule status")
-				return ctrl.Result{}, err
-			} else {
-				log.V(1).Info("MimirRule created successfully")
-				r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
-				mimirRule.Status.Ready = "True"
-				if err := r.Status().Update(ctx, mimirRule); err != nil {
-					log.Error(err, "Failed to update MimirRule ready status")
-					return ctrl.Result{}, err
-				}
-				return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
+		log.V(1).Info("MimirRule created successfully")
+		r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
+		mimirRule.Status.Ready = "True"
+		if err := r.Status().Update(ctx, mimirRule); err != nil {
+			log.Error(err, "Failed to update MimirRule ready status")
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+		}
+		return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 	}
 
 	for _, ref := range mimirRule.ObjectMeta.OwnerReferences {
@@ -146,7 +146,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 			if err := r.Get(ctx, sloNamespacedName, slo); err != nil {
 				log.Error(err, "Failed to get SLO")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 		}
 	}
@@ -154,7 +154,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	for _, rg := range rgs {
 		if err := r.createMimirRuleGroupAPI(log, &rg); err != nil {
 			log.Error(err, "Failed to create MimirRuleGroup")
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 	}
 
@@ -162,7 +162,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		controllerutil.AddFinalizer(mimirRule, mimirRuleFinalizer)
 		if err := r.Update(ctx, mimirRule); err != nil {
 			log.Error(err, fmt.Sprintf("%s MimirRule", errFinalizerAddFailed))
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 	}
 
@@ -170,7 +170,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		controllerutil.AddFinalizer(prometheusRule, prometheusRuleFinalizer)
 		if err := r.Update(ctx, prometheusRule); err != nil {
 			log.Error(err, fmt.Sprintf("%s PrometheusRule", errFinalizerAddFailed))
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 	}
 
@@ -178,7 +178,7 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	newMimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &mimirRule.Spec.ConnectionDetails)
 	if err != nil {
 		log.Error(err, "Failed to create new MimirRule")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	compareResult := reflect.DeepEqual(mimirRule.Spec, newMimirRule.Spec)
@@ -194,14 +194,15 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		mimirRule.Status.Ready = "False"
 		if err := r.Status().Update(ctx, mimirRule); err != nil {
 			log.Error(err, "Failed to update SLO status")
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	mimirRule.Status.Ready = "True"
 	if err := r.Status().Update(ctx, mimirRule); err != nil {
 		log.Error(err, "Failed to update MimirRule ready status")
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	r.Recorder.Event(mimirRule, "Normal", "MimirRuleUpdated", "MimirRule updated successfully")

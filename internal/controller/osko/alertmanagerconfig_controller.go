@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oskoperator/osko/internal/errors"
 	"github.com/oskoperator/osko/internal/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -67,14 +68,14 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, errGetAMC)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	if !controllerutil.ContainsFinalizer(amc, alertmanagerConfigFinalizer) {
 		controllerutil.AddFinalizer(amc, alertmanagerConfigFinalizer)
 		if err := r.Update(ctx, amc); err != nil {
 			log.Error(err, "Failed to update AlertmanagerConfig finalizer")
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 	}
 
@@ -111,7 +112,7 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 			controllerutil.RemoveFinalizer(amc, alertmanagerConfigFinalizer)
 			if err := r.Update(ctx, amc); err != nil {
 				log.Error(err, "Failed to update AlertmanagerConfig finalizer")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 		}
 		return ctrl.Result{}, nil
@@ -119,21 +120,19 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	log.V(1).Info("Getting datasourceRef", "datasourceRef", amc.ObjectMeta.Annotations["osko.dev/datasourceRef"])
 
-	// Get DS from AMC's ref
 	err = r.Get(ctx, client.ObjectKey{Name: amc.ObjectMeta.Annotations["osko.dev/datasourceRef"], Namespace: amc.Namespace}, ds)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			log.V(1).Info(fmt.Sprintf("datasourceRef: %v", "errGetDS"))
-			//amc.Status.Ready = "False"
 			r.Recorder.Event(amc, "Warning", "datasourceRef", "errDatasourceRef")
 			if err := r.Status().Update(ctx, amc); err != nil {
 				log.Error(err, "Failed to update amc ready status")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
-			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+			return ctrl.Result{}, errors.DependencyNotReady(err)
 		}
 		log.Error(err, "errGetDS")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	if amc.Spec.SecretRef.Namespace == "" {
@@ -145,13 +144,13 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 		if apierrors.IsNotFound(err) {
 			if err = utils.UpdateStatus(ctx, amc, r.Client, "Ready", metav1.ConditionFalse, "Secret from secretRef not found"); err != nil {
 				log.Error(err, "Failed to update amc status")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 			r.Recorder.Event(amc, "Warning", "SecretNotFound", "Secret from secretRef not found")
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, "Failed to get secret")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	yamlData, ok := secret.Data["alertmanager.yaml"]

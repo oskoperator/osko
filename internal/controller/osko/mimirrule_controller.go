@@ -19,6 +19,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -99,15 +100,25 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 		if controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
-			controllerutil.RemoveFinalizer(mimirRule, mimirRuleFinalizer)
-			if err := r.Update(ctx, mimirRule); err != nil {
+			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(ctx, req.NamespacedName, mimirRule); err != nil {
+					return err
+				}
+				controllerutil.RemoveFinalizer(mimirRule, mimirRuleFinalizer)
+				return r.Update(ctx, mimirRule)
+			}); err != nil {
 				log.Error(err, fmt.Sprintf("%s MimirRule", errFinalizerRemoveFailed))
 				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 		}
 		if controllerutil.ContainsFinalizer(prometheusRule, prometheusRuleFinalizer) {
-			controllerutil.RemoveFinalizer(prometheusRule, prometheusRuleFinalizer)
-			if err := r.Update(ctx, prometheusRule); err != nil {
+			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(ctx, types.NamespacedName{Name: prometheusRule.Name, Namespace: prometheusRule.Namespace}, prometheusRule); err != nil {
+					return err
+				}
+				controllerutil.RemoveFinalizer(prometheusRule, prometheusRuleFinalizer)
+				return r.Update(ctx, prometheusRule)
+			}); err != nil {
 				log.Error(err, fmt.Sprintf("%s PrometheusRule", errFinalizerRemoveFailed))
 				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
@@ -121,16 +132,26 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		if err = r.Create(ctx, mimirRule); err != nil {
 			r.Recorder.Event(mimirRule, "Error", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
-			if err = r.Status().Update(ctx, mimirRule); err != nil {
-				log.Error(err, "Failed to update MimirRule status")
-				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+			if statusErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(ctx, req.NamespacedName, mimirRule); err != nil {
+					return err
+				}
+				return r.Status().Update(ctx, mimirRule)
+			}); statusErr != nil {
+				log.Error(statusErr, "Failed to update MimirRule status")
+				return ctrl.Result{}, errors.Transient(statusErr, 5*time.Second)
 			}
 			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 		log.V(1).Info("MimirRule created successfully")
 		r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
-		mimirRule.Status.Ready = "True"
-		if err := r.Status().Update(ctx, mimirRule); err != nil {
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := r.Get(ctx, req.NamespacedName, mimirRule); err != nil {
+				return err
+			}
+			mimirRule.Status.Ready = "True"
+			return r.Status().Update(ctx, mimirRule)
+		}); err != nil {
 			log.Error(err, "Failed to update MimirRule ready status")
 			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
@@ -159,16 +180,32 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	if !controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
-		controllerutil.AddFinalizer(mimirRule, mimirRuleFinalizer)
-		if err := r.Update(ctx, mimirRule); err != nil {
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := r.Get(ctx, req.NamespacedName, mimirRule); err != nil {
+				return err
+			}
+			if controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
+				return nil
+			}
+			controllerutil.AddFinalizer(mimirRule, mimirRuleFinalizer)
+			return r.Update(ctx, mimirRule)
+		}); err != nil {
 			log.Error(err, fmt.Sprintf("%s MimirRule", errFinalizerAddFailed))
 			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 	}
 
 	if !controllerutil.ContainsFinalizer(prometheusRule, prometheusRuleFinalizer) {
-		controllerutil.AddFinalizer(prometheusRule, prometheusRuleFinalizer)
-		if err := r.Update(ctx, prometheusRule); err != nil {
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := r.Get(ctx, types.NamespacedName{Name: prometheusRule.Name, Namespace: prometheusRule.Namespace}, prometheusRule); err != nil {
+				return err
+			}
+			if controllerutil.ContainsFinalizer(prometheusRule, prometheusRuleFinalizer) {
+				return nil
+			}
+			controllerutil.AddFinalizer(prometheusRule, prometheusRuleFinalizer)
+			return r.Update(ctx, prometheusRule)
+		}); err != nil {
 			log.Error(err, fmt.Sprintf("%s PrometheusRule", errFinalizerAddFailed))
 			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
@@ -187,20 +224,28 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
 	}
 
-	newMimirRule.ResourceVersion = mimirRule.ResourceVersion
-
-	if err := r.Update(ctx, newMimirRule); err != nil {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, req.NamespacedName, mimirRule); err != nil {
+			return err
+		}
+		newMimirRule.ResourceVersion = mimirRule.ResourceVersion
+		return r.Update(ctx, newMimirRule)
+	}); err != nil {
 		log.Error(err, "Failed to update MimirRule")
 		mimirRule.Status.Ready = "False"
-		if err := r.Status().Update(ctx, mimirRule); err != nil {
-			log.Error(err, "Failed to update SLO status")
-			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+		if statusErr := r.Status().Update(ctx, mimirRule); statusErr != nil {
+			log.Error(statusErr, "Failed to update SLO status")
 		}
 		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
-	mimirRule.Status.Ready = "True"
-	if err := r.Status().Update(ctx, mimirRule); err != nil {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, req.NamespacedName, mimirRule); err != nil {
+			return err
+		}
+		mimirRule.Status.Ready = "True"
+		return r.Status().Update(ctx, mimirRule)
+	}); err != nil {
 		log.Error(err, "Failed to update MimirRule ready status")
 		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}

@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -125,21 +126,44 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		if err := r.Create(ctx, prometheusRule); err != nil {
 			r.Recorder.Event(slo, "Error", "FailedToCreatePrometheusRule", "Failed to create Prometheus Rule")
-			if err := r.Status().Update(ctx, prometheusRule); err != nil {
-				log.Error(err, "Failed to update SLO status")
-				slo.Status.Ready = "Failed"
-				if err := r.Status().Update(ctx, slo); err != nil {
-					log.Error(err, "Failed to update SLO ready status")
-					return ctrl.Result{}, err
+			if statusErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(ctx, req.NamespacedName, prometheusRule); err != nil {
+					return err
 				}
-				return ctrl.Result{}, err
+				return r.Status().Update(ctx, prometheusRule)
+			}); statusErr != nil {
+				log.Error(statusErr, "Failed to update SLO status")
+				slo.Status.Ready = "Failed"
+				if statusErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+					sloNamespacedName := types.NamespacedName{
+						Name:      slo.Name,
+						Namespace: slo.Namespace,
+					}
+					if err := r.Get(ctx, sloNamespacedName, slo); err != nil {
+						return err
+					}
+					return r.Status().Update(ctx, slo)
+				}); statusErr != nil {
+					log.Error(statusErr, "Failed to update SLO ready status")
+					return ctrl.Result{}, statusErr
+				}
+				return ctrl.Result{}, statusErr
 			}
 		} else {
 			log.V(1).Info("PrometheusRule created successfully")
 			r.Recorder.Event(slo, "Normal", "PrometheusRuleCreated", "PrometheusRule created successfully")
-			slo.Status.Ready = "True"
-			if err := r.Status().Update(ctx, slo); err != nil {
-				log.Error(err, "Failed to update SLO ready status")
+			if statusErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				sloNamespacedName := types.NamespacedName{
+					Name:      slo.Name,
+					Namespace: slo.Namespace,
+				}
+				if err := r.Get(ctx, sloNamespacedName, slo); err != nil {
+					return err
+				}
+				slo.Status.Ready = "True"
+				return r.Status().Update(ctx, slo)
+			}); statusErr != nil {
+				log.Error(statusErr, "Failed to update SLO ready status")
 				return ctrl.Result{}, nil
 			}
 		}
@@ -161,22 +185,43 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	// has to be the same as for previous object, otherwise it will not be updated and throw an error
-	newPrometheusRule.ResourceVersion = prometheusRule.ResourceVersion
-
 	log.Info("Updating PrometheusRule", "PrometheusRule Name", newPrometheusRule.Name, "PrometheusRule Namespace", newPrometheusRule.Namespace)
-	if err := r.Update(ctx, newPrometheusRule); err != nil {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, req.NamespacedName, prometheusRule); err != nil {
+			return err
+		}
+		newPrometheusRule.ResourceVersion = prometheusRule.ResourceVersion
+		return r.Update(ctx, newPrometheusRule)
+	}); err != nil {
 		log.Error(err, "Failed to update PrometheusRule")
 		return ctrl.Result{}, err
 	}
-	if err := r.Status().Update(ctx, slo); err != nil {
-		log.Error(err, "Failed to update SLO status")
-		slo.Status.Ready = "Failed"
-		if err := r.Status().Update(ctx, slo); err != nil {
-			log.Error(err, "Failed to update SLO ready status")
-			return ctrl.Result{}, err
+	if statusErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		sloNamespacedName := types.NamespacedName{
+			Name:      slo.Name,
+			Namespace: slo.Namespace,
 		}
-		return ctrl.Result{}, err
+		if err := r.Get(ctx, sloNamespacedName, slo); err != nil {
+			return err
+		}
+		return r.Status().Update(ctx, slo)
+	}); statusErr != nil {
+		log.Error(statusErr, "Failed to update SLO status")
+		slo.Status.Ready = "Failed"
+		if statusErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			sloNamespacedName := types.NamespacedName{
+				Name:      slo.Name,
+				Namespace: slo.Namespace,
+			}
+			if err := r.Get(ctx, sloNamespacedName, slo); err != nil {
+				return err
+			}
+			return r.Status().Update(ctx, slo)
+		}); statusErr != nil {
+			log.Error(statusErr, "Failed to update SLO ready status")
+			return ctrl.Result{}, statusErr
+		}
+		return ctrl.Result{}, statusErr
 	}
 
 	return ctrl.Result{}, nil

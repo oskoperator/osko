@@ -1,0 +1,1111 @@
+{
+   "annotations": {
+      "list": [
+         {
+            "builtIn": 1,
+            "datasource": {
+               "type": "grafana",
+               "uid": "-- Grafana --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "$datasource"
+            },
+            "enable": true,
+            "expr": "ALERTS{alertname=~\"SLOBudgetBurn.*\", slo_name=~\"$slo_name\", service=~\"$service\"}",
+            "hide": false,
+            "iconColor": "red",
+            "name": "SLO Alerts",
+            "tagKeys": "alertname,severity",
+            "textFormat": "{{ alertname }} - {{ severity }}",
+            "titleFormat": "SLO Alert"
+         }
+      ]
+   },
+   "editable": true,
+   "fiscalYearStartMonth": 0,
+   "graphTooltip": 1,
+   "links": [
+      {
+         "asDropdown": true,
+         "includeVars": true,
+         "keepTime": true,
+         "tags": [
+            "osko"
+         ],
+         "title": "OSKO Dashboards",
+         "type": "dashboards"
+      }
+   ],
+   "panels": [
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+         },
+         "id": 2,
+         "panels": [],
+         "title": "SLO Status at a Glance",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "description": "Current SLO compliance status. \nGreen = SLI is meeting the SLO target.\nRed = SLI is below the SLO target.\n",
+         "fieldConfig": {
+            "defaults": {
+               "mappings": [
+                  {
+                     "options": {
+                        "0": {
+                           "color": "red",
+                           "text": "Violated"
+                        }
+                     },
+                     "type": "value"
+                  },
+                  {
+                     "options": {
+                        "1": {
+                           "color": "green",
+                           "text": "Compliant"
+                        }
+                     },
+                     "type": "value"
+                  }
+               ],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "red",
+                        "value": 0
+                     },
+                     {
+                        "color": "green",
+                        "value": 1
+                     }
+                  ]
+               },
+               "unit": "bool"
+            },
+            "overrides": []
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 0,
+            "y": 1
+         },
+         "id": 3,
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "pluginVersion": "12.3.3",
+         "targets": [
+            {
+               "expr": "osko_sli_measurement{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"} >= bool on(slo_name, service, namespace) osko_slo_target{slo_name=~\"$slo_name\", service=~\"$service\"}",
+               "instant": true,
+               "legendFormat": "SLO Compliance",
+               "refId": "A"
+            }
+         ],
+         "title": "SLO Compliance",
+         "type": "stat"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "description": "Current Service Level Indicator (SLI) value as a percentage.\nThis shows the actual performance against the target.\nGreen = Meeting SLO, Yellow = At risk, Red = Breaching SLO.\n",
+         "fieldConfig": {
+            "defaults": {
+               "decimals": 3,
+               "mappings": [],
+               "max": 100,
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "red",
+                        "value": 0
+                     },
+                     {
+                        "color": "yellow",
+                        "value": 95
+                     },
+                     {
+                        "color": "green",
+                        "value": 99
+                     }
+                  ]
+               },
+               "unit": "percent"
+            },
+            "overrides": []
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 6,
+            "y": 1
+         },
+         "id": 4,
+         "options": {
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+         },
+         "pluginVersion": "12.3.3",
+         "targets": [
+            {
+               "expr": "osko_sli_measurement{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"} * 100",
+               "instant": true,
+               "legendFormat": "SLI Success Rate",
+               "refId": "A"
+            }
+         ],
+         "title": "Current SLI",
+         "type": "stat"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "description": "The target SLO value that must be maintained.",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+               },
+               "decimals": 3,
+               "mappings": [],
+               "max": 100,
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": 0
+                     },
+                     {
+                        "color": "red",
+                        "value": 80
+                     }
+                  ]
+               },
+               "unit": "percent"
+            },
+            "overrides": []
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 12,
+            "y": 1
+         },
+         "id": 5,
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+         },
+         "pluginVersion": "12.3.3",
+         "targets": [
+            {
+               "expr": "osko_slo_target{slo_name=~\"$slo_name\", service=~\"$service\"} * 100",
+               "instant": true,
+               "legendFormat": "SLO Target",
+               "refId": "A"
+            }
+         ],
+         "title": "SLO Target",
+         "type": "stat"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "description": "Percentage of error budget remaining for the current window.\nRed = <25% remaining (critical), Yellow = <50% remaining (warning), Green = >50% remaining (healthy).\n",
+         "fieldConfig": {
+            "defaults": {
+               "decimals": 1,
+               "mappings": [],
+               "max": 100,
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "red",
+                        "value": 0
+                     },
+                     {
+                        "color": "orange",
+                        "value": 10
+                     },
+                     {
+                        "color": "yellow",
+                        "value": 25
+                     },
+                     {
+                        "color": "green",
+                        "value": 50
+                     }
+                  ]
+               },
+               "unit": "percent"
+            },
+            "overrides": []
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 16,
+            "y": 1
+         },
+         "id": 6,
+         "options": {
+            "displayMode": "lcd",
+            "minVizHeight": 0,
+            "minVizWidth": 0,
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "showThresholdLabels": false,
+            "showThresholdMarkers": true,
+            "showUnfilled": true,
+            "sizing": "auto"
+         },
+         "pluginVersion": "12.3.3",
+         "targets": [
+            {
+               "expr": "(1 - osko_error_budget_value{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"}) * 100",
+               "instant": true,
+               "legendFormat": "Error Budget Remaining",
+               "refId": "A"
+            }
+         ],
+         "title": "Error Budget Remaining",
+         "type": "gauge"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 7
+         },
+         "id": 7,
+         "panels": [],
+         "title": "Trends & History",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "description": "Historical trend of SLI performance over time.\nThe red dashed line shows the SLO target for reference.\n",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "mappings": [],
+               "max": 100,
+               "min": 90,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": 0
+                     },
+                     {
+                        "color": "red",
+                        "value": 80
+                     }
+                  ]
+               },
+               "unit": "percent"
+            },
+            "overrides": [
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "SLO Target"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "fixedColor": "red",
+                           "mode": "fixed"
+                        }
+                     },
+                     {
+                        "id": "custom.lineStyle",
+                        "value": {
+                           "dash": [
+                              10,
+                              10
+                           ],
+                           "fill": "dash"
+                        }
+                     },
+                     {
+                        "id": "custom.lineWidth",
+                        "value": 2
+                     }
+                  ]
+               }
+            ]
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 8
+         },
+         "id": 8,
+         "options": {
+            "legend": {
+               "calcs": [
+                  "mean",
+                  "min",
+                  "max"
+               ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "hideZeros": false,
+               "mode": "multi",
+               "sort": "none"
+            }
+         },
+         "pluginVersion": "12.3.3",
+         "targets": [
+            {
+               "expr": "osko_sli_measurement{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"} * 100",
+               "legendFormat": "SLI Success Rate",
+               "refId": "A"
+            },
+            {
+               "expr": "osko_slo_target{slo_name=~\"$slo_name\", service=~\"$service\"} * 100",
+               "legendFormat": "SLO Target",
+               "refId": "B"
+            }
+         ],
+         "title": "SLI Trend Over Time",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "description": "Error budget consumption over time.\nShows how much budget has been used vs remaining.\nA steady decline is expected; rapid drops indicate incidents.\n",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 20,
+                  "gradientMode": "opacity",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "mappings": [],
+               "max": 100,
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": 0
+                     },
+                     {
+                        "color": "red",
+                        "value": 80
+                     }
+                  ]
+               },
+               "unit": "percent"
+            },
+            "overrides": []
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 8
+         },
+         "id": 9,
+         "options": {
+            "legend": {
+               "calcs": [
+                  "mean",
+                  "min",
+                  "lastNotNull"
+               ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "hideZeros": false,
+               "mode": "multi",
+               "sort": "none"
+            }
+         },
+         "pluginVersion": "12.3.3",
+         "targets": [
+            {
+               "expr": "(1 - osko_error_budget_value{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"}) * 100",
+               "legendFormat": "Error Budget Remaining ({{window}})",
+               "refId": "A"
+            }
+         ],
+         "title": "Error Budget Burndown",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 16
+         },
+         "id": 10,
+         "panels": [],
+         "title": "Burn Rate Analysis",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "description": "How quickly the error budget is being consumed.\n- Green line = Fast burn threshold (14.4x) - page immediately\n- Yellow line = Slow burn threshold (2x) - ticket for investigation\nValues above these lines indicate excessive budget consumption.\n",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "mappings": [],
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": 0
+                     },
+                     {
+                        "color": "red",
+                        "value": 80
+                     }
+                  ]
+               },
+               "unit": "short"
+            },
+            "overrides": [
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "Fast Burn Threshold (14.4x)"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "fixedColor": "red",
+                           "mode": "fixed"
+                        }
+                     },
+                     {
+                        "id": "custom.lineStyle",
+                        "value": {
+                           "dash": [
+                              10,
+                              10
+                           ],
+                           "fill": "dash"
+                        }
+                     },
+                     {
+                        "id": "custom.lineWidth",
+                        "value": 2
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "Slow Burn Threshold (2x)"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "fixedColor": "yellow",
+                           "mode": "fixed"
+                        }
+                     },
+                     {
+                        "id": "custom.lineStyle",
+                        "value": {
+                           "dash": [
+                              5,
+                              5
+                           ],
+                           "fill": "dash"
+                        }
+                     },
+                     {
+                        "id": "custom.lineWidth",
+                        "value": 2
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "Current Burn Rate"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "fixedColor": "blue",
+                           "mode": "fixed"
+                        }
+                     },
+                     {
+                        "id": "custom.lineWidth",
+                        "value": 3
+                     }
+                  ]
+               }
+            ]
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 17
+         },
+         "id": 11,
+         "options": {
+            "legend": {
+               "calcs": [
+                  "mean",
+                  "max",
+                  "lastNotNull"
+               ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "hideZeros": false,
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "12.3.3",
+         "targets": [
+            {
+               "expr": "osko_error_budget_burn_rate{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"}",
+               "legendFormat": "Current Burn Rate",
+               "refId": "A"
+            },
+            {
+               "expr": "osko_error_budget_burn_rate_threshold{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"}",
+               "legendFormat": "Fast Burn Threshold (14.4x)",
+               "refId": "B"
+            },
+            {
+               "expr": "osko_error_budget_burn_rate_threshold{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"} / 7.2",
+               "legendFormat": "Slow Burn Threshold (2x)",
+               "refId": "C"
+            }
+         ],
+         "title": "Error Budget Burn Rate",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "description": "Summary of events contributing to the SLI calculation.\nShows total events and helps understand the volume behind the SLI.\n",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": 0
+                     },
+                     {
+                        "color": "red",
+                        "value": 80
+                     }
+                  ]
+               },
+               "unit": "short"
+            },
+            "overrides": [
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "Good Events"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "fixedColor": "green",
+                           "mode": "fixed"
+                        }
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "Bad Events"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "fixedColor": "red",
+                           "mode": "fixed"
+                        }
+                     }
+                  ]
+               }
+            ]
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 17
+         },
+         "id": 12,
+         "options": {
+            "legend": {
+               "calcs": [
+                  "sum"
+               ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "hideZeros": false,
+               "mode": "multi",
+               "sort": "none"
+            }
+         },
+         "pluginVersion": "12.3.3",
+         "targets": [
+            {
+               "expr": "osko_sli_total{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"} * on(slo_name, service, namespace, window) osko_sli_measurement{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"}",
+               "legendFormat": "Good Events",
+               "refId": "A"
+            },
+            {
+               "expr": "osko_sli_total{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"} * on(slo_name, service, namespace, window) (1 - osko_sli_measurement{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"})",
+               "legendFormat": "Bad Events",
+               "refId": "B"
+            }
+         ],
+         "title": "Good vs Bad Events",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": true,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 25
+         },
+         "id": 13,
+         "panels": [],
+         "title": "Multi-SLO Comparison (Expand when viewing All)",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+         },
+         "description": "Comparison table showing all SLOs and their current status.\nUseful when viewing with 'All' selected in template variables.\n",
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "displayMode": "color-background-solid"
+               },
+               "decimals": 3,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "red",
+                        "value": 0
+                     },
+                     {
+                        "color": "yellow",
+                        "value": 95
+                     },
+                     {
+                        "color": "green",
+                        "value": 99
+                     }
+                  ]
+               },
+               "unit": "percent"
+            },
+            "overrides": []
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 26
+         },
+         "id": 14,
+         "options": {
+            "showHeader": true,
+            "sortBy": [
+               {
+                  "desc": true,
+                  "displayName": "SLI Value"
+               }
+            ]
+         },
+         "targets": [
+            {
+               "expr": "osko_sli_measurement{slo_name=~\"$slo_name\", service=~\"$service\", window=~\"$window\"} * 100",
+               "format": "table",
+               "instant": true,
+               "refId": "A"
+            }
+         ],
+         "title": "SLO Comparison",
+         "transformations": [
+            {
+               "id": "organize",
+               "options": {
+                  "excludeByName": {
+                     "Time": true,
+                     "Value": false
+                  },
+                  "indexByName": {
+                     "Value": 3,
+                     "service": 1,
+                     "slo_name": 0,
+                     "window": 2
+                  },
+                  "renameByName": {
+                     "Value": "SLI Value (%)",
+                     "service": "Service",
+                     "slo_name": "SLO Name",
+                     "window": "Window"
+                  }
+               }
+            }
+         ],
+         "type": "table"
+      }
+   ],
+   "preload": false,
+   "refresh": "30s",
+   "schemaVersion": 42,
+   "tags": [
+      "slo",
+      "sre",
+      "osko",
+      "improved",
+      "performance"
+   ],
+   "templating": {
+      "list": [
+         {
+            "current": {
+               "text": "Mimir",
+               "value": "PAE45454D0EDB9216"
+            },
+            "hide": 1,
+            "name": "datasource",
+            "options": [],
+            "query": "prometheus",
+            "refresh": 1,
+            "regex": "",
+            "type": "datasource"
+         },
+         {
+            "current": {
+               "text": "mimir-ingestion-latency",
+               "value": "mimir-ingestion-latency"
+            },
+            "datasource": "${datasource}",
+            "includeAll": true,
+            "label": "SLO",
+            "name": "slo_name",
+            "options": [],
+            "query": "label_values(osko_slo_target,slo_name)",
+            "refresh": 1,
+            "regex": "",
+            "type": "query"
+         },
+         {
+            "current": {
+               "text": "mimir",
+               "value": "mimir"
+            },
+            "datasource": "${datasource}",
+            "includeAll": true,
+            "label": "Service",
+            "name": "service",
+            "options": [],
+            "query": "label_values(osko_slo_target{slo_name=~\"$slo_name\"},service)",
+            "refresh": 1,
+            "regex": "",
+            "type": "query"
+         },
+         {
+            "current": {
+               "text": "28d",
+               "value": "28d"
+            },
+            "datasource": "${datasource}",
+            "includeAll": true,
+            "label": "Window",
+            "name": "window",
+            "options": [],
+            "query": "label_values(osko_sli_measurement{slo_name=~\"$slo_name\", service=~\"$service\"},window)",
+            "refresh": 1,
+            "regex": "",
+            "type": "query"
+         }
+      ]
+   },
+   "time": {
+      "from": "now-1h",
+      "to": "now"
+   },
+   "timepicker": {},
+   "timezone": "browser",
+   "title": "SLO Performance Dashboard (Improved)",
+   "__inputs": [],
+   "__requires": []
+}

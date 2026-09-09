@@ -175,8 +175,19 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	for _, rg := range rgs {
 		if err := r.createMimirRuleGroupAPI(log, &rg); err != nil {
 			log.Error(err, "Failed to create MimirRuleGroup")
+			// Ready otherwise tracks only the Kubernetes object, so it stays
+			// True while Mimir has rejected the group and holds no rules.
+			if statusErr := r.setReady(ctx, req.NamespacedName, "False"); statusErr != nil {
+				log.Error(statusErr, "Failed to mark MimirRule not ready")
+			}
+			r.Recorder.Event(mimirRule, "Warning", "MimirRuleGroupPushFailed",
+				fmt.Sprintf("Failed to push rule group %q to Mimir: %v", rg.Name, err))
 			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
+	}
+
+	if err := r.setReady(ctx, req.NamespacedName, "True"); err != nil {
+		log.Error(err, "Failed to mark MimirRule ready")
 	}
 
 	if !controllerutil.ContainsFinalizer(mimirRule, mimirRuleFinalizer) {
@@ -254,6 +265,24 @@ func (r *MimirRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	log.V(1).Info("MimirRule reconciled")
 	return ctrl.Result{RequeueAfter: r.RequeueAfterPeriod}, nil
+}
+
+// setReady reflects whether Mimir currently holds this MimirRule's groups. It
+// must be driven from the push result, not the Kubernetes object lifecycle: an
+// unchanged spec returns early from Reconcile, so without an explicit success
+// path the status would latch on the last failure.
+func (r *MimirRuleReconciler) setReady(ctx context.Context, name types.NamespacedName, ready string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		mimirRule := &oskov1alpha1.MimirRule{}
+		if err := r.Get(ctx, name, mimirRule); err != nil {
+			return err
+		}
+		if mimirRule.Status.Ready == ready {
+			return nil
+		}
+		mimirRule.Status.Ready = ready
+		return r.Status().Update(ctx, mimirRule)
+	})
 }
 
 func (r *MimirRuleReconciler) newMimirClient(connectionDetails *oskov1alpha1.ConnectionDetails) error {

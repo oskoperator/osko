@@ -1,18 +1,32 @@
 package helpers
 
 import (
+	"context"
+	stderrors "errors"
 	"strings"
 	"testing"
+	"time"
 
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/config"
+	oskoerrors "github.com/oskoperator/osko/internal/errors"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/util/teststorage"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func init() {
 	config.NewConfig()
 }
+
+const (
+	recordingGroupName = "test-slo_recording"
+	alertGroupName     = "test-slo_alert"
+)
 
 func TestValidateTarget(t *testing.T) {
 	tests := []struct {
@@ -74,12 +88,24 @@ func createTestSLO(target string) *openslov1.SLO {
 			Namespace: "default",
 		},
 		Spec: openslov1.SLOSpec{
-			Service: "test-service",
+			Service:         "test-service",
+			BudgetingMethod: "Occurrences",
+			TimeWindow: []openslov1.TimeWindowSpec{
+				{Duration: "28d", IsRolling: true},
+			},
 			Objectives: []openslov1.ObjectivesSpec{
 				{Target: target},
 			},
 		},
 	}
+}
+
+func createTestSLOWithAlerting(target string) *openslov1.SLO {
+	slo := createTestSLO(target)
+	slo.Annotations = map[string]string{
+		"osko.dev/magicAlerting": "true",
+	}
+	return slo
 }
 
 func createTestSLI() *openslov1.SLI {
@@ -172,6 +198,77 @@ func createTestSLIWithBad() *openslov1.SLI {
 	}
 }
 
+// --- test helpers -----------------------------------------------------------
+
+func groupByName(t *testing.T, groups []monitoringv1.RuleGroup, name string) *monitoringv1.RuleGroup {
+	t.Helper()
+	for i, g := range groups {
+		if g.Name == name {
+			return &groups[i]
+		}
+	}
+	t.Fatalf("rule group %q not found, got groups %v", name, groupNames(groups))
+	return nil
+}
+
+// The alert group also carries the burn-rate recording rules the alerts read.
+func alertRules(g *monitoringv1.RuleGroup) []monitoringv1.Rule {
+	out := make([]monitoringv1.Rule, 0, len(g.Rules))
+	for _, r := range g.Rules {
+		if r.Alert != "" {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func groupNames(groups []monitoringv1.RuleGroup) []string {
+	names := make([]string, 0, len(groups))
+	for _, g := range groups {
+		names = append(names, g.Name)
+	}
+	return names
+}
+
+func countRules(groups []monitoringv1.RuleGroup) int {
+	total := 0
+	for _, g := range groups {
+		total += len(g.Rules)
+	}
+	return total
+}
+
+func allRules(groups []monitoringv1.RuleGroup) []monitoringv1.Rule {
+	var rules []monitoringv1.Rule
+	for _, g := range groups {
+		rules = append(rules, g.Rules...)
+	}
+	return rules
+}
+
+func ruleFor(t *testing.T, groups []monitoringv1.RuleGroup, record, window string) monitoringv1.Rule {
+	t.Helper()
+	for _, r := range allRules(groups) {
+		if r.Record == record && r.Labels["window"] == window {
+			return r
+		}
+	}
+	t.Fatalf("no rule with record %q and window %q found", record, window)
+	return monitoringv1.Rule{}
+}
+
+func setupRules(t *testing.T, slo *openslov1.SLO, sli *openslov1.SLI, baseWindow string) []monitoringv1.RuleGroup {
+	t.Helper()
+	mrs := &MonitoringRuleSet{Slo: slo, Sli: sli, BaseWindow: baseWindow}
+	groups, err := mrs.SetupRules()
+	if err != nil {
+		t.Fatalf("SetupRules() error = %v", err)
+	}
+	return groups
+}
+
+// --- tests ------------------------------------------------------------------
+
 func TestSetupRules_TargetValidation(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -201,64 +298,697 @@ func TestSetupRules_TargetValidation(t *testing.T) {
 	}
 }
 
-func TestSetupRules_BurnRateFormula(t *testing.T) {
-	mrs := &MonitoringRuleSet{
-		Slo:        createTestSLO("0.999"),
-		Sli:        createTestSLI(),
-		BaseWindow: "5m",
+func TestSetupRules_SpecValidation(t *testing.T) {
+	thresholdSLI := func() *openslov1.SLI {
+		sli := createTestSLI()
+		sli.Spec.RatioMetric = openslov1.RatioMetricSpec{}
+		sli.Spec.ThresholdMetric = openslov1.ThresholdMetricSpec{
+			MetricSource: openslov1.MetricSource{
+				Type: "prometheus",
+				Spec: openslov1.MetricSourceSpec{Query: "http_request_duration_seconds"},
+			},
+		}
+		return sli
 	}
 
-	ruleGroups, err := mrs.SetupRules()
-	if err != nil {
-		t.Fatalf("SetupRules() error = %v", err)
+	noTotalSLI := func() *openslov1.SLI {
+		sli := createTestSLI()
+		sli.Spec.RatioMetric.Total.MetricSource.Spec.Query = ""
+		return sli
 	}
 
-	var burnRateGroup *monitoringv1.RuleGroup
-	for i, rg := range ruleGroups {
-		if strings.HasSuffix(rg.Name, "_burn_rate") {
-			burnRateGroup = &ruleGroups[i]
-			break
+	noGoodNoBadSLI := func() *openslov1.SLI {
+		sli := createTestSLI()
+		sli.Spec.RatioMetric.Good.MetricSource.Spec.Query = ""
+		sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query = ""
+		return sli
+	}
+
+	timeslicesSLO := func() *openslov1.SLO {
+		slo := createTestSLO("0.999")
+		slo.Spec.BudgetingMethod = "Timeslices"
+		return slo
+	}
+
+	tests := []struct {
+		name        string
+		slo         *openslov1.SLO
+		sli         *openslov1.SLI
+		wantErrIs   error
+		wantErrPart string
+	}{
+		{
+			name:        "unsupported budgeting method",
+			slo:         timeslicesSLO(),
+			sli:         createTestSLI(),
+			wantErrIs:   oskoerrors.ErrUnsupportedBudgetingMethod,
+			wantErrPart: "Timeslices",
+		},
+		{
+			name:        "threshold metric not supported",
+			slo:         createTestSLO("0.999"),
+			sli:         thresholdSLI(),
+			wantErrIs:   oskoerrors.ErrInvalidSLIConfiguration,
+			wantErrPart: "thresholdMetric",
+		},
+		{
+			name:        "missing total query",
+			slo:         createTestSLO("0.999"),
+			sli:         noTotalSLI(),
+			wantErrIs:   oskoerrors.ErrInvalidSLIConfiguration,
+			wantErrPart: "ratioMetric.total",
+		},
+		{
+			name:        "missing good and bad query",
+			slo:         createTestSLO("0.999"),
+			sli:         noGoodNoBadSLI(),
+			wantErrIs:   oskoerrors.ErrInvalidSLIConfiguration,
+			wantErrPart: "ratioMetric.bad",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mrs := &MonitoringRuleSet{Slo: tt.slo, Sli: tt.sli, BaseWindow: "5m"}
+			_, err := mrs.SetupRules()
+			if err == nil {
+				t.Fatalf("SetupRules() expected error, got nil")
+			}
+			if !stderrors.Is(err, tt.wantErrIs) {
+				t.Errorf("SetupRules() error = %v, want errors.Is(%v)", err, tt.wantErrIs)
+			}
+			if !strings.Contains(err.Error(), tt.wantErrPart) {
+				t.Errorf("SetupRules() error = %q, want it to mention %q", err.Error(), tt.wantErrPart)
+			}
+		})
+	}
+}
+
+func TestSetupRules_RuleAndGroupCount(t *testing.T) {
+	tests := []struct {
+		name          string
+		slo           *openslov1.SLO
+		wantGroups    []string
+		wantRuleCount int
+	}{
+		{
+			name:          "magic alerting enabled",
+			slo:           createTestSLOWithAlerting("0.999"),
+			wantGroups:    []string{recordingGroupName, alertGroupName},
+			wantRuleCount: 23,
+		},
+		{
+			name:          "magic alerting disabled",
+			slo:           createTestSLO("0.999"),
+			wantGroups:    []string{recordingGroupName},
+			wantRuleCount: 19,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			groups := setupRules(t, tt.slo, createTestSLI(), "5m")
+
+			if got := groupNames(groups); len(got) != len(tt.wantGroups) {
+				t.Fatalf("expected groups %v, got %v", tt.wantGroups, got)
+			}
+			for i, want := range tt.wantGroups {
+				if groups[i].Name != want {
+					t.Errorf("group[%d] = %q, want %q", i, groups[i].Name, want)
+				}
+			}
+
+			if got := countRules(groups); got != tt.wantRuleCount {
+				t.Errorf("expected %d rules, got %d", tt.wantRuleCount, got)
+			}
+		})
+	}
+}
+
+func TestSetupRules_RuleBreakdown(t *testing.T) {
+	groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+
+	counts := map[string]int{}
+	alerts := 0
+	for _, r := range allRules(groups) {
+		if r.Record != "" {
+			counts[r.Record]++
+		}
+		if r.Alert != "" {
+			alerts++
 		}
 	}
 
-	if burnRateGroup == nil {
-		t.Fatal("Expected to find burn_rate rule group")
+	want := map[string]int{
+		"osko_slo_target":             1,
+		"osko_sli_total":              2,
+		"osko_sli_measurement":        8,
+		"osko_error_budget_burn_rate": 8,
 	}
 
-	for _, rule := range burnRateGroup.Rules {
-		if !strings.Contains(rule.Expr.StrVal, "error_budget_ratio") {
-			t.Errorf("Burn rate should use error_budget_ratio, got: %s", rule.Expr.StrVal)
+	for record, wantCount := range want {
+		if counts[record] != wantCount {
+			t.Errorf("record %s: got %d rules, want %d", record, counts[record], wantCount)
 		}
-		if !strings.Contains(rule.Expr.StrVal, "/") {
-			t.Errorf("Burn rate should use division, got: %s", rule.Expr.StrVal)
+	}
+	for record := range counts {
+		if _, ok := want[record]; !ok {
+			t.Errorf("unexpected recording rule %s emitted", record)
+		}
+	}
+	if alerts != 4 {
+		t.Errorf("expected 4 alert rules, got %d", alerts)
+	}
+}
+
+func TestSetupRules_RemovedRecordingRules(t *testing.T) {
+	for _, sli := range []*openslov1.SLI{createTestSLI(), createTestSLIWithBad()} {
+		groups := setupRules(t, createTestSLOWithAlerting("0.999"), sli, "5m")
+		for _, r := range allRules(groups) {
+			switch r.Record {
+			case "osko_sli_good", "osko_sli_bad", "osko_error_budget_ratio":
+				t.Errorf("rule %s should no longer be emitted, got expr %q", r.Record, r.Expr.StrVal)
+			}
 		}
 	}
 }
 
-func TestSetupRules_ExtendedWindowUsesIndependentRate(t *testing.T) {
-	mrs := &MonitoringRuleSet{
-		Slo:        createTestSLO("0.999"),
-		Sli:        createTestSLI(),
-		BaseWindow: "5m",
+func TestSetupRules_ExpressionLiterals(t *testing.T) {
+	groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+
+	const selector5m = `namespace="default", service="test-service", sli_name="test-sli", slo_name="test-slo", window="5m"`
+
+	tests := []struct {
+		name   string
+		record string
+		window string
+		want   string
+	}{
+		{
+			name:   "slo target",
+			record: "osko_slo_target",
+			window: "28d",
+			want:   "vector(0.999)",
+		},
+		{
+			name:   "sli total base window",
+			record: "osko_sli_total",
+			window: "5m",
+			want:   "sum(rate(http_requests_total[5m]))",
+		},
+		{
+			name:   "sli total reporting window derived",
+			record: "osko_sli_total",
+			window: "28d",
+			want:   "avg_over_time(osko_sli_total{" + selector5m + "}[28d])",
+		},
+		{
+			name:   "sli measurement 5m",
+			record: "osko_sli_measurement",
+			window: "5m",
+			want:   "clamp_min(clamp_max(sum(rate(http_requests_success_total[5m])) / sum(rate(http_requests_total[5m])), 1), 0)",
+		},
+		{
+			name:   "sli measurement 28d derived",
+			record: "osko_sli_measurement",
+			window: "28d",
+			want:   "clamp_min(clamp_max(avg_over_time(osko_sli_measurement{" + selector5m + "}[28d]), 1), 0)",
+		},
+		{
+			name:   "burn rate 1h",
+			record: "osko_error_budget_burn_rate",
+			window: "1h",
+			want:   `(1 - osko_sli_measurement{namespace="default", service="test-service", sli_name="test-sli", slo_name="test-slo", window="1h"}) / 0.0010000000`,
+		},
 	}
 
-	ruleGroups, err := mrs.SetupRules()
-	if err != nil {
-		t.Fatalf("SetupRules() error = %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := ruleFor(t, groups, tt.record, tt.window)
+			if rule.Expr.StrVal != tt.want {
+				t.Errorf("expr mismatch\n got: %s\nwant: %s", rule.Expr.StrVal, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetupRules_AlertExpressionLiteral(t *testing.T) {
+	groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+	alertGroup := groupByName(t, groups, alertGroupName)
+
+	want := `(osko_error_budget_burn_rate{namespace="default", service="test-service", sli_name="test-sli", slo_name="test-slo", window="5m"} > 14.4 and ignoring(window) osko_error_budget_burn_rate{namespace="default", service="test-service", sli_name="test-sli", slo_name="test-slo", window="1h"} > 14.4)`
+
+	var found bool
+	for _, r := range alertGroup.Rules {
+		if r.Alert != "test-slo_alert_page_critical" {
+			continue
+		}
+		found = true
+		if r.Expr.StrVal != want {
+			t.Errorf("alert expr mismatch\n got: %s\nwant: %s", r.Expr.StrVal, want)
+		}
+	}
+	if !found {
+		t.Fatal("expected test-slo_alert_page_critical alert")
+	}
+}
+
+func TestSetupRules_AlertForDurations(t *testing.T) {
+	groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+	alertGroup := groupByName(t, groups, alertGroupName)
+
+	want := map[string]monitoringv1.Duration{
+		"test-slo_alert_page_critical": "2m",
+		"test-slo_alert_page_high":     "2m",
+		"test-slo_alert_ticket_high":   "15m",
+		"test-slo_alert_ticket_medium": "15m",
 	}
 
-	for _, rg := range ruleGroups {
-		if strings.HasSuffix(rg.Name, "_sli_total") {
-			for _, rule := range rg.Rules {
-				if strings.Contains(rule.Expr.StrVal, "increase(") {
-					t.Errorf("Extended window should use rate(), not increase(), got: %s", rule.Expr.StrVal)
-				}
-				if strings.Contains(rule.Expr.StrVal, "osko_sli_total") {
-					t.Errorf("Extended window should calculate from raw metrics, not recording rules, got: %s", rule.Expr.StrVal)
-				}
+	seen := map[string]bool{}
+	for _, r := range alertRules(alertGroup) {
+		wantFor, ok := want[r.Alert]
+		if !ok {
+			t.Errorf("unexpected alert %s", r.Alert)
+			continue
+		}
+		seen[r.Alert] = true
+		if r.For == nil {
+			t.Errorf("alert %s has no `for` duration", r.Alert)
+			continue
+		}
+		if *r.For != wantFor {
+			t.Errorf("alert %s for = %s, want %s", r.Alert, *r.For, wantFor)
+		}
+	}
+	for alert := range want {
+		if !seen[alert] {
+			t.Errorf("expected alert %s to be emitted", alert)
+		}
+	}
+}
+
+func TestSetupRules_BadMetricInlined(t *testing.T) {
+	groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLIWithBad(), "5m")
+
+	rule := ruleFor(t, groups, "osko_sli_measurement", "5m")
+	want := "clamp_min(clamp_max((sum(rate(http_requests_total[5m])) - sum(rate(http_requests_error_total[5m]))) / sum(rate(http_requests_total[5m])), 1), 0)"
+	if rule.Expr.StrVal != want {
+		t.Errorf("bad-metric expr mismatch\n got: %s\nwant: %s", rule.Expr.StrVal, want)
+	}
+
+	if !strings.Contains(rule.Expr.StrVal, "- sum(rate(http_requests_error_total[5m]))") {
+		t.Errorf("expected inlined bad metric subtraction, got: %s", rule.Expr.StrVal)
+	}
+
+	for _, r := range allRules(groups) {
+		if r.Record == "osko_sli_good" || r.Record == "osko_sli_bad" {
+			t.Errorf("unexpected %s rule emitted", r.Record)
+		}
+	}
+}
+
+func TestSetupRules_DefaultGroupingHasNoByClause(t *testing.T) {
+	groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+
+	for _, r := range allRules(groups) {
+		if strings.Contains(r.Expr.StrVal, " by (") {
+			t.Errorf("expected no `by (` clause by default, got: %s", r.Expr.StrVal)
+		}
+	}
+
+	for _, record := range []string{"osko_sli_total", "osko_sli_measurement"} {
+		rule := ruleFor(t, groups, record, "5m")
+		if !strings.Contains(rule.Expr.StrVal, "sum(rate(") {
+			t.Errorf("expected %s to contain sum(rate(, got: %s", record, rule.Expr.StrVal)
+		}
+	}
+}
+
+func TestSetupRules_ExplicitGroupBy(t *testing.T) {
+	slo := createTestSLOWithAlerting("0.999")
+	slo.Annotations["osko.dev/groupBy"] = "region, cluster"
+
+	groups := setupRules(t, slo, createTestSLI(), "5m")
+
+	total := ruleFor(t, groups, "osko_sli_total", "5m")
+	if !strings.Contains(total.Expr.StrVal, "by (region, cluster)") {
+		t.Errorf("expected grouping clause in %s, got: %s", total.Record, total.Expr.StrVal)
+	}
+
+	measurement := ruleFor(t, groups, "osko_sli_measurement", "5m")
+	if !strings.Contains(measurement.Expr.StrVal, "by (region, cluster)") {
+		t.Errorf("expected grouping clause in %s, got: %s", measurement.Record, measurement.Expr.StrVal)
+	}
+
+	for _, r := range allRules(groups) {
+		if r.Record == "" {
+			continue
+		}
+		for _, forbidden := range []string{"region", "cluster"} {
+			if _, ok := r.Labels[forbidden]; ok {
+				t.Errorf("rule %s must not stamp the grouped label %q, labels: %v", r.Record, forbidden, r.Labels)
 			}
 		}
 	}
+}
+
+func TestSetupRules_ReportingWindowSliTotal(t *testing.T) {
+	countTotals := func(groups []monitoringv1.RuleGroup) int {
+		n := 0
+		for _, r := range allRules(groups) {
+			if r.Record == "osko_sli_total" {
+				n++
+			}
+		}
+		return n
+	}
+
+	t.Run("raw when long window strategy is raw", func(t *testing.T) {
+		slo := createTestSLOWithAlerting("0.999")
+		slo.Annotations["osko.dev/longWindowStrategy"] = "raw"
+
+		groups := setupRules(t, slo, createTestSLI(), "5m")
+
+		if got := countTotals(groups); got != 2 {
+			t.Fatalf("expected 2 osko_sli_total rules, got %d", got)
+		}
+		rule := ruleFor(t, groups, "osko_sli_total", "28d")
+		want := "sum(rate(http_requests_total[28d]))"
+		if rule.Expr.StrVal != want {
+			t.Errorf("expr mismatch\n got: %s\nwant: %s", rule.Expr.StrVal, want)
+		}
+	})
+
+	t.Run("raw when base window exceeds the raw threshold", func(t *testing.T) {
+		groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "24h")
+
+		rule := ruleFor(t, groups, "osko_sli_total", "28d")
+		if strings.Contains(rule.Expr.StrVal, "avg_over_time(osko_sli_total{") {
+			t.Errorf("must not derive from a base window that is itself long, got: %s", rule.Expr.StrVal)
+		}
+	})
+
+	t.Run("no duplicate when reporting window equals base window", func(t *testing.T) {
+		slo := createTestSLOWithAlerting("0.999")
+		slo.Spec.TimeWindow = []openslov1.TimeWindowSpec{{Duration: "1h", IsRolling: true}}
+
+		groups := setupRules(t, slo, createTestSLI(), "1h")
+
+		if got := countTotals(groups); got != 1 {
+			t.Errorf("expected exactly 1 osko_sli_total when base == reporting, got %d", got)
+		}
+		rule := ruleFor(t, groups, "osko_sli_total", "1h")
+		want := "sum(rate(http_requests_total[1h]))"
+		if rule.Expr.StrVal != want {
+			t.Errorf("expr mismatch\n got: %s\nwant: %s", rule.Expr.StrVal, want)
+		}
+	})
+}
+
+func TestSetupRules_LongWindowStrategy(t *testing.T) {
+	tests := []struct {
+		name         string
+		strategy     string
+		wantDerived  bool
+		derivedNames []string
+	}{
+		{
+			name:         "derived by default",
+			strategy:     "",
+			wantDerived:  true,
+			derivedNames: []string{"24h", "3d", "28d"},
+		},
+		{
+			name:         "raw when requested",
+			strategy:     "raw",
+			wantDerived:  false,
+			derivedNames: []string{"24h", "3d", "28d"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			slo := createTestSLOWithAlerting("0.999")
+			if tt.strategy != "" {
+				slo.Annotations["osko.dev/longWindowStrategy"] = tt.strategy
+			}
+
+			groups := setupRules(t, slo, createTestSLI(), "5m")
+
+			for _, w := range tt.derivedNames {
+				rule := ruleFor(t, groups, "osko_sli_measurement", w)
+				hasDerived := strings.Contains(rule.Expr.StrVal, "avg_over_time(osko_sli_measurement{")
+				hasRaw := strings.Contains(rule.Expr.StrVal, "http_requests_total")
+
+				if tt.wantDerived {
+					if !hasDerived {
+						t.Errorf("window %s: expected derived expression, got: %s", w, rule.Expr.StrVal)
+					}
+					if hasRaw {
+						t.Errorf("window %s: derived expression must not reference the raw metric, got: %s", w, rule.Expr.StrVal)
+					}
+					continue
+				}
+
+				if !hasRaw {
+					t.Errorf("window %s: expected raw metric reference, got: %s", w, rule.Expr.StrVal)
+				}
+				if hasDerived {
+					t.Errorf("window %s: raw strategy must not derive from osko_sli_measurement, got: %s", w, rule.Expr.StrVal)
+				}
+			}
+
+			// Short windows are always raw.
+			short := ruleFor(t, groups, "osko_sli_measurement", "5m")
+			if !strings.Contains(short.Expr.StrVal, "http_requests_total") {
+				t.Errorf("5m measurement should always be raw, got: %s", short.Expr.StrVal)
+			}
+		})
+	}
+}
+
+func TestSetupRules_LongBaseWindowForcesRaw(t *testing.T) {
+	slo := createTestSLOWithAlerting("0.999")
+	groups := setupRules(t, slo, createTestSLI(), "24h")
+
+	rule := ruleFor(t, groups, "osko_sli_measurement", "28d")
+	if strings.Contains(rule.Expr.StrVal, "avg_over_time(osko_sli_measurement{") {
+		t.Errorf("a base window longer than the raw threshold must not be derived from, got: %s", rule.Expr.StrVal)
+	}
+
+	base := ruleFor(t, groups, "osko_sli_measurement", "24h")
+	if strings.Contains(base.Expr.StrVal, "avg_over_time(osko_sli_measurement{") {
+		t.Errorf("base window measurement must never self-reference, got: %s", base.Expr.StrVal)
+	}
+}
+
+func TestSetupRules_RecordingGroupOrdering(t *testing.T) {
+	groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+	recording := groupByName(t, groups, recordingGroupName)
+
+	lastMeasurement := -1
+	firstBurnRate := len(recording.Rules)
+	baseMeasurement := -1
+	firstDerived := len(recording.Rules)
+	baseTotal := -1
+	derivedTotal := -1
+	firstMeasurement := len(recording.Rules)
+
+	for i, r := range recording.Rules {
+		switch r.Record {
+		case "osko_sli_total":
+			if strings.Contains(r.Expr.StrVal, "avg_over_time(osko_sli_total{") {
+				derivedTotal = i
+			} else {
+				baseTotal = i
+			}
+		case "osko_sli_measurement":
+			if i < firstMeasurement {
+				firstMeasurement = i
+			}
+			lastMeasurement = i
+			if r.Labels["window"] == "5m" {
+				baseMeasurement = i
+			}
+			if strings.Contains(r.Expr.StrVal, "avg_over_time(osko_sli_measurement{") && i < firstDerived {
+				firstDerived = i
+			}
+		case "osko_error_budget_burn_rate":
+			if i < firstBurnRate {
+				firstBurnRate = i
+			}
+		}
+	}
+
+	if recording.Rules[0].Record != "osko_slo_target" {
+		t.Errorf("expected osko_slo_target first, got %s", recording.Rules[0].Record)
+	}
+	if recording.Rules[1].Record != "osko_sli_total" || recording.Rules[2].Record != "osko_sli_total" {
+		t.Errorf("expected both osko_sli_total rules at positions 1 and 2, got %s and %s",
+			recording.Rules[1].Record, recording.Rules[2].Record)
+	}
+	if baseTotal == -1 || derivedTotal == -1 {
+		t.Fatalf("expected a base and a derived osko_sli_total (baseTotal=%d, derivedTotal=%d)", baseTotal, derivedTotal)
+	}
+	if baseTotal >= derivedTotal {
+		t.Errorf("the derived osko_sli_total must follow the base window one (baseTotal=%d, derivedTotal=%d)", baseTotal, derivedTotal)
+	}
+	if derivedTotal >= firstMeasurement {
+		t.Errorf("both osko_sli_total rules must precede the measurement rules (derivedTotal=%d, firstMeasurement=%d)", derivedTotal, firstMeasurement)
+	}
+	if lastMeasurement >= firstBurnRate {
+		t.Errorf("every burn rate rule must follow every measurement rule (lastMeasurement=%d, firstBurnRate=%d)", lastMeasurement, firstBurnRate)
+	}
+	if baseMeasurement == -1 {
+		t.Fatal("expected a base window measurement rule")
+	}
+	if firstDerived <= baseMeasurement {
+		t.Errorf("derived measurements must follow the base window measurement (baseMeasurement=%d, firstDerived=%d)", baseMeasurement, firstDerived)
+	}
+}
+
+func TestSetupRules_WindowOrderingIsDeterministic(t *testing.T) {
+	first := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+	second := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+
+	if len(first) != len(second) {
+		t.Fatalf("group count differs between runs: %d vs %d", len(first), len(second))
+	}
+	for gi := range first {
+		if len(first[gi].Rules) != len(second[gi].Rules) {
+			t.Fatalf("rule count differs in group %s", first[gi].Name)
+		}
+		for ri := range first[gi].Rules {
+			if first[gi].Rules[ri].Expr.StrVal != second[gi].Rules[ri].Expr.StrVal {
+				t.Errorf("rule %d in group %s differs between runs:\n%s\n%s",
+					ri, first[gi].Name, first[gi].Rules[ri].Expr.StrVal, second[gi].Rules[ri].Expr.StrVal)
+			}
+		}
+	}
+
+	wantOrder := []string{"5m", "30m", "1h", "2h", "6h", "24h", "3d", "28d"}
+	var gotOrder []string
+	for _, r := range allRules(first) {
+		if r.Record == "osko_error_budget_burn_rate" {
+			gotOrder = append(gotOrder, r.Labels["window"])
+		}
+	}
+	if strings.Join(gotOrder, ",") != strings.Join(wantOrder, ",") {
+		t.Errorf("burn rate window order = %v, want %v", gotOrder, wantOrder)
+	}
+}
+
+func TestSetupRules_BurnRateFormula(t *testing.T) {
+	groups := setupRules(t, createTestSLO("0.999"), createTestSLI(), "5m")
+
+	found := 0
+	for _, r := range allRules(groups) {
+		if r.Record != "osko_error_budget_burn_rate" {
+			continue
+		}
+		found++
+		if !strings.Contains(r.Expr.StrVal, "1 - osko_sli_measurement{") {
+			t.Errorf("burn rate should be derived from osko_sli_measurement, got: %s", r.Expr.StrVal)
+		}
+		if !strings.Contains(r.Expr.StrVal, "/") {
+			t.Errorf("burn rate should divide by the error budget target, got: %s", r.Expr.StrVal)
+		}
+	}
+	if found == 0 {
+		t.Fatal("expected burn rate recording rules")
+	}
+}
+
+// BUG-2 (a selector-less `osko_sli_total - osko_sli_bad` expression that
+// collapsed every SLO onto one labelset) shipped because nothing ever checked
+// that the generated PromQL was well formed. This is that check: every
+// expression must parse, and every emitted name must satisfy the same
+// constraints Prometheus applies in model/rulefmt.
+func TestSetupRules_GeneratedRulesAreValidPromQL(t *testing.T) {
+	withAnnotation := func(slo *openslov1.SLO, key, value string) *openslov1.SLO {
+		slo.Annotations[key] = value
+		return slo
+	}
+
+	cases := []struct {
+		name       string
+		slo        *openslov1.SLO
+		sli        *openslov1.SLI
+		baseWindow string
+	}{
+		{"good path", createTestSLOWithAlerting("0.999"), createTestSLI(), "5m"},
+		{"bad path", createTestSLOWithAlerting("0.999"), createTestSLIWithBad(), "5m"},
+		{
+			"group by",
+			withAnnotation(createTestSLOWithAlerting("0.999"), "osko.dev/groupBy", "region, cluster"),
+			createTestSLI(), "5m",
+		},
+		{
+			"group by with bad path",
+			withAnnotation(createTestSLOWithAlerting("0.999"), "osko.dev/groupBy", "region, cluster"),
+			createTestSLIWithBad(), "5m",
+		},
+		{
+			"raw long windows good path",
+			withAnnotation(createTestSLOWithAlerting("0.999"), "osko.dev/longWindowStrategy", "raw"),
+			createTestSLI(), "5m",
+		},
+		{
+			"raw long windows bad path",
+			withAnnotation(createTestSLOWithAlerting("0.999"), "osko.dev/longWindowStrategy", "raw"),
+			createTestSLIWithBad(), "5m",
+		},
+		{"gauge", createTestSLOWithAlerting("0.999"), createTestSLIGauge(), "5m"},
+		{"long base window", createTestSLOWithAlerting("0.999"), createTestSLI(), "24h"},
+	}
+
+	checked := 0
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			groups := setupRules(t, tc.slo, tc.sli, tc.baseWindow)
+
+			for _, g := range groups {
+				for _, r := range g.Rules {
+					expr := r.Expr.String()
+					checked++
+
+					if _, err := parser.ParseExpr(expr); err != nil {
+						t.Errorf("%s: unparseable PromQL: %v\n  %s", g.Name, err, expr)
+					}
+
+					if r.Record != "" && !model.IsValidMetricName(model.LabelValue(r.Record)) {
+						t.Errorf("%s: invalid recording rule name %q", g.Name, r.Record)
+					}
+
+					// Prometheus stores the alert name in the `alertname` label,
+					// so rulefmt validates it as a label value, not a metric name.
+					if r.Alert != "" && !model.LabelValue(r.Alert).IsValid() {
+						t.Errorf("%s: invalid alert name %q", g.Name, r.Alert)
+					}
+
+					for k, v := range r.Labels {
+						if !model.LabelName(k).IsValid() || k == model.MetricNameLabel {
+							t.Errorf("%s: invalid label name %q on %s%s", g.Name, k, r.Record, r.Alert)
+						}
+						if !model.LabelValue(v).IsValid() {
+							t.Errorf("%s: invalid label value %q for %q", g.Name, v, k)
+						}
+					}
+
+					for k := range r.Annotations {
+						if !model.LabelName(k).IsValid() {
+							t.Errorf("%s: invalid annotation name %q", g.Name, k)
+						}
+					}
+				}
+			}
+		})
+	}
+
+	if checked == 0 {
+		t.Fatal("expected the matrix to produce rules to validate")
+	}
+	t.Logf("validated %d generated expressions across %d configurations", checked, len(cases))
 }
 
 func TestCreatePrometheusRule(t *testing.T) {
@@ -277,11 +1007,17 @@ func TestCreatePrometheusRule(t *testing.T) {
 
 	foundTarget := false
 	for _, g := range rule.Spec.Groups {
+		if g.Interval != nil {
+			t.Errorf("rule group %s must not set an interval, got %s", g.Name, *g.Interval)
+		}
 		for _, r := range g.Rules {
 			if r.Record == "osko_slo_target" {
 				foundTarget = true
 				if !strings.Contains(r.Expr.StrVal, "vector(0.999)") {
 					t.Errorf("Expected target rule to contain vector(0.999), got %s", r.Expr.StrVal)
+				}
+				if r.Labels["window"] != "28d" {
+					t.Errorf("Expected target rule window label 28d, got %s", r.Labels["window"])
 				}
 			}
 		}
@@ -314,41 +1050,16 @@ func TestBurnRateWindows_HasWindows(t *testing.T) {
 }
 
 func TestSetupRules_MagicAlerting_WindowPairs(t *testing.T) {
-	slo := createTestSLO("0.999")
-	slo.Annotations = map[string]string{
-		"osko.dev/magicAlerting": "true",
-	}
-
-	mrs := &MonitoringRuleSet{
-		Slo:        slo,
-		Sli:        createTestSLI(),
-		BaseWindow: "5m",
-	}
-
-	ruleGroups, err := mrs.SetupRules()
-	if err != nil {
-		t.Fatalf("SetupRules() error = %v", err)
-	}
-
-	var alertGroup *monitoringv1.RuleGroup
-	for i, rg := range ruleGroups {
-		if strings.HasSuffix(rg.Name, "_slo_alert") {
-			alertGroup = &ruleGroups[i]
-			break
-		}
-	}
-
-	if alertGroup == nil {
-		t.Fatal("Expected to find alert rule group when magicAlerting is enabled")
-	}
+	groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+	alertGroup := groupByName(t, groups, alertGroupName)
 
 	expectedAlerts := 4
-	if len(alertGroup.Rules) != expectedAlerts {
-		t.Errorf("Expected %d alert rules, got %d", expectedAlerts, len(alertGroup.Rules))
+	if got := len(alertRules(alertGroup)); got != expectedAlerts {
+		t.Errorf("Expected %d alert rules, got %d", expectedAlerts, got)
 	}
 
 	alertNames := make(map[string]bool)
-	for _, rule := range alertGroup.Rules {
+	for _, rule := range alertRules(alertGroup) {
 		alertNames[rule.Alert] = true
 	}
 
@@ -367,33 +1078,8 @@ func TestSetupRules_MagicAlerting_WindowPairs(t *testing.T) {
 }
 
 func TestSetupRules_MagicAlerting_CorrectWindowPairs(t *testing.T) {
-	slo := createTestSLO("0.999")
-	slo.Annotations = map[string]string{
-		"osko.dev/magicAlerting": "true",
-	}
-
-	mrs := &MonitoringRuleSet{
-		Slo:        slo,
-		Sli:        createTestSLI(),
-		BaseWindow: "5m",
-	}
-
-	ruleGroups, err := mrs.SetupRules()
-	if err != nil {
-		t.Fatalf("SetupRules() error = %v", err)
-	}
-
-	var alertGroup *monitoringv1.RuleGroup
-	for i, rg := range ruleGroups {
-		if strings.HasSuffix(rg.Name, "_slo_alert") {
-			alertGroup = &ruleGroups[i]
-			break
-		}
-	}
-
-	if alertGroup == nil {
-		t.Fatal("Expected to find alert rule group")
-	}
+	groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+	alertGroup := groupByName(t, groups, alertGroupName)
 
 	expectedPairs := []struct {
 		shortWindow string
@@ -405,7 +1091,7 @@ func TestSetupRules_MagicAlerting_CorrectWindowPairs(t *testing.T) {
 		{"6h", "3d"},
 	}
 
-	for _, rule := range alertGroup.Rules {
+	for _, rule := range alertRules(alertGroup) {
 		shortWindow := rule.Labels["short_window"]
 		longWindow := rule.Labels["long_window"]
 
@@ -423,105 +1109,159 @@ func TestSetupRules_MagicAlerting_CorrectWindowPairs(t *testing.T) {
 	}
 }
 
-func TestSetupRules_BadMetric(t *testing.T) {
-	mrs := &MonitoringRuleSet{
-		Slo:        createTestSLO("0.999"),
-		Sli:        createTestSLIWithBad(),
-		BaseWindow: "5m",
-	}
-
-	ruleGroups, err := mrs.SetupRules()
-	if err != nil {
-		t.Fatalf("SetupRules() error = %v", err)
-	}
-
-	var goodGroup *monitoringv1.RuleGroup
-	for i, rg := range ruleGroups {
-		if strings.HasSuffix(rg.Name, "_sli_good") {
-			goodGroup = &ruleGroups[i]
-			break
-		}
-	}
-
-	if goodGroup == nil {
-		t.Fatal("Expected to find sli_good rule group")
-	}
-
-	foundGoodFromBad := false
-	for _, rule := range goodGroup.Rules {
-		if strings.Contains(rule.Expr.StrVal, "osko_sli_total - osko_sli_bad") {
-			foundGoodFromBad = true
-			break
-		}
-	}
-
-	if !foundGoodFromBad {
-		t.Error("Expected good metric to be calculated from total - bad")
-	}
-}
-
 func TestSetupRules_GaugeMetricsUseAvgOverTime(t *testing.T) {
-	mrs := &MonitoringRuleSet{
-		Slo:        createTestSLO("0.999"),
-		Sli:        createTestSLIGauge(),
-		BaseWindow: "5m",
-	}
+	groups := setupRules(t, createTestSLO("0.999"), createTestSLIGauge(), "5m")
 
-	ruleGroups, err := mrs.SetupRules()
-	if err != nil {
-		t.Fatalf("SetupRules() error = %v", err)
-	}
-
-	for _, rg := range ruleGroups {
-		if strings.HasSuffix(rg.Name, "_sli_total") {
-			for _, rule := range rg.Rules {
-				if !strings.Contains(rule.Expr.StrVal, "avg_over_time(") {
-					t.Errorf("SLI total rule for gauge should use avg_over_time(), got: %s", rule.Expr.StrVal)
-				}
-				if strings.Contains(rule.Expr.StrVal, "rate(") {
-					t.Errorf("SLI total rule for gauge should NOT use rate(), got: %s", rule.Expr.StrVal)
-				}
-			}
+	for _, record := range []string{"osko_sli_total", "osko_sli_measurement"} {
+		rule := ruleFor(t, groups, record, "5m")
+		if !strings.Contains(rule.Expr.StrVal, "avg_over_time(") {
+			t.Errorf("%s for gauge should use avg_over_time(), got: %s", record, rule.Expr.StrVal)
 		}
-		if strings.HasSuffix(rg.Name, "_sli_good") {
-			for _, rule := range rg.Rules {
-				if !strings.Contains(rule.Expr.StrVal, "avg_over_time(") {
-					t.Errorf("SLI good rule for gauge should use avg_over_time(), got: %s", rule.Expr.StrVal)
-				}
-			}
+		if strings.Contains(rule.Expr.StrVal, "rate(") {
+			t.Errorf("%s for gauge should NOT use rate(), got: %s", record, rule.Expr.StrVal)
 		}
 	}
 }
 
 func TestSetupRules_CounterMetricsUseRate(t *testing.T) {
-	mrs := &MonitoringRuleSet{
-		Slo:        createTestSLO("0.999"),
-		Sli:        createTestSLI(),
-		BaseWindow: "5m",
+	groups := setupRules(t, createTestSLO("0.999"), createTestSLI(), "5m")
+
+	for _, record := range []string{"osko_sli_total", "osko_sli_measurement"} {
+		rule := ruleFor(t, groups, record, "5m")
+		if !strings.Contains(rule.Expr.StrVal, "rate(") {
+			t.Errorf("%s for counter should use rate(), got: %s", record, rule.Expr.StrVal)
+		}
+		if strings.Contains(rule.Expr.StrVal, "avg_over_time(") {
+			t.Errorf("%s for counter should NOT use avg_over_time(), got: %s", record, rule.Expr.StrVal)
+		}
+	}
+}
+
+// evalBurnRateExpr writes one osko_error_budget_burn_rate sample per window into
+// an in-memory TSDB and evaluates expr against it, returning the result series.
+func evalBurnRateExpr(t *testing.T, expr string, burnRates map[string]float64) int {
+	t.Helper()
+
+	store := teststorage.New(t)
+	t.Cleanup(func() { _ = store.Close() })
+
+	at := time.Unix(0, 0)
+	app := store.Appender(context.Background())
+	for window, value := range burnRates {
+		series := labels.FromStrings(
+			labels.MetricName, "osko_error_budget_burn_rate",
+			"namespace", "default",
+			"service", "test-service",
+			"sli_name", "test-sli",
+			"slo_name", "test-slo",
+			"window", window,
+		)
+		if _, err := app.Append(0, series, at.UnixMilli(), value); err != nil {
+			t.Fatalf("append window %s: %v", window, err)
+		}
+	}
+	if err := app.Commit(); err != nil {
+		t.Fatalf("commit samples: %v", err)
 	}
 
-	ruleGroups, err := mrs.SetupRules()
+	engine := promql.NewEngine(promql.EngineOpts{
+		MaxSamples: 10_000,
+		Timeout:    10 * time.Second,
+	})
+	query, err := engine.NewInstantQuery(context.Background(), store, nil, expr, at)
 	if err != nil {
-		t.Fatalf("SetupRules() error = %v", err)
+		t.Fatalf("prepare query %q: %v", expr, err)
+	}
+	defer query.Close()
+
+	result := query.Exec(context.Background())
+	if result.Err != nil {
+		t.Fatalf("evaluate query %q: %v", expr, result.Err)
+	}
+	vector, err := result.Vector()
+	if err != nil {
+		t.Fatalf("result as vector: %v", err)
 	}
 
-	for _, rg := range ruleGroups {
-		if strings.HasSuffix(rg.Name, "_sli_total") {
-			for _, rule := range rg.Rules {
-				if !strings.Contains(rule.Expr.StrVal, "rate(") {
-					t.Errorf("SLI total rule for counter should use rate(), got: %s", rule.Expr.StrVal)
-				}
-				if strings.Contains(rule.Expr.StrVal, "avg_over_time(") {
-					t.Errorf("SLI total rule for counter should NOT use avg_over_time(), got: %s", rule.Expr.StrVal)
+	return len(vector)
+}
+
+// The burn rate windows differ in their `window` label, so an alert joining them
+// with a plain `and` silently matches nothing and can never fire. Asserting on
+// the expression string cannot catch that, so evaluate it for real instead.
+func TestSetupRules_AlertFiresOnlyWhenBothWindowsBreach(t *testing.T) {
+	groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+	alertGroup := groupByName(t, groups, alertGroupName)
+
+	var expr string
+	for _, rule := range alertGroup.Rules {
+		if rule.Alert == "test-slo_alert_page_critical" {
+			expr = rule.Expr.StrVal
+		}
+	}
+	if expr == "" {
+		t.Fatal("expected test-slo_alert_page_critical alert")
+	}
+
+	const pageCriticalThreshold = 14.4
+	over, under := pageCriticalThreshold+7, pageCriticalThreshold-12
+
+	tests := []struct {
+		name      string
+		burnRates map[string]float64
+		want      int
+	}{
+		{"both windows breach", map[string]float64{"5m": over, "1h": over}, 1},
+		{"only short window breaches", map[string]float64{"5m": over, "1h": under}, 0},
+		{"only long window breaches", map[string]float64{"5m": under, "1h": over}, 0},
+		{"neither window breaches", map[string]float64{"5m": under, "1h": under}, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := evalBurnRateExpr(t, expr, tt.burnRates); got != tt.want {
+				t.Errorf("got %d series, want %d\nexpr: %s", got, tt.want, expr)
+			}
+		})
+	}
+}
+
+func TestSetupRules_GroupsStayUnderMimirRuleLimit(t *testing.T) {
+	// Mimir's ruler_max_rules_per_rule_group defaults to 20 and rejects the
+	// entire group with HTTP 400 above it, so the rules never evaluate. The
+	// operator has no way to detect this, hence the compile-time guard.
+	const mimirMaxRulesPerGroup = 20
+
+	tests := []struct {
+		name        string
+		baseWindow  string
+		wantWindows int
+	}{
+		{name: "default base window", baseWindow: "5m", wantWindows: 8},
+		{name: "custom base window adds a window", baseWindow: "1m", wantWindows: 9},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), tt.baseWindow)
+
+			measurements := 0
+			for _, g := range groups {
+				for _, r := range g.Rules {
+					if r.Record == "osko_sli_measurement" {
+						measurements++
+					}
 				}
 			}
-		}
-		if strings.HasSuffix(rg.Name, "_sli_good") {
-			for _, rule := range rg.Rules {
-				if !strings.Contains(rule.Expr.StrVal, "rate(") {
-					t.Errorf("SLI good rule for counter should use rate(), got: %s", rule.Expr.StrVal)
+			if measurements != tt.wantWindows {
+				t.Fatalf("got %d windows, want %d", measurements, tt.wantWindows)
+			}
+
+			for _, g := range groups {
+				if len(g.Rules) > mimirMaxRulesPerGroup {
+					t.Errorf("group %q has %d rules, exceeds Mimir's limit of %d", g.Name, len(g.Rules), mimirMaxRulesPerGroup)
 				}
 			}
-		}
+		})
 	}
 }

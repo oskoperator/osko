@@ -10,6 +10,10 @@ var (
 	ErrPermanent          = errors.New("permanent error")
 	ErrDependencyNotReady = errors.New("dependency not ready")
 	ErrInvalidTarget      = errors.New("invalid SLO target")
+
+	ErrUnsupportedBudgetingMethod = errors.New("unsupported budgeting method")
+	ErrInvalidSLIConfiguration    = errors.New("invalid SLI configuration")
+	ErrInvalidWindow              = errors.New("invalid window duration")
 )
 
 type ReconcileError struct {

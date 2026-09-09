@@ -1,14 +1,13 @@
 package helpers
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"text/template"
+	"time"
 
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	"github.com/oskoperator/osko/internal/config"
@@ -21,40 +20,39 @@ import (
 )
 
 const (
-	RecordPrefix   = "osko"
-	promqlTemplate = `
-	{{- if eq .RecordName "slo_target" -}}
-	vector({{.Metric}})
-	{{- else if eq .RecordName "sli_total" -}}
-	sum({{.Aggregation}}({{.Metric}}[{{.Window}}])) by ({{.Grouping}})
-	{{- else if eq .RecordName "sli_good" -}}
-	sum({{.Aggregation}}({{.Metric}}[{{.Window}}])) by ({{.Grouping}})
-	{{- else if eq .RecordName "sli_bad" -}}
-	sum({{.Aggregation}}({{.Metric}}[{{.Window}}])) by ({{.Grouping}})
-	{{- end -}}
-	`
+	RecordPrefix = "osko"
+
 	gaugeAggregation   = "avg_over_time"
 	counterAggregation = "rate"
+
+	annotationGroupBy            = "osko.dev/groupBy"
+	annotationLongWindowStrategy = "osko.dev/longWindowStrategy"
+	annotationMagicAlerting      = "osko.dev/magicAlerting"
+	annotationAlertingTool       = "osko.dev/alertingTool"
+	annotationBaseWindow         = "osko.dev/baseWindow"
+
+	// longWindowStrategyDerived computes long-window SLI measurements by
+	// averaging the base-window osko_sli_measurement recording rule instead of
+	// re-scanning the raw source series over the long range.
+	longWindowStrategyDerived = "derived"
+	// longWindowStrategyRaw computes every window straight from the raw source
+	// series. Correct, but dramatically more expensive on long windows.
+	longWindowStrategyRaw = "raw"
+
+	budgetingMethodOccurrences = "Occurrences"
+
+	defaultReportingWindow = "28d"
+
+	// maxRawWindow is the longest range we are willing to evaluate directly
+	// against raw source series. Anything longer is derived from the base
+	// window measurement when the derived strategy is active.
+	maxRawWindow = model.Duration(6 * time.Hour)
 )
 
-type RuleTemplateData struct {
-	Metric      string
-	Service     string
-	Window      string
-	RecordName  string
-	Labels      string
-	Aggregation string
-	Grouping    string
-}
-
-type AlertRuleTemplateData struct {
-	Metric     string
-	Service    string
-	Window     string
-	RecordName string
-	Labels     string
-	For        string
-}
+// alertingWindows are the fixed short/long window pairs used by the
+// multi-burn-rate alerts. They are always recorded so the alerts can reference
+// them regardless of the configured base and reporting windows.
+var alertingWindows = []string{"5m", "30m", "1h", "2h", "6h", "24h", "3d"}
 
 type MonitoringRuleSet struct {
 	Slo        *openslov1.SLO
@@ -64,6 +62,14 @@ type MonitoringRuleSet struct {
 	GoodRule   monitoringv1.Rule
 	TotalRule  monitoringv1.Rule
 	BaseWindow string
+}
+
+// window couples a window's literal spelling (used verbatim in PromQL and in
+// the `window` label) with its parsed duration (used for ordering and for the
+// raw/derived split).
+type window struct {
+	name     string
+	duration model.Duration
 }
 
 func mapToColonSeparatedString(labels map[string]string) string {
@@ -116,13 +122,13 @@ func uniqueStrings(input []string) []string {
 	return result
 }
 
-func (mrs *MonitoringRuleSet) createBaseRuleLabels(window string) map[string]string {
+func (mrs *MonitoringRuleSet) createBaseRuleLabels(w string) map[string]string {
 	return map[string]string{
 		"namespace": mrs.Slo.Namespace,
 		"service":   mrs.Slo.Spec.Service,
 		"sli_name":  mrs.Sli.Name,
 		"slo_name":  mrs.Slo.Name,
-		"window":    window,
+		"window":    w,
 	}
 }
 
@@ -139,39 +145,153 @@ func (mrs *MonitoringRuleSet) createUserDefinedRuleLabels() map[string]string {
 	return relevantLabels
 }
 
-func (mrs *MonitoringRuleSet) createSliMeasurementRecordingRule(totalRule, goodRule monitoringv1.Rule, window string) monitoringv1.Rule {
-	goodLabels := mapToColonSeparatedString(goodRule.Labels)
-	totalLabels := mapToColonSeparatedString(totalRule.Labels)
+// groupByLabels returns the label names the SLI should be aggregated by, as
+// configured via the osko.dev/groupBy annotation. An empty result means the
+// recording rules collapse to a single series, which is what makes stamping
+// the rule labels safe.
+func (mrs *MonitoringRuleSet) groupByLabels() []string {
+	raw := mrs.Slo.ObjectMeta.Annotations[annotationGroupBy]
+	if raw == "" {
+		return nil
+	}
+
+	parts := strings.Split(raw, ",")
+	labels := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		labels = append(labels, trimmed)
+	}
+
+	return uniqueStrings(labels)
+}
+
+// groupingClause renders the PromQL `by (...)` suffix, or an empty string when
+// no grouping is configured.
+func (mrs *MonitoringRuleSet) groupingClause() string {
+	labels := mrs.groupByLabels()
+	if len(labels) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" by (%s)", strings.Join(labels, ", "))
+}
+
+// ruleLabels builds the label set stamped onto every generated rule. Labels
+// carried by the data itself (the groupBy set) are deliberately excluded so the
+// rule labels never overwrite them.
+func (mrs *MonitoringRuleSet) ruleLabels(w string) map[string]string {
+	labels := mergeLabels(mrs.createBaseRuleLabels(w), mrs.createUserDefinedRuleLabels())
+	for _, groupBy := range mrs.groupByLabels() {
+		delete(labels, groupBy)
+	}
+	return labels
+}
+
+// selectorFor renders a PromQL label selector body pinned to a single window.
+func (mrs *MonitoringRuleSet) selectorFor(w string) string {
+	return mapToColonSeparatedString(mrs.ruleLabels(w))
+}
+
+func (mrs *MonitoringRuleSet) aggregation() string {
+	if mrs.Sli.Spec.RatioMetric.Counter {
+		return counterAggregation
+	}
+	return gaugeAggregation
+}
+
+// rangeExpr renders `sum(<agg>(<query>[<window>]))[ by (...)]`.
+func (mrs *MonitoringRuleSet) rangeExpr(query, w string) string {
+	return fmt.Sprintf("sum(%s(%s[%s]))%s", mrs.aggregation(), query, w, mrs.groupingClause())
+}
+
+func (mrs *MonitoringRuleSet) totalExpr(w string) string {
+	return mrs.rangeExpr(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, w)
+}
+
+// goodExpr renders the numerator of the SLI ratio. When only a bad metric is
+// configured the good series is inlined as `total - bad` so no intermediate
+// recording rule (and therefore no selector-less duplicate labelset) is needed.
+func (mrs *MonitoringRuleSet) goodExpr(w string) string {
+	if query := mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query; query != "" {
+		return mrs.rangeExpr(query, w)
+	}
+
+	return fmt.Sprintf(
+		"(%s - %s)",
+		mrs.totalExpr(w),
+		mrs.rangeExpr(mrs.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query, w),
+	)
+}
+
+func (mrs *MonitoringRuleSet) createTargetRule(reportingWindow string) monitoringv1.Rule {
+	return monitoringv1.Rule{
+		Record: fmt.Sprintf("%s_slo_target", RecordPrefix),
+		Expr:   intstr.FromString(fmt.Sprintf("vector(%s)", mrs.Slo.Spec.Objectives[0].Target)),
+		Labels: mrs.ruleLabels(reportingWindow),
+	}
+}
+
+func (mrs *MonitoringRuleSet) createSliTotalRule(w string) monitoringv1.Rule {
+	return monitoringv1.Rule{
+		Record: fmt.Sprintf("%s_sli_total", RecordPrefix),
+		Expr:   intstr.FromString(mrs.totalExpr(w)),
+		Labels: mrs.ruleLabels(w),
+	}
+}
+
+// The base window total is already a per-second rate (or gauge average), so
+// avg_over_time preserves its units; sum_over_time would scale it by the sample
+// count and is wrong here.
+func (mrs *MonitoringRuleSet) createDerivedSliTotalRule(w, baseWindow string) monitoringv1.Rule {
+	return monitoringv1.Rule{
+		Record: fmt.Sprintf("%s_sli_total", RecordPrefix),
+		Expr: intstr.FromString(fmt.Sprintf(
+			"avg_over_time(%s_sli_total{%s}[%s])",
+			RecordPrefix,
+			mrs.selectorFor(baseWindow),
+			w,
+		)),
+		Labels: mrs.ruleLabels(w),
+	}
+}
+
+func (mrs *MonitoringRuleSet) createRawSliMeasurementRule(w string) monitoringv1.Rule {
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_sli_measurement", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("clamp_max(%s{%s} / %s{%s}, 1)", goodRule.Record, goodLabels, totalRule.Record, totalLabels)),
-		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
+		Expr: intstr.FromString(fmt.Sprintf(
+			"clamp_min(clamp_max(%s / %s, 1), 0)",
+			mrs.goodExpr(w),
+			mrs.totalExpr(w),
+		)),
+		Labels: mrs.ruleLabels(w),
 	}
 }
 
-func (mrs *MonitoringRuleSet) createErrorBudgetRatioRecordingRule(sliMeasurement monitoringv1.Rule, window string) monitoringv1.Rule {
-	sliMeasurementLabels := mapToColonSeparatedString(sliMeasurement.Labels)
+func (mrs *MonitoringRuleSet) createDerivedSliMeasurementRule(w, baseWindow string) monitoringv1.Rule {
 	return monitoringv1.Rule{
-		Record: fmt.Sprintf("%s_error_budget_ratio", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("1 - %s{%s}", sliMeasurement.Record, sliMeasurementLabels)),
-		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
+		Record: fmt.Sprintf("%s_sli_measurement", RecordPrefix),
+		Expr: intstr.FromString(fmt.Sprintf(
+			"clamp_min(clamp_max(avg_over_time(%s_sli_measurement{%s}[%s]), 1), 0)",
+			RecordPrefix,
+			mrs.selectorFor(baseWindow),
+			w,
+		)),
+		Labels: mrs.ruleLabels(w),
 	}
 }
 
-func (mrs *MonitoringRuleSet) createBurnRateRecordingRule(errorBudgetRatio monitoringv1.Rule, errorBudgetTarget float64, window string) monitoringv1.Rule {
-	errorBudgetRatioLabels := mapToColonSeparatedString(errorBudgetRatio.Labels)
+func (mrs *MonitoringRuleSet) createBurnRateRule(w string, errorBudgetTarget float64) monitoringv1.Rule {
 	return monitoringv1.Rule{
 		Record: fmt.Sprintf("%s_error_budget_burn_rate", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("%s{%s} / %.10f", errorBudgetRatio.Record, errorBudgetRatioLabels, errorBudgetTarget)),
-		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
-	}
-}
-
-func (mrs *MonitoringRuleSet) createAntecedentRule(metric, recordName, window string) monitoringv1.Rule {
-	return monitoringv1.Rule{
-		Record: fmt.Sprintf("%s_%s", RecordPrefix, recordName),
-		Expr:   intstr.FromString(metric),
-		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
+		Expr: intstr.FromString(fmt.Sprintf(
+			"(1 - %s_sli_measurement{%s}) / %.10f",
+			RecordPrefix,
+			mrs.selectorFor(w),
+			errorBudgetTarget,
+		)),
+		Labels: mrs.ruleLabels(w),
 	}
 }
 
@@ -211,60 +331,107 @@ func validateTarget(target float64) error {
 	return nil
 }
 
-func (mrs *MonitoringRuleSet) createRecordingRule(metric, recordName, window string) monitoringv1.Rule {
+// validateSpec rejects SLO/SLI combinations that would otherwise generate
+// syntactically invalid or silently wrong PromQL. These messages surface on the
+// SLO status, so they name both the offending value and the fix.
+func (mrs *MonitoringRuleSet) validateSpec() error {
+	budgetingMethod := mrs.Slo.Spec.BudgetingMethod
+	if budgetingMethod != "" && budgetingMethod != budgetingMethodOccurrences {
+		return fmt.Errorf(
+			"budgetingMethod %q is not implemented, only %q is currently supported: %w",
+			budgetingMethod, budgetingMethodOccurrences, errors.ErrUnsupportedBudgetingMethod,
+		)
+	}
+
+	totalQuery := mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query
+
+	if mrs.Sli.Spec.ThresholdMetric.MetricSource.Type != "" && totalQuery == "" {
+		return fmt.Errorf(
+			"thresholdMetric SLIs are not yet supported, please express the SLI as a ratioMetric with total and good (or bad) queries: %w",
+			errors.ErrInvalidSLIConfiguration,
+		)
+	}
+
+	if totalQuery == "" {
+		return fmt.Errorf(
+			"a ratioMetric.total.metricSource.spec.query is required to generate SLO rules: %w",
+			errors.ErrInvalidSLIConfiguration,
+		)
+	}
+
+	if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query == "" &&
+		mrs.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query == "" {
+		return fmt.Errorf(
+			"one of ratioMetric.good.metricSource.spec.query or ratioMetric.bad.metricSource.spec.query is required to generate SLO rules: %w",
+			errors.ErrInvalidSLIConfiguration,
+		)
+	}
+
+	return nil
+}
+
+// longWindowStrategy resolves the osko.dev/longWindowStrategy annotation.
+// Anything other than an explicit "raw" falls back to the derived default.
+func (mrs *MonitoringRuleSet) longWindowStrategy() string {
 	log := ctrllog.FromContext(context.Background())
-	tmpl, err := template.New("promql").Parse(promqlTemplate)
-	if err != nil {
-		log.Error(err, "Failed to parse the PromQL template")
-		return monitoringv1.Rule{}
+
+	switch value := mrs.Slo.ObjectMeta.Annotations[annotationLongWindowStrategy]; value {
+	case "", longWindowStrategyDerived:
+		return longWindowStrategyDerived
+	case longWindowStrategyRaw:
+		return longWindowStrategyRaw
+	default:
+		log.V(1).Info("Unknown long window strategy, falling back to derived",
+			"annotation", annotationLongWindowStrategy,
+			"value", value,
+			"slo", mrs.Slo.Name)
+		return longWindowStrategyDerived
+	}
+}
+
+// resolveWindows builds the deterministic, ascending set of windows the SLO
+// records rules for: the base window, the reporting window and every alerting
+// window.
+func resolveWindows(baseWindow, reportingWindow string) ([]window, error) {
+	names := append([]string{baseWindow, reportingWindow}, alertingWindows...)
+	names = uniqueStrings(names)
+
+	windows := make([]window, 0, len(names))
+	for _, name := range names {
+		duration, err := model.ParseDuration(name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse window %q: %w", name, errors.ErrInvalidWindow)
+		}
+		windows = append(windows, window{name: name, duration: duration})
 	}
 
-	isCounter := mrs.Sli.Spec.RatioMetric.Counter
-	aggregation := counterAggregation
-	if !isCounter {
-		aggregation = gaugeAggregation
-	}
+	sort.Slice(windows, func(i, j int) bool {
+		if windows[i].duration != windows[j].duration {
+			return windows[i].duration < windows[j].duration
+		}
+		return windows[i].name < windows[j].name
+	})
 
-	grouping := fmt.Sprintf("namespace, service, sli_name, slo_name")
-
-	data := RuleTemplateData{
-		Metric:      metric,
-		Service:     mrs.Slo.Spec.Service,
-		Window:      window,
-		RecordName:  recordName,
-		Aggregation: aggregation,
-		Grouping:    grouping,
-	}
-
-	var promql bytes.Buffer
-	if err := tmpl.Execute(&promql, data); err != nil {
-		log.Error(err, "Failed to execute PromQL template")
-		return monitoringv1.Rule{}
-	}
-
-	rule := monitoringv1.Rule{
-		Record: fmt.Sprintf("%s_%s", RecordPrefix, recordName),
-		Expr:   intstr.FromString(promql.String()),
-		Labels: mergeLabels(mrs.createBaseRuleLabels(window), mrs.createUserDefinedRuleLabels()),
-	}
-
-	return rule
+	return windows, nil
 }
 
 func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	log := ctrllog.FromContext(context.Background())
 
-	baseWindow := mrs.BaseWindow
-	log.V(1).Info("Starting SetupRules", "baseWindow", baseWindow)
-	extendedWindow := "28d"
-
-	if len(mrs.Slo.Spec.TimeWindow) > 0 && mrs.Slo.Spec.TimeWindow[0].Duration != "" {
-		extendedWindow = string(mrs.Slo.Spec.TimeWindow[0].Duration)
+	if err := mrs.validateSpec(); err != nil {
+		return nil, err
 	}
 
 	if !mrs.isPrometheusSource() {
 		return []monitoringv1.RuleGroup{}, fmt.Errorf("unsupported metric source type")
 	}
+
+	baseWindow := mrs.BaseWindow
+	reportingWindow := defaultReportingWindow
+	if len(mrs.Slo.Spec.TimeWindow) > 0 && mrs.Slo.Spec.TimeWindow[0].Duration != "" {
+		reportingWindow = string(mrs.Slo.Spec.TimeWindow[0].Duration)
+	}
+	log.V(1).Info("Starting SetupRules", "baseWindow", baseWindow, "reportingWindow", reportingWindow)
 
 	target, err := parseTarget(mrs.Slo.Spec.Objectives[0].Target)
 	if err != nil {
@@ -278,147 +445,117 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	errorBudgetTarget := 1.0 - target
 	log.V(1).Info("SLO configuration", "target", target, "errorBudgetTarget", errorBudgetTarget)
 
-	var rules = map[string]map[string]monitoringv1.Rule{
-		"targetRule":       {},
-		"totalRule":        {},
-		"goodRule":         {},
-		"badRule":          {},
-		"sliMeasurement":   {},
-		"errorBudgetRatio": {},
-		"burnRate":         {},
+	windows, err := resolveWindows(baseWindow, reportingWindow)
+	if err != nil {
+		return nil, err
 	}
 
-	windows := []string{baseWindow, extendedWindow, "5m", "30m", "1h", "2h", "6h", "24h", "3d"}
-	windows = uniqueStrings(windows)
-
-	var alertingBurnRates []monitoringv1.Rule
-
-	rules["targetRule"][baseWindow] = monitoringv1.Rule{
-		Record: fmt.Sprintf("%s_slo_target", RecordPrefix),
-		Expr:   intstr.FromString(fmt.Sprintf("vector(%s)", mrs.Slo.Spec.Objectives[0].Target)),
-		Labels: mergeLabels(mrs.createBaseRuleLabels(baseWindow), mrs.createUserDefinedRuleLabels()),
+	baseDuration, err := model.ParseDuration(baseWindow)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse base window %q: %w", baseWindow, errors.ErrInvalidWindow)
 	}
 
-	for _, window := range windows {
-		log.V(1).Info("Processing window", "window", window)
+	reportingDuration, err := model.ParseDuration(reportingWindow)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse reporting window %q: %w", reportingWindow, errors.ErrInvalidWindow)
+	}
 
-		rules["totalRule"][window] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Total.MetricSource.Spec.Query, "sli_total", window)
+	// A derived window must never depend on a base window that is itself
+	// longer than the raw threshold, otherwise the base measurement would be
+	// derived from itself.
+	forceRaw := mrs.longWindowStrategy() == longWindowStrategyRaw || baseDuration > maxRawWindow
+	isDerived := func(d model.Duration) bool { return !forceRaw && d > maxRawWindow }
 
-		if mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query != "" {
-			rules["goodRule"][window] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Good.MetricSource.Spec.Query, "sli_good", window)
+	// Rules are emitted in strict dependency order inside a single group so
+	// Prometheus resolves the whole chain within one evaluation interval.
+	recordingRules := []monitoringv1.Rule{
+		mrs.createTargetRule(reportingWindow),
+		mrs.createSliTotalRule(baseWindow),
+	}
+
+	// Dashboards select osko_sli_total by the reporting window, so it is
+	// recorded for that window too unless it is already the base window.
+	if reportingWindow != baseWindow {
+		if isDerived(reportingDuration) {
+			recordingRules = append(recordingRules, mrs.createDerivedSliTotalRule(reportingWindow, baseWindow))
 		} else {
-			rules["badRule"][window] = mrs.createRecordingRule(mrs.Sli.Spec.RatioMetric.Bad.MetricSource.Spec.Query, "sli_bad", window)
-			rules["goodRule"][window] = mrs.createAntecedentRule(
-				fmt.Sprintf("%s - %s",
-					rules["totalRule"][window].Record,
-					rules["badRule"][window].Record,
-				), "sli_good", window)
-		}
-
-		rules["sliMeasurement"][window] = mrs.createSliMeasurementRecordingRule(rules["totalRule"][window], rules["goodRule"][window], window)
-		rules["errorBudgetRatio"][window] = mrs.createErrorBudgetRatioRecordingRule(rules["sliMeasurement"][window], window)
-		rules["burnRate"][window] = mrs.createBurnRateRecordingRule(rules["errorBudgetRatio"][window], errorBudgetTarget, window)
-
-		if window == "5m" || window == "30m" || window == "1h" || window == "2h" ||
-			window == "6h" || window == "24h" || window == "3d" {
-			alertingBurnRates = append(alertingBurnRates, rules["burnRate"][window])
+			recordingRules = append(recordingRules, mrs.createSliTotalRule(reportingWindow))
 		}
 	}
 
-	log.V(1).Info("Final burn rates collection",
-		"count", len(alertingBurnRates),
-		"windows", func() []string {
-			ws := make([]string, 0)
-			for _, r := range alertingBurnRates {
-				ws = append(ws, r.Labels["window"])
-			}
-			return ws
-		}())
-
-	rulesByType := make(map[string][]monitoringv1.Rule)
-
-	if rule, exists := rules["targetRule"][baseWindow]; exists {
-		rulesByType["targetRule"] = []monitoringv1.Rule{rule}
-	}
-
-	for ruleKey, nestedMap := range rules {
-		if ruleKey == "targetRule" {
+	var derivedMeasurements []monitoringv1.Rule
+	for _, w := range windows {
+		if isDerived(w.duration) {
+			derivedMeasurements = append(derivedMeasurements, mrs.createDerivedSliMeasurementRule(w.name, baseWindow))
 			continue
 		}
-		for _, window := range windows {
-			if rule, exists := nestedMap[window]; exists {
-				rulesByType[ruleKey] = append(rulesByType[ruleKey], rule)
-			}
-		}
+		recordingRules = append(recordingRules, mrs.createRawSliMeasurementRule(w.name))
+	}
+	recordingRules = append(recordingRules, derivedMeasurements...)
+
+	burnRates := make([]monitoringv1.Rule, 0, len(windows))
+	for _, w := range windows {
+		burnRates = append(burnRates, mrs.createBurnRateRule(w.name, errorBudgetTarget))
 	}
 
 	sloName := mrs.Slo.Name
-	ruleGroups := []monitoringv1.RuleGroup{
-		{Name: fmt.Sprintf("%s_slo_target", sloName), Rules: rulesByType["targetRule"]},
-		{Name: fmt.Sprintf("%s_sli_good", sloName), Rules: rulesByType["goodRule"]},
-		{Name: fmt.Sprintf("%s_sli_total", sloName), Rules: rulesByType["totalRule"]},
-		{Name: fmt.Sprintf("%s_sli_measurement", sloName), Rules: rulesByType["sliMeasurement"]},
-		{Name: fmt.Sprintf("%s_error_budget_ratio", sloName), Rules: rulesByType["errorBudgetRatio"]},
-		{Name: fmt.Sprintf("%s_burn_rate", sloName), Rules: rulesByType["burnRate"]},
+	magicAlerting := mrs.Slo.ObjectMeta.Annotations[annotationMagicAlerting] == "true"
+	log.V(1).Info("Magic alerting", "SLO", sloName, "enabled", magicAlerting)
+
+	// Burn rates ship with the alerts consuming them, not the measurements they
+	// derive from. Either layout costs one evaluation interval from measurement
+	// to alert, but this one splits 2*len(windows) rules over two groups rather
+	// than stacking them in one, staying clear of Mimir's default 20-rule
+	// ruler_max_rules_per_rule_group limit.
+	if !magicAlerting {
+		recordingRules = append(recordingRules, burnRates...)
+		return []monitoringv1.RuleGroup{
+			{Name: fmt.Sprintf("%s_recording", sloName), Rules: recordingRules},
+		}, nil
 	}
 
-	log.V(1).Info("Magic alerting", "SLO", sloName, "enabled", mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"])
-	if mrs.Slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
-		duration := monitoringv1.Duration("5m")
-		var alertRules []monitoringv1.Rule
+	return []monitoringv1.RuleGroup{
+		{Name: fmt.Sprintf("%s_recording", sloName), Rules: recordingRules},
+		{Name: fmt.Sprintf("%s_alert", sloName), Rules: append(burnRates, mrs.buildAlertRules(burnRates)...)},
+	}, nil
+}
 
-		burnRateWindows := mrs.getBurnRateWindows(alertingBurnRates)
+func (mrs *MonitoringRuleSet) buildAlertRules(alertingBurnRates []monitoringv1.Rule) []monitoringv1.Rule {
+	burnRateWindows := mrs.getBurnRateWindows(alertingBurnRates)
 
-		if burnRateWindows.hasWindows("5m", "1h") {
-			alertRules = append(alertRules,
-				mrs.createMultiBurnRateAlert(
-					burnRateWindows,
-					errorBudgetTarget,
-					&duration,
-					config.PageCritical,
-				),
-			)
-		}
-
-		if burnRateWindows.hasWindows("30m", "6h") {
-			alertRules = append(alertRules,
-				mrs.createMultiBurnRateAlert(
-					burnRateWindows,
-					errorBudgetTarget,
-					&duration,
-					config.PageHigh,
-				),
-			)
-		}
-
-		if burnRateWindows.hasWindows("2h", "24h") {
-			alertRules = append(alertRules,
-				mrs.createMultiBurnRateAlert(
-					burnRateWindows,
-					errorBudgetTarget,
-					&duration,
-					config.TicketHigh,
-				),
-			)
-		}
-
-		if burnRateWindows.hasWindows("6h", "3d") {
-			alertRules = append(alertRules,
-				mrs.createMultiBurnRateAlert(
-					burnRateWindows,
-					errorBudgetTarget,
-					&duration,
-					config.TicketMedium,
-				),
-			)
-		}
-
-		ruleGroups = append(ruleGroups, monitoringv1.RuleGroup{
-			Name:  fmt.Sprintf("%s_slo_alert", sloName),
-			Rules: alertRules,
-		})
+	tiers := []struct {
+		short    string
+		long     string
+		severity config.SREAlertSeverity
+	}{
+		{"5m", "1h", config.PageCritical},
+		{"30m", "6h", config.PageHigh},
+		{"2h", "24h", config.TicketHigh},
+		{"6h", "3d", config.TicketMedium},
 	}
-	return ruleGroups, nil
+
+	var alertRules []monitoringv1.Rule
+	for _, tier := range tiers {
+		if !burnRateWindows.hasWindows(tier.short, tier.long) {
+			continue
+		}
+		duration := alertDurationFor(tier.severity)
+		alertRules = append(alertRules, mrs.createMultiBurnRateAlert(burnRateWindows, &duration, tier.severity))
+	}
+
+	return alertRules
+}
+
+// alertDurationFor keeps the fast-burn tiers responsive. The SRE Workbook's
+// 1h/5m tier targets a ~2 minute detection time, which a uniform 5m `for` more
+// than doubles.
+func alertDurationFor(sreSeverity config.SREAlertSeverity) monitoringv1.Duration {
+	switch sreSeverity {
+	case config.PageCritical, config.PageHigh:
+		return monitoringv1.Duration("2m")
+	default:
+		return monitoringv1.Duration("15m")
+	}
 }
 
 type burnRateWindows struct {
@@ -434,15 +571,15 @@ func (brw *burnRateWindows) hasWindows(required ...string) bool {
 	return true
 }
 
-func (brw *burnRateWindows) get(window string) monitoringv1.Rule {
-	return brw.windows[window]
+func (brw *burnRateWindows) get(w string) monitoringv1.Rule {
+	return brw.windows[w]
 }
 
 func (mrs *MonitoringRuleSet) getBurnRateWindows(burnRates []monitoringv1.Rule) *burnRateWindows {
 	windows := make(map[string]monitoringv1.Rule)
 	for _, br := range burnRates {
-		if window, ok := br.Labels["window"]; ok && window != "" {
-			windows[window] = br
+		if w, ok := br.Labels["window"]; ok && w != "" {
+			windows[w] = br
 		}
 	}
 	return &burnRateWindows{windows: windows}
@@ -454,7 +591,6 @@ func isValidRule(rule monitoringv1.Rule) bool {
 
 func (mrs *MonitoringRuleSet) createMultiBurnRateAlert(
 	brw *burnRateWindows,
-	errorBudgetTarget float64,
 	duration *monitoringv1.Duration,
 	sreSeverity config.SREAlertSeverity,
 ) monitoringv1.Rule {
@@ -497,13 +633,16 @@ func (mrs *MonitoringRuleSet) createMultiBurnRateAlert(
 	shortLabels := mapToColonSeparatedString(shortWindow.Labels)
 	longLabels := mapToColonSeparatedString(longWindow.Labels)
 
+	// ignoring(window) is load-bearing: `and` matches on the full label set, and
+	// the two sides differ in `window`, so a plain conjunction never intersects
+	// and the alert can never fire.
 	alertExpression := fmt.Sprintf(
-		"(%s{%s} > %.1f and %s{%s} > %.1f)",
+		"(%s{%s} > %.1f and ignoring(window) %s{%s} > %.1f)",
 		shortWindow.Record, shortLabels, shortThreshold,
 		longWindow.Record, longLabels, longThreshold,
 	)
 
-	alertingTool := mrs.Slo.ObjectMeta.Annotations["osko.dev/alertingTool"]
+	alertingTool := mrs.Slo.ObjectMeta.Annotations[annotationAlertingTool]
 	if alertingTool == "" {
 		alertingTool = config.Cfg.AlertingTool
 	}
@@ -537,8 +676,8 @@ func CreateAlertingRule() (*monitoringv1.PrometheusRule, error) {
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
 	baseWindow := model.Duration(config.Cfg.DefaultBaseWindow).String()
-	if slo.ObjectMeta.Annotations["osko.dev/baseWindow"] != "" {
-		baseWindow = slo.ObjectMeta.Annotations["osko.dev/baseWindow"]
+	if slo.ObjectMeta.Annotations[annotationBaseWindow] != "" {
+		baseWindow = slo.ObjectMeta.Annotations[annotationBaseWindow]
 	}
 
 	mrs := &MonitoringRuleSet{

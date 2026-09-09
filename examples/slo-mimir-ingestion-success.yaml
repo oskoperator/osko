@@ -1,0 +1,42 @@
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: mimir-ingestion-success-rate
+  namespace: monitoring
+  labels:
+    label.osko.dev/domain: infrastructure
+    label.osko.dev/service: mimir
+    label.osko.dev/system: monitoring
+    label.osko.dev/team: platform
+  annotations:
+    osko.dev/datasourceRef: mimir-infra-ds
+    osko.dev/magicAlerting: "true"
+spec:
+  service: mimir
+  description: "Mimir should successfully ingest metric samples without failures"
+  budgetingMethod: Occurrences
+  indicator:
+    metadata:
+      name: mimir-ingestion-success-rate
+    spec:
+      ratioMetric:
+        counter: true
+        # No `good` series exists; omitting it makes osko derive good = total - bad.
+        total:
+          metricSource:
+            metricSourceRef: mimir-infra-ds
+            type: Mimir
+            spec:
+              query: "cortex_ingester_ingested_samples_total"
+        bad:
+          metricSource:
+            metricSourceRef: mimir-infra-ds
+            type: Mimir
+            spec:
+              query: "cortex_ingester_ingested_samples_failures_total"
+  objectives:
+    - target: "0.999"
+      displayName: "99.9% Ingestion Success Rate"
+  timeWindow:
+    - duration: 28d
+      isRolling: true

@@ -1,0 +1,42 @@
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: kubelet-runtime-operations
+  namespace: monitoring
+  labels:
+    label.osko.dev/domain: infrastructure
+    label.osko.dev/service: kubelet
+    label.osko.dev/system: kubernetes
+    label.osko.dev/team: platform
+  annotations:
+    osko.dev/datasourceRef: mimir-infra-ds
+    osko.dev/magicAlerting: "true"
+spec:
+  service: kubelet
+  description: "Container runtime operations should succeed without errors"
+  budgetingMethod: Occurrences
+  indicator:
+    metadata:
+      name: kubelet-runtime-operations
+    spec:
+      ratioMetric:
+        counter: true
+        # No `good` series exists; omitting it makes osko derive good = total - bad.
+        total:
+          metricSource:
+            metricSourceRef: mimir-infra-ds
+            type: Mimir
+            spec:
+              query: "kubelet_runtime_operations_total"
+        bad:
+          metricSource:
+            metricSourceRef: mimir-infra-ds
+            type: Mimir
+            spec:
+              query: "kubelet_runtime_operations_errors_total"
+  objectives:
+    - target: "0.999"
+      displayName: "99.9% Runtime Operation Success"
+  timeWindow:
+    - duration: 28d
+      isRolling: true

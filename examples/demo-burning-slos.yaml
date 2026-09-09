@@ -1,0 +1,245 @@
+# Demo SLO set for the local devel stack (make deploydev).
+#
+# Every SLI below is measured against Mimir's own metrics, with targets chosen
+# so the error budget actually burns at a known rate. Between them they cover
+# each distinct code path in the rule generator.
+#
+#   SLO                        SLI     target    burn    alert tiers
+#   mimir-api-latency          0.9759  0.999     24.1x   P1 P2 P3 P4
+#   mimir-tenant-latency       0.9907  0.999      9.3x      P2 P3 P4
+#   mimir-querystream-latency  0.99731 0.999      2.7x            P4
+#   mimir-request-errors       0.99983 0.9999     1.7x            P4
+#   mimir-ring-health          1.0     0.99       0x      none (healthy)
+#
+# burn = (1 - SLI) / (1 - target); tiers fire at 14.4x / 6x / 3x / 1x.
+---
+# Referenced (not owned) SLI: shared, survives deletion of the SLO below.
+#
+# Each query must be a single selector: it is injected verbatim into
+# sum(rate(<query>[window])). Multi-metric selectors such as {__name__=~"a|b"}
+# are rejected by Mimir's federated ruler.
+apiVersion: openslo.com/v1
+kind: SLI
+metadata:
+  name: mimir-tenant-latency-5ms
+  namespace: default
+spec:
+  description: Share of per-tenant requests served in under 5ms
+  ratioMetric:
+    counter: true
+    good:
+      metricSource:
+        type: Mimir
+        metricSourceRef: mimir-infra-ds
+        spec:
+          query: cortex_per_tenant_request_duration_seconds_bucket{le="0.005"}
+    total:
+      metricSource:
+        type: Mimir
+        metricSourceRef: mimir-infra-ds
+        spec:
+          query: cortex_per_tenant_request_duration_seconds_count
+---
+# 1. Fast burn -> trips every tier including the P1 page.
+#    Covers: inline SLI, good/total, counter default (field omitted), magicAlerting.
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: mimir-api-latency
+  namespace: default
+  annotations:
+    osko.dev/datasourceRef: mimir-infra-ds
+    osko.dev/magicAlerting: "true"
+  labels:
+    label.osko.dev/domain: observability
+    label.osko.dev/system: monitoring
+    label.osko.dev/team: infra
+    label.osko.dev/service: mimir-api
+spec:
+  description: 99.9% of Mimir API requests complete in under 5ms
+  service: mimir-api
+  budgetingMethod: Occurrences
+  indicator:
+    metadata:
+      name: mimir-api-latency-5ms
+    spec:
+      description: Requests served in under 5ms
+      ratioMetric:
+        good:
+          metricSource:
+            type: Mimir
+            metricSourceRef: mimir-infra-ds
+            spec:
+              query: cortex_request_duration_seconds_bucket{le="0.005"}
+        total:
+          metricSource:
+            type: Mimir
+            metricSourceRef: mimir-infra-ds
+            spec:
+              query: cortex_request_duration_seconds_count
+  objectives:
+    - target: "0.999"
+  timeWindow:
+    - duration: 28d
+      isRolling: true
+---
+# 2. Slow burn. Covers: the bad/total path (errors counted directly rather
+#    than successes), which the generator inlines as (total - bad) / total.
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: mimir-request-errors
+  namespace: default
+  annotations:
+    osko.dev/datasourceRef: mimir-infra-ds
+    osko.dev/magicAlerting: "true"
+  labels:
+    label.osko.dev/domain: observability
+    label.osko.dev/system: monitoring
+    label.osko.dev/team: infra
+    label.osko.dev/service: mimir-api
+spec:
+  description: 99.99% of Mimir requests return a non-error status
+  service: mimir-api
+  budgetingMethod: Occurrences
+  indicator:
+    metadata:
+      name: mimir-request-error-rate
+    spec:
+      description: Requests failing with 4xx, 5xx or an execution error
+      ratioMetric:
+        bad:
+          metricSource:
+            type: Mimir
+            metricSourceRef: mimir-infra-ds
+            spec:
+              query: cortex_request_duration_seconds_count{status_code=~"4..|5..|ERROR_EXECUTION"}
+        total:
+          metricSource:
+            type: Mimir
+            metricSourceRef: mimir-infra-ds
+            spec:
+              query: cortex_request_duration_seconds_count
+  objectives:
+    - target: "0.9999"
+  timeWindow:
+    - duration: 28d
+      isRolling: true
+---
+# 3. Moderate burn -> P2 + P3 + P4. Covers: indicatorRef (referenced, non-owned
+#    SLI) and osko.dev/groupBy, which yields one SLI series per tenant.
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: mimir-tenant-latency
+  namespace: default
+  annotations:
+    osko.dev/datasourceRef: mimir-infra-ds
+    osko.dev/magicAlerting: "true"
+    osko.dev/groupBy: tenant
+  labels:
+    label.osko.dev/domain: observability
+    label.osko.dev/system: monitoring
+    label.osko.dev/team: storage
+    label.osko.dev/service: mimir-ingester
+spec:
+  description: 99.9% of per-tenant requests complete in under 5ms
+  service: mimir-ingester
+  budgetingMethod: Occurrences
+  indicatorRef: mimir-tenant-latency-5ms
+  objectives:
+    - target: "0.999"
+  timeWindow:
+    - duration: 28d
+      isRolling: true
+---
+# 4. Healthy contrast. Covers: counter=false, i.e. the gauge aggregation path
+#    (avg_over_time instead of rate), explicitly overriding the true default.
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: mimir-ring-health
+  namespace: default
+  annotations:
+    osko.dev/datasourceRef: mimir-infra-ds
+  labels:
+    label.osko.dev/domain: observability
+    label.osko.dev/system: monitoring
+    label.osko.dev/team: infra
+    label.osko.dev/service: mimir-ring
+spec:
+  description: 99% of hash ring members are ACTIVE
+  service: mimir-ring
+  budgetingMethod: Occurrences
+  indicator:
+    metadata:
+      name: mimir-ring-active-members
+    spec:
+      description: Share of ring members in the ACTIVE state
+      ratioMetric:
+        counter: false
+        good:
+          metricSource:
+            type: Mimir
+            metricSourceRef: mimir-infra-ds
+            spec:
+              query: cortex_ring_members{state="ACTIVE"}
+        total:
+          metricSource:
+            type: Mimir
+            metricSourceRef: mimir-infra-ds
+            spec:
+              query: cortex_ring_members
+  objectives:
+    - target: "0.99"
+  timeWindow:
+    - duration: 28d
+      isRolling: true
+---
+# 5. Slow burn. Covers the cost knobs: longWindowStrategy=raw (every window
+#    scans the source series instead of deriving from the base measurement),
+#    a 1m base window and a 7d reporting window. Base and reporting windows are
+#    merged into the fixed alerting windows, so this SLO records 9 windows and
+#    25 rules rather than the default 8 and 23.
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: mimir-querystream-latency
+  namespace: default
+  annotations:
+    osko.dev/datasourceRef: mimir-infra-ds
+    osko.dev/magicAlerting: "true"
+    osko.dev/baseWindow: 1m
+    osko.dev/longWindowStrategy: raw
+  labels:
+    label.osko.dev/domain: observability
+    label.osko.dev/system: monitoring
+    label.osko.dev/team: storage
+    label.osko.dev/service: mimir-ingester
+spec:
+  description: 99.9% of ingester QueryStream calls complete in under 5ms
+  service: mimir-ingester
+  budgetingMethod: Occurrences
+  indicator:
+    metadata:
+      name: mimir-querystream-latency-5ms
+    spec:
+      description: QueryStream calls served in under 5ms
+      ratioMetric:
+        good:
+          metricSource:
+            type: Mimir
+            metricSourceRef: mimir-infra-ds
+            spec:
+              query: cortex_request_duration_seconds_bucket{route="/cortex.Ingester/QueryStream", le="0.005"}
+        total:
+          metricSource:
+            type: Mimir
+            metricSourceRef: mimir-infra-ds
+            spec:
+              query: cortex_request_duration_seconds_count{route="/cortex.Ingester/QueryStream"}
+  objectives:
+    - target: "0.999"
+  timeWindow:
+    - duration: 7d
+      isRolling: true

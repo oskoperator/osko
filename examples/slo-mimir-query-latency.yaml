@@ -1,0 +1,41 @@
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: mimir-query-latency
+  namespace: monitoring
+  labels:
+    label.osko.dev/domain: infrastructure
+    label.osko.dev/service: mimir
+    label.osko.dev/system: monitoring
+    label.osko.dev/team: platform
+  annotations:
+    osko.dev/datasourceRef: mimir-infra-ds
+    osko.dev/magicAlerting: "true"
+spec:
+  service: mimir
+  description: "Mimir queries should return within 2.5 seconds"
+  budgetingMethod: Occurrences
+  indicator:
+    metadata:
+      name: mimir-query-latency
+    spec:
+      ratioMetric:
+        counter: true
+        good:
+          metricSource:
+            metricSourceRef: mimir-infra-ds
+            type: Mimir
+            spec:
+              query: "cortex_querier_query_frontend_request_duration_seconds_bucket{le=\"2.5\"}"
+        total:
+          metricSource:
+            metricSourceRef: mimir-infra-ds
+            type: Mimir
+            spec:
+              query: "cortex_querier_query_frontend_request_duration_seconds_count"
+  objectives:
+    - target: "0.95"
+      displayName: "95% Queries Under 2.5s"
+  timeWindow:
+    - duration: 28d
+      isRolling: true

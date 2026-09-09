@@ -15,7 +15,18 @@ type RatioMetricSpec struct {
 	Good    MetricSpec `json:"good,omitempty"`
 	Bad     MetricSpec `json:"bad,omitempty"`
 	Total   MetricSpec `json:"total,omitempty"`
-	Counter bool       `json:"counter,omitempty"`
+	// Counter marks the source series as monotonically increasing counters,
+	// aggregated with rate(). Set false for gauges, aggregated with
+	// avg_over_time(). Defaults to true: avg_over_time() on a counter yields its
+	// lifetime average instead of a windowed rate, which silently makes short
+	// windows unresponsive and stops fast-burn alerts firing.
+	//
+	// Not `omitempty` on purpose: the SLO controller writes an SLI from an inline
+	// indicator, and dropping the field would let the default flip an explicit
+	// false back to true.
+	// +kubebuilder:default=true
+	// +optional
+	Counter bool `json:"counter"`
 }
 
 type ThresholdMetricSpec struct {

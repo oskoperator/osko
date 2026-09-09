@@ -254,6 +254,17 @@ spec:
                                 type: object
                             type: object
                           counter:
+                            default: true
+                            description: |-
+                              Counter marks the source series as monotonically increasing counters,
+                              aggregated with rate(). Set false for gauges, aggregated with
+                              avg_over_time(). Defaults to true: avg_over_time() on a counter yields its
+                              lifetime average instead of a windowed rate, which silently makes short
+                              windows unresponsive and stops fast-burn alerts firing.
+
+                              Not `omitempty` on purpose: the SLO controller writes an SLI from an inline
+                              indicator, and dropping the field would let the default flip an explicit
+                              false back to true.
                             type: boolean
                           good:
                             properties:
@@ -381,6 +392,17 @@ spec:
                                       type: object
                                   type: object
                                 counter:
+                                  default: true
+                                  description: |-
+                                    Counter marks the source series as monotonically increasing counters,
+                                    aggregated with rate(). Set false for gauges, aggregated with
+                                    avg_over_time(). Defaults to true: avg_over_time() on a counter yields its
+                                    lifetime average instead of a windowed rate, which silently makes short
+                                    windows unresponsive and stops fast-burn alerts firing.
+
+                                    Not `omitempty` on purpose: the SLO controller writes an SLI from an inline
+                                    indicator, and dropping the field would let the default flip an explicit
+                                    false back to true.
                                   type: boolean
                                 good:
                                   properties:

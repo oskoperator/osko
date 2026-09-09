@@ -25,7 +25,11 @@ Dockerfile.cross
 *~
 
 # Dashboard vendor dependencies (generated from jsonnetfile.lock.json)
-dashboards/vendor/
+devel/dashboards/vendor/
 
 # Repomix
 repomix-output.xml
+
+# Local development environment
+.envrc
+.omo/

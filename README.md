@@ -8,6 +8,51 @@ See the [design document](DESIGN.md) for more details on what `osko` aims to do.
 
 `osko` is in very active development, hardly functional and definitely not stable. Until a `v1` release comes around, use at your own risk.
 
+## Prerequisites
+
+### Mimir ruler limits
+
+Each SLO expands into a couple of dozen recording and alerting rules, which runs into two Mimir ruler limits. Both default to values that are low for SLO workloads, and exceeding either makes the ruler reject the whole rule group with `HTTP 400`. The rules never reach Mimir, so nothing evaluates:
+
+```
+per-user rules per rule group limit (limit: 20 actual: 21) exceeded
+```
+
+| Limit | Mimir default | What it constrains |
+| --- | --- | --- |
+| `ruler_max_rules_per_rule_group` | 20 | Rules in one group, so the number of windows per SLO |
+| `ruler_max_rule_groups_per_tenant` | 70 | Total groups, so the number of SLOs per tenant |
+
+An SLO with magic alerting enabled produces two groups, sized by the number of distinct windows `W`:
+
+```
+<slo>_recording   2 + W rules   (target, osko_sli_total, osko_sli_measurement)
+<slo>_alert       4 + W rules   (osko_error_budget_burn_rate, burn-rate alerts)
+```
+
+`W` is the seven fixed alerting windows (`5m`, `30m`, `1h`, `2h`, `6h`, `24h`, `3d`) plus the SLO's base and reporting windows where those differ. The defaults give `W = 8`, so 11 and 12 rules. A group limit of 20 therefore allows `W ≤ 16`; a custom `osko.dev/baseWindow` or an unusual `timeWindow` adds at most two.
+
+Without magic alerting the burn-rate rules stay in the recording group, giving one group of `3 + 2W` rules and a lower ceiling of `W ≤ 8`.
+
+Raise both limits in the Mimir `limits` block:
+
+```yaml
+limits:
+  ruler_max_rules_per_rule_group: 40
+  ruler_max_rule_groups_per_tenant: 200
+```
+
+Or per tenant, via the runtime overrides file:
+
+```yaml
+overrides:
+  my-tenant:
+    ruler_max_rules_per_rule_group: 40
+    ruler_max_rule_groups_per_tenant: 200
+```
+
+Divide `ruler_max_rule_groups_per_tenant` by two to get the number of SLOs a tenant can hold. Check what is actually in effect with `curl -H "X-Scope-OrgID: <tenant>" http://<mimir>/config | grep ruler_max`.
+
 ## Test It Out
 
 1. You’ll need a Kubernetes cluster to run `osko`. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.

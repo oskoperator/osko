@@ -170,7 +170,7 @@
         "description": "Window",
         "label": "Window",
         "name": "window",
-        "query": "label_values(osko_slo_target, window)",
+        "query": "label_values(osko_sli_measurement, window)",
         "refresh": 2,
         "type": "query"
       },

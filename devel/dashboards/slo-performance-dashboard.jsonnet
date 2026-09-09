@@ -8,7 +8,7 @@ local templates = [
   template.datasource(
     'datasource',
     'prometheus',
-    'Prometheus',
+    null,
     hide='label',
   ),
   template.new(
@@ -102,7 +102,7 @@ local errorBudgetPanel = {
     showUnfilled: true,
   },
   targets: [{
-    expr: '(1 - osko_error_budget_value{slo_name="$slo_name", service="$service", window="$window"}) * 100',
+    expr: 'clamp_min((1 - osko_error_budget_burn_rate{slo_name="$slo_name", service="$service", window="$window"}) * 100, 0)',
     instant: true,
     legendFormat: 'Error Budget Remaining (28d)',
   }],
@@ -170,7 +170,7 @@ local burndownPanel = {
     legend: { displayMode: 'table', placement: 'bottom' },
   },
   targets: [{
-    expr: '(1 - osko_error_budget_value{slo_name="$slo_name", service="$service", window="$window"}) * 100',
+    expr: 'clamp_min((1 - osko_error_budget_burn_rate{slo_name="$slo_name", service="$service", window="$window"}) * 100, 0)',
     legendFormat: 'Error Budget Remaining ($window)',
   }],
   title: 'Error Budget Burndown (28d)',

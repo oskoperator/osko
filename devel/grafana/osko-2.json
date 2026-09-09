@@ -245,7 +245,7 @@
                   "type": "prometheus",
                   "uid": "$env"
                },
-               "expr": "sum(\n    osko_error_budget_target{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n    *\n    osko_sli_total{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n)\n",
+               "expr": "sum(\n    osko_sli_total{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n    * on(slo_name, service, namespace) group_left()\n    (1 - osko_slo_target{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\"})\n)\n",
                "legendFormat": "Budget"
             }
          ],
@@ -298,7 +298,7 @@
                   "type": "prometheus",
                   "uid": "$env"
                },
-               "expr": "sum(\n    (\n        osko_error_budget_target{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n        - osko_error_budget_available{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n    ) *\n    osko_sli_total{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n)\n",
+               "expr": "sum(\n    clamp_min(\n        osko_sli_measurement{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n        - on(slo_name, service, namespace) group_left()\n        osko_slo_target{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\"},\n    0) * on(slo_name, service, namespace, window)\n    osko_sli_total{domain=~\"$domain\", system=~\"$system\", team=~\"$team\", service=~\"$service\", slo_name=~\"$slo\", window=\"$window\"}\n)\n",
                "legendFormat": "Remaining"
             }
          ],
@@ -333,7 +333,7 @@
             "description": "Window",
             "label": "Window",
             "name": "window",
-            "query": "label_values(osko_slo_target, window)",
+            "query": "label_values(osko_sli_measurement, window)",
             "refresh": 2,
             "type": "query"
          },

@@ -8,7 +8,7 @@ local templates = [
   template.datasource(
     'datasource',
     'prometheus',
-    'Prometheus',
+    null,
     hide='label',
   ),
   template.new(
@@ -84,7 +84,7 @@ local compliancePanel = {
     graphMode: 'none',
   },
   targets: [{
-    expr: 'osko_sli_measurement{slo_name=~"$slo_name", service=~"$service", window=~"$window"} >= osko_slo_target{slo_name=~"$slo_name", service=~"$service"}',
+    expr: 'osko_sli_measurement{slo_name=~"$slo_name", service=~"$service", window=~"$window"} >= bool on(slo_name, service, namespace) group_left() osko_slo_target{slo_name=~"$slo_name", service=~"$service"}',
     instant: true,
     legendFormat: 'SLO Compliance',
   }],
@@ -197,7 +197,7 @@ local errorBudgetPanel = {
     minVizHeight: 0,
   },
   targets: [{
-    expr: '(1 - osko_error_budget_value{slo_name=~"$slo_name", service=~"$service", window=~"$window"}) * 100',
+    expr: 'clamp_min((1 - osko_error_budget_burn_rate{slo_name=~"$slo_name", service=~"$service", window=~"$window"}) * 100, 0)',
     instant: true,
     legendFormat: 'Error Budget Remaining',
   }],
@@ -301,7 +301,7 @@ local burndownPanel = {
     tooltip: { mode: 'multi', sort: 'none' },
   },
   targets: [{
-    expr: '(1 - osko_error_budget_value{slo_name=~"$slo_name", service=~"$service", window=~"$window"}) * 100',
+    expr: 'clamp_min((1 - osko_error_budget_burn_rate{slo_name=~"$slo_name", service=~"$service", window=~"$window"}) * 100, 0)',
     legendFormat: 'Error Budget Remaining ({{window}})',
   }],
   title: 'Error Budget Burndown',
@@ -382,11 +382,11 @@ local burnRatePanel = {
       legendFormat: 'Current Burn Rate',
     },
     {
-      expr: 'osko_error_budget_burn_rate_threshold{slo_name=~"$slo_name", service=~"$service", window=~"$window"}',
+      expr: 'vector(14.4)',
       legendFormat: 'Fast Burn Threshold (14.4x)',
     },
     {
-      expr: 'osko_error_budget_burn_rate_threshold{slo_name=~"$slo_name", service=~"$service", window=~"$window"} / 7.2',
+      expr: 'vector(2)',
       legendFormat: 'Slow Burn Threshold (2x)',
     },
   ],
@@ -438,11 +438,11 @@ local eventsSummaryPanel = {
   },
   targets: [
     {
-      expr: 'osko_sli_total{slo_name=~"$slo_name", service=~"$service", window=~"$window"} * osko_sli_measurement{slo_name=~"$slo_name", service=~"$service", window=~"$window"}',
+      expr: 'osko_sli_total{slo_name=~"$slo_name", service=~"$service", window=~"$window"} * on(slo_name, service, namespace, window) osko_sli_measurement{slo_name=~"$slo_name", service=~"$service", window=~"$window"}',
       legendFormat: 'Good Events',
     },
     {
-      expr: 'osko_sli_total{slo_name=~"$slo_name", service=~"$service", window=~"$window"} * (1 - osko_sli_measurement{slo_name=~"$slo_name", service=~"$service", window=~"$window"})',
+      expr: 'osko_sli_total{slo_name=~"$slo_name", service=~"$service", window=~"$window"} * on(slo_name, service, namespace, window) (1 - osko_sli_measurement{slo_name=~"$slo_name", service=~"$service", window=~"$window"})',
       legendFormat: 'Bad Events',
     },
   ],
@@ -564,7 +564,7 @@ dashboard.new(
         enable: true,
         iconColor: 'red',
         name: 'SLO Alerts',
-        expr: 'ALERTS{alertname=~"SLOBudgetBurn.*", slo_name=~"$slo_name", service=~"$service"}',
+        expr: 'ALERTS{alertname=~".*_alert_.*", slo_name=~"$slo_name", alertstate="firing"}',
         tagKeys: 'alertname,severity',
         textFormat: '{{ alertname }} - {{ severity }}',
         titleFormat: 'SLO Alert',

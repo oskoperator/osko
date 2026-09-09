@@ -108,7 +108,7 @@
          },
          "targets": [
             {
-               "expr": "(1 - osko_error_budget_value{slo_name=\"$slo_name\", service=\"$service\", window=\"$window\"}) * 100",
+               "expr": "clamp_min((1 - osko_error_budget_burn_rate{slo_name=\"$slo_name\", service=\"$service\", window=\"$window\"}) * 100, 0)",
                "instant": true,
                "legendFormat": "Error Budget Remaining (28d)"
             }
@@ -215,7 +215,7 @@
          },
          "targets": [
             {
-               "expr": "(1 - osko_error_budget_value{slo_name=\"$slo_name\", service=\"$service\", window=\"$window\"}) * 100",
+               "expr": "clamp_min((1 - osko_error_budget_burn_rate{slo_name=\"$slo_name\", service=\"$service\", window=\"$window\"}) * 100, 0)",
                "legendFormat": "Error Budget Remaining ($window)"
             }
          ],
@@ -335,10 +335,7 @@
    "templating": {
       "list": [
          {
-            "current": {
-               "text": "Prometheus",
-               "value": "Prometheus"
-            },
+            "current": { },
             "hide": 1,
             "label": null,
             "name": "datasource",

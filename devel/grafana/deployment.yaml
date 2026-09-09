@@ -23,6 +23,14 @@ spec:
         - name: grafana-datasources
           mountPath: /etc/grafana/provisioning/datasources
           readOnly: true
+        - name: grafana-dashboard-provider
+          mountPath: /etc/grafana/provisioning/dashboards
+          readOnly: true
+        - name: grafana-data
+          mountPath: /var/lib/grafana
+        - name: grafana-dashboards
+          mountPath: /var/lib/grafana/dashboards/osko
+          readOnly: true
         env:
         - name: GF_SERVER_ROOT_URL
           value: http://localhost:3000
@@ -37,3 +45,12 @@ spec:
       - name: grafana-datasources
         configMap:
           name: grafana-datasources
+      - name: grafana-dashboard-provider
+        configMap:
+          name: grafana-dashboard-provider
+      - name: grafana-data
+        persistentVolumeClaim:
+          claimName: grafana-data
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards

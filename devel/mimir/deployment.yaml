@@ -24,12 +24,19 @@ spec:
           volumeMounts:
             - name: config-volume
               mountPath: /etc/mimir
+            - name: mimir-data
+              mountPath: /tmp/mimir
             - name: alertmanagerconfig-volume
               mountPath: /tmp/mimir/alertmanager-config/
+      securityContext:
+        fsGroup: 10001
       volumes:
         - name: config-volume
           configMap:
             name: mimir-config
+        - name: mimir-data
+          persistentVolumeClaim:
+            claimName: mimir-data
         - name: alertmanagerconfig-volume
           configMap:
             name: mimir-alertmanager-config

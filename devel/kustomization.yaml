@@ -2,9 +2,20 @@ resources:
   - grafana/deployment.yaml
   - grafana/service.yaml
   - grafana/mimir-datasource.yaml
+  - grafana/dashboards-provider.yaml
+  - grafana/pvc.yaml
   - mimir/deployment.yaml
   - mimir/service.yaml
   - mimir/configmap.yaml
   - mimir/alertmanager-default-config.yaml
+  - mimir/pvc.yaml
   - grafana-agent/deployment.yaml
   - grafana-agent/configmap.yaml
+
+configMapGenerator:
+  - name: grafana-dashboards
+    files:
+      - dashboards/slo-performance-dashboard.json
+      - dashboards/slo-performance-dashboard-improved.json
+      - grafana/osko-1.json
+      - grafana/osko-2.json

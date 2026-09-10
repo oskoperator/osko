@@ -31,6 +31,7 @@ var _ = Describe("Datasource spec.type validation", func() {
 		err := k8sClient.Create(context.Background(), newDatasource("bad-type", "thanso"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("spec.type"))
+		Expect(err.Error()).To(ContainSubstring("Unsupported value"))
 	})
 
 	It("accepts thanos", func() {
@@ -47,6 +48,12 @@ var _ = Describe("Datasource spec.type validation", func() {
 
 	It("accepts mimir", func() {
 		ds := newDatasource("good-mimir", "mimir")
+		Expect(k8sClient.Create(context.Background(), ds)).To(Succeed())
+		Expect(k8sClient.Delete(context.Background(), ds)).To(Succeed())
+	})
+
+	It("accepts cortex", func() {
+		ds := newDatasource("good-cortex", "cortex")
 		Expect(k8sClient.Create(context.Background(), ds)).To(Succeed())
 		Expect(k8sClient.Delete(context.Background(), ds)).To(Succeed())
 	})

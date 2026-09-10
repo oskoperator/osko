@@ -32,11 +32,14 @@ The spec's testing section calls for envtest integration tests of the SLO reconc
 
 Making those tests work requires vendoring prometheus-operator CRDs, extending `CRDDirectoryPaths`, registering `monitoringv1`, and starting a manager in the suite. That is standalone test-infrastructure work unrelated to Thanos.
 
+**Correction, made during Task 4 planning.** The paragraph above over-generalises. What is unreachable is running a *manager* under envtest — it needs the prometheus-operator CRDs. Calling `Reconcile` directly is a different matter: `sigs.k8s.io/controller-runtime/pkg/client/fake` needs only a scheme, and `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.74.0` is already a direct dependency, so `monitoringv1` types register without any CRD YAML. Task 4 uses that to test the reconciler's gating behaviour for real.
+
 **This plan therefore:**
 
 - Puts all decision logic in pure functions in `internal/backend`, so every gating decision is unit-testable without a cluster (Task 1).
-- Uses envtest only for CRD schema validation, which **is** reachable with existing infrastructure (Task 2).
-- Records the reconciler-level integration test gap as a follow-up in the ADR (Task 6).
+- Uses envtest for CRD schema validation, which **is** reachable with existing infrastructure (Task 2).
+- Drives `connectDatasource` (Task 3) and `Reconcile` (Task 4) directly, against `httptest` and the fake client respectively, so the behaviour each task delivers is covered rather than merely inspected.
+- Records the remaining gap — a real manager under envtest, exercising watches and the full controller runtime — as a follow-up in the ADR (Task 6).
 
 ---
 
@@ -923,24 +926,196 @@ Thanos equivalent."
 - Consumes: `backend.Parse` and the `Type` methods `NeedsRemoteRulePush` / `SupportsMagicAlerting` from Task 1.
 - Produces: no new exported symbols.
 
-**No new test in this task, deliberately.** The behaviour being added is two `if` wrappers around existing blocks in the SLO reconciler. Asserting that the reconciler takes those branches requires a running manager, which this repository does not have (see the deviation note at the top of this plan). The predicates themselves are already covered exhaustively by Task 1's `TestTypeNeedsRemoteRulePush` and `TestTypeSupportsMagicAlerting`.
+**On testing this task.** A test that merely re-asserted Task 1's predicates would pass before the change, pass after a *wrong* change, and give false confidence — that shape was considered and rejected. But the reconciler itself *can* be driven directly with `sigs.k8s.io/controller-runtime/pkg/client/fake`: the fake client needs only a scheme, not CRD YAML, and `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.74.0` is already a direct dependency, so `monitoringv1` types register fine. The envtest limitation recorded at the top of this plan applies to running a *manager*, not to calling `Reconcile` directly.
 
-A test in this file that re-asserted those predicates would pass before the change, pass after a *wrong* change, and give false confidence. It was considered and rejected. Verification for this task is: the existing suite stays green, and the reviewer inspects the diff for correct branch placement. The coverage gap is recorded in ADR 0008 (Task 6).
+So this task asserts the real thing: given a Datasource of each backend type, does the reconciler create a MimirRule or not, and does magic alerting produce an AlertManagerConfig or not.
 
 - [ ] **Step 1: Confirm the baseline is green before changing anything**
 
 Run: `make test`
-Expected: PASS. Note the result — if anything is already failing, stop and report, because this task's only automated signal is that the suite does not change state.
+Expected: PASS. If anything is already failing, stop and report.
 
-- [ ] **Step 2: Write the implementation**
+- [ ] **Step 2: Write the failing test**
 
-2a. Add the import to `internal/controller/openslo/slo_controller.go`:
+Create `internal/controller/openslo/slo_gating_test.go`:
+
+```go
+package controller
+
+import (
+	"context"
+	"testing"
+
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
+	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
+	"github.com/oskoperator/osko/internal/config"
+)
+
+func gatingTestScheme(t *testing.T) *runtime.Scheme {
+	t.Helper()
+	s := runtime.NewScheme()
+	require.NoError(t, openslov1.AddToScheme(s))
+	require.NoError(t, oskov1alpha1.AddToScheme(s))
+	require.NoError(t, monitoringv1.AddToScheme(s))
+	return s
+}
+
+// TestSLOGatesOwnedResourcesByBackend asserts which owned resources the SLO
+// reconciler creates for each backend. Mimir and Cortex expose a ruler
+// configuration API, so they need a MimirRule; Thanos, Prometheus and
+// VictoriaMetrics consume the PrometheusRule instead and must not get one.
+func TestSLOGatesOwnedResourcesByBackend(t *testing.T) {
+	config.NewConfig()
+
+	tests := []struct {
+		name           string
+		datasourceType string
+		magicAlerting  bool
+		wantMimirRule  bool
+		wantAMC        bool
+	}{
+		{name: "mimir pushes rules to a remote ruler", datasourceType: "mimir", wantMimirRule: true},
+		{name: "cortex pushes rules to a remote ruler", datasourceType: "cortex", wantMimirRule: true},
+		{name: "thanos consumes the PrometheusRule instead", datasourceType: "thanos", wantMimirRule: false},
+		{name: "prometheus consumes the PrometheusRule instead", datasourceType: "prometheus", wantMimirRule: false},
+		{name: "victoriametrics consumes the PrometheusRule instead", datasourceType: "victoriametrics", wantMimirRule: false},
+		{name: "magic alerting on mimir creates an AlertManagerConfig", datasourceType: "mimir", magicAlerting: true, wantMimirRule: true, wantAMC: true},
+		{name: "magic alerting on thanos creates nothing", datasourceType: "thanos", magicAlerting: true, wantMimirRule: false, wantAMC: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			annotations := map[string]string{"osko.dev/datasourceRef": "test-ds"}
+			if tt.magicAlerting {
+				annotations["osko.dev/magicAlerting"] = "true"
+			}
+
+			ds := &openslov1.Datasource{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-ds", Namespace: "default"},
+				Spec: openslov1.DatasourceSpec{
+					Type: tt.datasourceType,
+					ConnectionDetails: oskov1alpha1.ConnectionDetails{
+						Address:      "http://example:9090",
+						TargetTenant: "test-tenant",
+					},
+				},
+			}
+
+			metricSource := func() openslov1.MetricSource {
+				return openslov1.MetricSource{
+					MetricSourceRef: "test-ds",
+					Type:            tt.datasourceType,
+					Spec:            openslov1.MetricSourceSpec{Query: "sum(rate(requests_total[5m]))"},
+				}
+			}
+
+			slo := &openslov1.SLO{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-slo",
+					Namespace:   "default",
+					Annotations: annotations,
+				},
+				Spec: openslov1.SLOSpec{
+					Service:         "test-service",
+					BudgetingMethod: "Occurrences",
+					Objectives:      []openslov1.ObjectivesSpec{{Target: "0.99"}},
+					TimeWindow:      []openslov1.TimeWindowSpec{{Duration: "28d", IsRolling: true}},
+					Indicator: &openslov1.Indicator{
+						Metadata: metav1.ObjectMeta{Name: "test-sli"},
+						Spec: openslov1.SLISpec{
+							RatioMetric: openslov1.RatioMetricSpec{
+								Counter: true,
+								Good:    openslov1.MetricSpec{MetricSource: metricSource()},
+								Total:   openslov1.MetricSpec{MetricSource: metricSource()},
+							},
+						},
+					},
+				},
+			}
+
+			s := gatingTestScheme(t)
+			c := fake.NewClientBuilder().
+				WithScheme(s).
+				WithObjects(ds, slo).
+				WithStatusSubresource(
+					&openslov1.SLO{},
+					&openslov1.SLI{},
+					&openslov1.Datasource{},
+					&oskov1alpha1.MimirRule{},
+					&oskov1alpha1.AlertManagerConfig{},
+				).
+				Build()
+
+			r := &SLOReconciler{Client: c, Scheme: s, Recorder: record.NewFakeRecorder(50)}
+			ctx := context.Background()
+			key := types.NamespacedName{Name: "test-slo", Namespace: "default"}
+
+			// Reconcile is not single-pass: pass 1 adds the finalizer and
+			// requeues, pass 2 creates the PrometheusRule and returns, and only
+			// pass 3 reaches the MimirRule and magic-alerting gates. A fourth
+			// pass is harmless and guards against an extra early return.
+			for i := 1; i <= 4; i++ {
+				_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
+				require.NoError(t, err, "reconcile pass %d", i)
+			}
+
+			pr := &monitoringv1.PrometheusRule{}
+			require.NoError(t, c.Get(ctx, key, pr),
+				"every backend gets a PrometheusRule")
+
+			mr := &oskov1alpha1.MimirRule{}
+			mrErr := c.Get(ctx, key, mr)
+			if tt.wantMimirRule {
+				assert.NoError(t, mrErr,
+					"%s exposes a ruler API, so a MimirRule is required", tt.datasourceType)
+			} else {
+				assert.True(t, apierrors.IsNotFound(mrErr),
+					"%s has no rule-write API, so no MimirRule may be created; got err=%v",
+					tt.datasourceType, mrErr)
+			}
+
+			amc := &oskov1alpha1.AlertManagerConfig{}
+			amcErr := c.Get(ctx, types.NamespacedName{Name: "test-slo-alerting", Namespace: "default"}, amc)
+			if tt.wantAMC {
+				assert.NoError(t, amcErr,
+					"magic alerting on %s must create an AlertManagerConfig", tt.datasourceType)
+			} else {
+				assert.True(t, apierrors.IsNotFound(amcErr),
+					"no AlertManagerConfig expected for %s (magicAlerting=%v); got err=%v",
+					tt.datasourceType, tt.magicAlerting, amcErr)
+			}
+		})
+	}
+}
+```
+
+Notes for whoever implements this:
+
+- `config.NewConfig()` is required because `CreatePrometheusRule` reads `config.Cfg.DefaultBaseWindow`; without it the base window is zero and rule generation misbehaves.
+- Build a fresh `runtime.NewScheme()` rather than using the global `scheme.Scheme`, which `suite_test.go` already mutates.
+- `WithStatusSubresource` is required in controller-runtime 0.18 for `r.Status().Update()` to work against the fake client. If a status update still errors, add the offending type to that list rather than removing the status call from production code.
+- If a reconcile pass returns an unexpected error, do not paper over it by lowering the pass count — read the error and report what the reconciler actually did.
+
+- [ ] **Step 3: Write the implementation**
+
+3a. Add the import to `internal/controller/openslo/slo_controller.go`:
 
 ```go
 	"github.com/oskoperator/osko/internal/backend"
 ```
 
-2a-bis. Parse the datasource type once, immediately after the Datasource `ds` has been fetched and before the PrometheusRule block. An unparseable type is a permanent error: the SLO cannot be reconciled correctly against a backend OSKO does not understand, and failing here is what stops the gates below from degrading silently.
+3a-bis. Parse the datasource type once, immediately after the Datasource `ds` has been fetched and before the PrometheusRule block. An unparseable type is a permanent error: the SLO cannot be reconciled correctly against a backend OSKO does not understand, and failing here is what stops the gates below from degrading silently.
 
 ```go
 	backendType, err := backend.Parse(ds.Spec.Type)
@@ -959,7 +1134,7 @@ Expected: PASS. Note the result — if anything is already failing, stop and rep
 
 `utils`, `metav1`, `errors` and `time` are already imported in this file.
 
-2b. Wrap the MimirRule block. Find line 211 `mimirRule := &oskov1alpha1.MimirRule{}` and the `log.V(1).Info("MimirRule found", ...)` line that closes the block at line 270. Wrap the whole span:
+3b. Wrap the MimirRule block. Find line 211 `mimirRule := &oskov1alpha1.MimirRule{}` and the `log.V(1).Info("MimirRule found", ...)` line that closes the block at line 270. Wrap the whole span:
 
 ```go
 	if backendType.NeedsRemoteRulePush() {
@@ -977,7 +1152,7 @@ Expected: PASS. Note the result — if anything is already failing, stop and rep
 
 Do not change any logic inside the block. The `return ctrl.Result{}, nil` statements inside it stay as they are.
 
-2c. Gate magic alerting. Replace the opening of the block at line 273:
+3c. Gate magic alerting. Replace the opening of the block at line 273:
 
 ```go
 	// Create AlertManagerConfig if magic alerting is enabled and the backend
@@ -1000,12 +1175,12 @@ Do not change any logic inside the block. The `return ctrl.Result{}, nil` statem
 
 The SLO is deliberately left Ready: the burn-rate alerting rules live in the PrometheusRule and do fire. Only the routing configuration is out of scope.
 
-- [ ] **Step 3: Run tests to verify nothing regressed**
+- [ ] **Step 4: Run tests to verify nothing regressed**
 
 Run: `make test`
 Expected: PASS. Confirm nothing else regressed, particularly `TestSLOOwnershipLogic` and `TestMagicAlertingDetection`.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add internal/controller/openslo/slo_controller.go

@@ -8,6 +8,7 @@ import (
 
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 	oskov1alpha1 "github.com/oskoperator/osko/api/osko/v1alpha1"
+	"github.com/oskoperator/osko/internal/backend"
 	"github.com/oskoperator/osko/internal/errors"
 	"github.com/oskoperator/osko/internal/helpers"
 	"github.com/oskoperator/osko/internal/utils"
@@ -111,6 +112,19 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
+	backendType, err := backend.Parse(ds.Spec.Type)
+	if err != nil {
+		log.Error(err, "unsupported datasource type", "type", ds.Spec.Type)
+		if r.Recorder != nil {
+			r.Recorder.Event(slo, "Warning", "UnsupportedDatasourceType", err.Error())
+		}
+		if statusErr := utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, err.Error()); statusErr != nil {
+			log.Error(statusErr, "Failed to update SLO status")
+			return ctrl.Result{}, errors.Transient(statusErr, 5*time.Second)
+		}
+		return ctrl.Result{}, errors.Permanent(err)
+	}
+
 	// Handle SLI - either reference existing or create inline SLI
 	if slo.Spec.IndicatorRef != nil {
 		err = r.Get(ctx, client.ObjectKey{Name: *slo.Spec.IndicatorRef, Namespace: slo.Namespace}, sli)
@@ -208,113 +222,126 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	log.V(1).Info("PrometheusRule found", "Name", prometheusRule.Name, "Namespace", prometheusRule.Namespace)
 
-	mimirRule := &oskov1alpha1.MimirRule{}
-	err = r.Get(ctx, types.NamespacedName{
-		Name:      slo.Name,
-		Namespace: slo.Namespace,
-	}, mimirRule)
-
-	if apierrors.IsNotFound(err) {
-		log.V(1).Info("MimirRule not found. Let's make one.")
-		mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &ds.Spec.ConnectionDetails)
-		if err != nil {
-			if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule Object"); err != nil {
-				log.Error(err, "Failed to update SLO status")
-				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
-			}
-			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
-		}
-
-		if err = r.Create(ctx, mimirRule); err != nil {
-			if r.Recorder != nil {
-				r.Recorder.Event(slo, "Warning", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
-			}
-			log.Error(err, "Failed to create MimirRule")
-			createErr := err
-			if statusErr := r.Status().Update(ctx, slo); statusErr != nil {
-				log.Error(statusErr, "Failed to update SLO status")
-				if statusErr = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule"); statusErr != nil {
-					log.Error(statusErr, "Failed to update SLO ready status")
-				}
-			}
-			return ctrl.Result{}, errors.Transient(createErr, 5*time.Second)
-		} else {
-			log.V(1).Info("MimirRule created successfully")
-			if r.Recorder != nil {
-				r.Recorder.Event(slo, "Normal", "MimirRuleCreated", "MimirRule created successfully")
-				r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
-			}
-
-			if err := controllerutil.SetOwnerReference(slo, mimirRule, r.Scheme); err != nil {
-				log.Error(err, "Failed to set owner reference for MimirRule")
-				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
-			}
-			if err := r.Update(ctx, mimirRule); err != nil {
-				log.Error(err, "Failed to update MimirRule with owner reference")
-				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
-			}
-			slo.Status.Ready = "True"
-			mimirRule.Status.Ready = "True"
-			if err := r.Status().Update(ctx, slo); err != nil {
-				log.Error(err, "Failed to update SLO ready status")
-				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
-			}
-			if err := r.Status().Update(ctx, mimirRule); err != nil {
-				log.Error(err, "Failed to update MimirRule ready status")
-				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
-			}
-			return ctrl.Result{}, nil
-		}
-	}
-
-	log.V(1).Info("MimirRule found", "Name", mimirRule.Name, "Namespace", mimirRule.Namespace)
-
-	// Create AlertManagerConfig if magic alerting is enabled
-	if slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
-		alertManagerConfig := &oskov1alpha1.AlertManagerConfig{}
+	if backendType.NeedsRemoteRulePush() {
+		mimirRule := &oskov1alpha1.MimirRule{}
 		err = r.Get(ctx, types.NamespacedName{
-			Name:      fmt.Sprintf("%s-alerting", slo.Name),
+			Name:      slo.Name,
 			Namespace: slo.Namespace,
-		}, alertManagerConfig)
+		}, mimirRule)
 
 		if apierrors.IsNotFound(err) {
-			log.V(1).Info("AlertManagerConfig not found. Creating one for magic alerting.")
-			alertManagerConfig, err = r.createAlertManagerConfig(ctx, slo, ds)
+			log.V(1).Info("MimirRule not found. Let's make one.")
+			mimirRule, err = helpers.NewMimirRule(slo, prometheusRule, &ds.Spec.ConnectionDetails)
 			if err != nil {
-				log.Error(err, "Failed to create AlertManagerConfig")
-				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create AlertManagerConfig"); err != nil {
+				if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule Object"); err != nil {
 					log.Error(err, "Failed to update SLO status")
 					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 				}
 				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 
-			if err := r.Create(ctx, alertManagerConfig); err != nil {
-				log.Error(err, "Failed to create AlertManagerConfig")
+			if err = r.Create(ctx, mimirRule); err != nil {
 				if r.Recorder != nil {
-					r.Recorder.Event(slo, "Warning", "FailedToCreateAlertManagerConfig", "Failed to create AlertManagerConfig")
+					r.Recorder.Event(slo, "Warning", "FailedToCreateMimirRule", "Failed to create Mimir Rule")
 				}
-				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
-			}
+				log.Error(err, "Failed to create MimirRule")
+				createErr := err
+				if statusErr := r.Status().Update(ctx, slo); statusErr != nil {
+					log.Error(statusErr, "Failed to update SLO status")
+					if statusErr = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create Mimir Rule"); statusErr != nil {
+						log.Error(statusErr, "Failed to update SLO ready status")
+					}
+				}
+				return ctrl.Result{}, errors.Transient(createErr, 5*time.Second)
+			} else {
+				log.V(1).Info("MimirRule created successfully")
+				if r.Recorder != nil {
+					r.Recorder.Event(slo, "Normal", "MimirRuleCreated", "MimirRule created successfully")
+					r.Recorder.Event(mimirRule, "Normal", "MimirRuleCreated", "MimirRule created successfully")
+				}
 
-			if err := controllerutil.SetOwnerReference(slo, alertManagerConfig, r.Scheme); err != nil {
-				log.Error(err, "Failed to set owner reference for AlertManagerConfig")
-				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+				if err := controllerutil.SetOwnerReference(slo, mimirRule, r.Scheme); err != nil {
+					log.Error(err, "Failed to set owner reference for MimirRule")
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+				}
+				if err := r.Update(ctx, mimirRule); err != nil {
+					log.Error(err, "Failed to update MimirRule with owner reference")
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+				}
+				slo.Status.Ready = "True"
+				mimirRule.Status.Ready = "True"
+				if err := r.Status().Update(ctx, slo); err != nil {
+					log.Error(err, "Failed to update SLO ready status")
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+				}
+				if err := r.Status().Update(ctx, mimirRule); err != nil {
+					log.Error(err, "Failed to update MimirRule ready status")
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+				}
+				return ctrl.Result{}, nil
 			}
-			if err := r.Update(ctx, alertManagerConfig); err != nil {
-				log.Error(err, "Failed to update AlertManagerConfig with owner reference")
-				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
-			}
+		}
 
-			log.V(1).Info("AlertManagerConfig created successfully")
+		log.V(1).Info("MimirRule found", "Name", mimirRule.Name, "Namespace", mimirRule.Namespace)
+	}
+
+	// Create AlertManagerConfig if magic alerting is enabled and the backend
+	// exposes an Alertmanager configuration API to write it to.
+	if slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
+		if !backendType.SupportsMagicAlerting() {
+			log.V(1).Info("magicAlerting is not supported for this datasource type",
+				"type", ds.Spec.Type)
 			if r.Recorder != nil {
-				r.Recorder.Event(slo, "Normal", "AlertManagerConfigCreated", "AlertManagerConfig created successfully")
+				r.Recorder.Event(slo, "Warning", "MagicAlertingUnsupported", fmt.Sprintf(
+					"magicAlerting is not supported for %q datasources; configure Alertmanager through Thanos Ruler --alertmanagers.url",
+					ds.Spec.Type))
 			}
-		} else if err != nil {
-			log.Error(err, "Failed to get AlertManagerConfig")
-			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		} else {
-			log.V(1).Info("AlertManagerConfig found", "Name", alertManagerConfig.Name, "Namespace", alertManagerConfig.Namespace)
+			alertManagerConfig := &oskov1alpha1.AlertManagerConfig{}
+			err = r.Get(ctx, types.NamespacedName{
+				Name:      fmt.Sprintf("%s-alerting", slo.Name),
+				Namespace: slo.Namespace,
+			}, alertManagerConfig)
+
+			if apierrors.IsNotFound(err) {
+				log.V(1).Info("AlertManagerConfig not found. Creating one for magic alerting.")
+				alertManagerConfig, err = r.createAlertManagerConfig(ctx, slo, ds)
+				if err != nil {
+					log.Error(err, "Failed to create AlertManagerConfig")
+					if err = utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, "Failed to create AlertManagerConfig"); err != nil {
+						log.Error(err, "Failed to update SLO status")
+						return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+					}
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+				}
+
+				if err := r.Create(ctx, alertManagerConfig); err != nil {
+					log.Error(err, "Failed to create AlertManagerConfig")
+					if r.Recorder != nil {
+						r.Recorder.Event(slo, "Warning", "FailedToCreateAlertManagerConfig", "Failed to create AlertManagerConfig")
+					}
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+				}
+
+				if err := controllerutil.SetOwnerReference(slo, alertManagerConfig, r.Scheme); err != nil {
+					log.Error(err, "Failed to set owner reference for AlertManagerConfig")
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+				}
+				if err := r.Update(ctx, alertManagerConfig); err != nil {
+					log.Error(err, "Failed to update AlertManagerConfig with owner reference")
+					return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+				}
+
+				log.V(1).Info("AlertManagerConfig created successfully")
+				if r.Recorder != nil {
+					r.Recorder.Event(slo, "Normal", "AlertManagerConfigCreated", "AlertManagerConfig created successfully")
+				}
+			} else if err != nil {
+				log.Error(err, "Failed to get AlertManagerConfig")
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+			} else {
+				log.V(1).Info("AlertManagerConfig found", "Name", alertManagerConfig.Name, "Namespace", alertManagerConfig.Namespace)
+			}
 		}
 	}
 

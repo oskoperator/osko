@@ -82,6 +82,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ThanosRuler
 metadata:
   name: thanos-ruler
+  namespace: monitoring
 spec:
   ruleSelector:
     matchLabels:
@@ -89,9 +90,27 @@ spec:
   # Without this, rule discovery is limited to the ThanosRuler's own namespace.
   ruleNamespaceSelector: {}
   queryConfig:
-    name: thanos-ruler
+    name: thanos-ruler-query-config
     key: query.yaml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  # Must live in the same namespace as the ThanosRuler above.
+  name: thanos-ruler-query-config
+  namespace: monitoring
+stringData:
+  query.yaml: |-
+    - static_configs:
+        - dnssrv+_http._tcp.thanos-query.monitoring.svc.cluster.local
+      scheme: http
 ```
+
+A `ThanosRuler` needs at least one Query API server, given either as `queryConfig` (a
+Secret, recommended from Thanos v0.11.0) or as a plain `queryEndpoints` list. The
+operator does not validate the Secret's contents, so a missing or malformed `query.yaml`
+surfaces only as a crashing ruler pod. The format is documented under
+[Thanos Ruler's query API configuration](https://thanos.io/tip/components/rule.md/#query-api).
 
 A **null** `ruleSelector` matches no objects, so it must be set.
 

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -152,6 +153,22 @@ func TestSLOGatesOwnedResourcesByBackend(t *testing.T) {
 				assert.True(t, apierrors.IsNotFound(amcErr),
 					"no AlertManagerConfig expected for %s (magicAlerting=%v); got err=%v",
 					tt.datasourceType, tt.magicAlerting, amcErr)
+			}
+
+			got := &openslov1.SLO{}
+			require.NoError(t, c.Get(ctx, key, got))
+			assert.Equal(t, "True", got.Status.Ready,
+				"burn-rate rules live in the PrometheusRule and still fire, so the SLO stays Ready")
+
+			if tt.magicAlerting && !tt.wantAMC {
+				rec := r.Recorder.(*record.FakeRecorder)
+				var warned bool
+				for len(rec.Events) > 0 {
+					if strings.Contains(<-rec.Events, "MagicAlertingUnsupported") {
+						warned = true
+					}
+				}
+				assert.True(t, warned, "the operator must be told why no routing config was written")
 			}
 		})
 	}

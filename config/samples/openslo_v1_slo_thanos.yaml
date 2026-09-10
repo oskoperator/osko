@@ -1,0 +1,39 @@
+apiVersion: openslo.com/v1
+kind: SLO
+metadata:
+  name: thanos-query-availability
+  annotations:
+    osko.dev/datasourceRef: "thanos-ds"
+    # magicAlerting is NOT supported on thanos datasources. Setting it emits a
+    # MagicAlertingUnsupported warning; the burn-rate alerting rules are still
+    # generated and still fire. Route them via Thanos Ruler --alertmanagers.url.
+  labels:
+    # Inherited by the generated PrometheusRule alongside the OSKO markers.
+    team: observability
+spec:
+  budgetingMethod: Occurrences
+  description: 99% of Thanos Query requests should succeed
+  service: thanos
+  indicator:
+    metadata:
+      name: thanos-query-success
+    spec:
+      ratioMetric:
+        counter: true
+        good:
+          metricSource:
+            metricSourceRef: thanos-ds
+            type: Thanos
+            spec:
+              query: sum(rate(http_requests_total{job="thanos-query",code!~"5.."}[5m]))
+        total:
+          metricSource:
+            metricSourceRef: thanos-ds
+            type: Thanos
+            spec:
+              query: sum(rate(http_requests_total{job="thanos-query"}[5m]))
+  objectives:
+    - target: "0.99"
+  timeWindow:
+    - duration: 28d
+      isRolling: true

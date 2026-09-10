@@ -53,6 +53,70 @@ overrides:
 
 Divide `ruler_max_rule_groups_per_tenant` by two to get the number of SLOs a tenant can hold. Check what is actually in effect with `curl -H "X-Scope-OrgID: <tenant>" http://<mimir>/config | grep ruler_max`.
 
+## Supported backends
+
+Set `spec.type` on a `Datasource` to one of:
+
+| Type | Rule delivery | Tenancy header | Magic alerting |
+| --- | --- | --- | --- |
+| `mimir` | Pushed to the Mimir ruler API | `X-Scope-OrgID` | Supported |
+| `cortex` | Pushed to the ruler API via `MimirRule` (untested against Cortex) | `X-Scope-OrgID` | Supported (untested against Cortex) |
+| `thanos` | `PrometheusRule` consumed by `ThanosRuler` | `THANOS-TENANT` | Not supported |
+| `prometheus` | `PrometheusRule` consumed by `Prometheus` | none | Not supported |
+| `victoriametrics` | `PrometheusRule` consumed by your ruler | none | Not supported |
+
+A `cortex` Datasource's connectivity is never verified, so it reports `Ready=False` with
+`Cortex support is not implemented yet`. That status does not gate rule or alert delivery:
+the SLO controller never reads it, and a `cortex` SLO still gets a `MimirRule` and,
+with magic alerting, an `AlertManagerConfig`, both pushed down the Mimir path.
+
+### Thanos
+
+Thanos Ruler has no rule-write API, so OSKO does not push rules to it. Instead it relies on
+the `PrometheusRule` it already generates, which prometheus-operator renders into files for
+Thanos Ruler. Every generated `PrometheusRule` carries
+`app.kubernetes.io/managed-by: osko`, so point your ruler at it:
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ThanosRuler
+metadata:
+  name: thanos-ruler
+  namespace: monitoring
+spec:
+  ruleSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: osko
+  # Without this, rule discovery is limited to the ThanosRuler's own namespace.
+  ruleNamespaceSelector: {}
+  queryConfig:
+    name: thanos-ruler-query-config
+    key: query.yaml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  # Must live in the same namespace as the ThanosRuler above.
+  name: thanos-ruler-query-config
+  namespace: monitoring
+stringData:
+  query.yaml: |-
+    - static_configs:
+        - dnssrv+_http._tcp.thanos-query.monitoring.svc.cluster.local
+      scheme: http
+```
+
+A `ThanosRuler` needs at least one Query API server, given either as `queryConfig` (a
+Secret, recommended from Thanos v0.11.0) or as a plain `queryEndpoints` list. The
+operator does not validate the Secret's contents, so a missing or malformed `query.yaml`
+surfaces only as a crashing ruler pod. The format is documented under
+[Thanos Ruler's query API configuration](https://thanos.io/tip/components/rule.md/#query-api).
+
+A **null** `ruleSelector` matches no objects, so it must be set.
+
+`osko.dev/magicAlerting` is not supported on Thanos. The burn-rate alerting rules are still
+generated and still fire; route them by configuring Thanos Ruler's `--alertmanagers.url`.
+
 ## Test It Out
 
 1. You’ll need a Kubernetes cluster to run `osko`. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.

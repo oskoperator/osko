@@ -1749,6 +1749,48 @@ and include it in the `git add` above.
 - [ ] Confirm the Helm subchart was not committed: `git status --short helm/` shows no staged CRDs
 - [ ] Review the whole diff: `git diff main...HEAD`
 
+## Post-review fix wave
+
+Tasks 1-6 are complete. The final whole-branch review over `44d688d..3b4ee04` returned
+"with fixes". These are the rulings, to be delivered as **one** fix wave. Where a fix
+contradicts an executed task's step text, this section governs.
+
+**F1 (was Critical).** Add `+kubebuilder:default=mimir` to `DatasourceSpec.Type` in
+`api/openslo/v1/datasource_types.go`, alongside the existing enum marker. Regenerate.
+
+The enum does not validate an absent field, so a `Datasource` with no `spec.type` is
+admissible and yields `Type == ""`. `backend.Parse("")` errors, and the SLO reconciler parses
+at `slo_controller.go:115` — *above* `PrometheusRule` creation — so such an SLO currently
+produces nothing at all and reports `Ready=False`. That configuration is legal and working in
+the released version. Defaulting restores it with no user action. See spec D5.
+
+**F2 (was Important).** In `slo_controller.go`, delete owned resources the backend can no
+longer justify: when `!backendType.NeedsRemoteRulePush()`, delete any `MimirRule` owned by
+this SLO; when magic alerting is requested but `!backendType.SupportsMagicAlerting()`, delete
+any `AlertManagerConfig` owned by this SLO. Normal event on each deletion; treat `IsNotFound`
+as success, since most SLOs never had one. See spec D7.
+
+**F3 (was Important).** The `MagicAlertingUnsupported` event message hardcodes Thanos Ruler
+advice but fires for `prometheus` and `victoriametrics` too. Make the remedy backend-specific
+or drop it and point at `docs/labels-and-annotations.md`, which was already corrected to name
+all three backends.
+
+**F4 (was Important).** Add a `default:` arm to the backend switch in
+`datasource_controller.go`. Today a `backend.Type` not listed falls through to the shared
+success write and reports `Ready=True` without ever connecting.
+
+**F5 (was Important, test gap).** Add gating-test rows for the empty-type case — the hole F1
+shipped through — and for the F2 transition.
+
+**F6 (was Minor, promoted by triage).** `README.md`'s `ThanosRuler` example references a
+`queryConfig` Secret it never defines, so the ruler will not start if copy-pasted. This is the
+canonical wiring block for the whole feature.
+
+**Deferred by ruling:** replacing `internal/helpers.isPrometheusSource`'s duplicate backend
+switch with `backend.Parse`. It reads a different field on a different CRD and is untouched by
+this branch; folding an unrelated refactor into a fix wave carrying an upgrade-critical change
+would make the diff harder to review and revert. Follow-up issue.
+
 ## Out of scope
 
 Recorded in the spec and ADR 0008 as follow-ups:

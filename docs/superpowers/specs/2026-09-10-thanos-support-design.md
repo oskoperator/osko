@@ -165,8 +165,21 @@ codebase already acknowledges. It is handled exactly like Thanos and Prometheus:
 the root, no tenancy header, no remote rule push, no magic alerting. A typo such as `thanso` is
 rejected at `kubectl apply` with a clear message instead of silently producing no rules.
 
-The field stays `omitempty`; it does not become newly required. An empty type is handled by
-the controller's default branch.
+The field stays `omitempty`; it does not become newly required. It carries
+`+kubebuilder:default=mimir`, so an omitted type is defaulted by the API server on read.
+
+**This defaulting is load-bearing, not cosmetic.** An OpenAPI `enum` does not validate an
+absent field, so a `Datasource` with no `spec.type` is admissible and yields `Type == ""`.
+Since capabilities are only reachable through `backend.Parse` (D4), and the SLO reconciler
+parses before it generates anything, an empty type would otherwise fail the reconcile *above*
+`PrometheusRule` creation — taking out rule generation entirely, not merely the Mimir push.
+Omitting `spec.type` is legal in the released version and works there, because every
+downstream consumer reads only `connectionDetails`. Defaulting to `mimir` preserves that
+behaviour exactly, with no user action on upgrade.
+
+An earlier draft of this spec promised that "an empty type is handled by the controller's
+default branch". No such branch was ever built, and the claim was only caught by the final
+whole-branch review. The CRD default replaces that promise.
 
 **Accepted upgrade caveat:** after the new CRD is applied, an existing `Datasource` whose
 `type` is outside the enum becomes invalid and cannot be updated until corrected. Reads
@@ -211,6 +224,28 @@ else.
 
 *Rejected:* documentation only, telling Thanos users to label their SLOs. Zero blast radius,
 but the silent-no-op failure mode stays live and undetectable.
+
+### D7. Switching a live SLO to a backend without a capability deletes the resource that capability owned
+
+Gating creation is not enough. If an SLO's datasource is repointed from `mimir` to `thanos`,
+skipping the `MimirRule` block leaves the previously-created `MimirRule` in place. That object
+carries its own frozen copy of `spec.connectionDetails`, and `mimirrule_controller` returns
+`RequeueAfter` on every success path, so it keeps pushing rule groups to the *old* Mimir
+indefinitely while the SLO reports `Ready=True`. The result is duplicate rule evaluation and
+duplicate alerts across two backends, with nothing to indicate it.
+
+So the SLO reconciler deletes what the backend can no longer justify:
+
+- when `!NeedsRemoteRulePush()`, delete any `MimirRule` owned by this SLO;
+- when magic alerting is on but `!SupportsMagicAlerting()`, delete any `AlertManagerConfig`
+  owned by this SLO.
+
+Each deletion emits a Normal event. Deletion is idempotent — `IsNotFound` is not an error,
+which is the common case, since most SLOs never had one.
+
+This path only became reachable in this change: before it, an SLO could never stop wanting a
+`MimirRule`. Owner references already handle SLO *deletion*; they do nothing for a backend
+*transition*, which is precisely the migration this feature exists to enable.
 
 ## Architecture
 
@@ -349,10 +384,14 @@ Integration (envtest):
 - Generated `PrometheusRule` objects carry `app.kubernetes.io/managed-by: osko` and
   `osko.dev/slo: <name>`, and still carry any labels inherited from the SLO.
 - Ownership and cascade-delete behaviour is unchanged on the Thanos path.
+- An SLO whose datasource has **no** `spec.type` behaves exactly as a `mimir` one, proving
+  the CRD default (D5) holds and that upgrades do not go dark.
+- Repointing an SLO from `mimir` to `thanos` deletes the previously-created `MimirRule` (D7).
 
 CRD validation:
 
 - Applying a `Datasource` with `type: bogus` is rejected by the API server.
+- A `Datasource` created with `spec.type` omitted reads back as `mimir`.
 
 ## Release notes
 
@@ -360,6 +399,13 @@ CRD validation:
   point your `ThanosRuler.ruleSelector` at `app.kubernetes.io/managed-by: osko`.
 - `Datasource.spec.type` is now validated against `prometheus|mimir|cortex|thanos|victoriametrics`. Existing
   Datasources with any other value must be corrected before they can be updated.
+- `Datasource.spec.type` now defaults to `mimir` when omitted. Datasources that never set it
+  keep working unchanged; set it explicitly if you are on any other backend.
+- Repointing an SLO's datasource to a backend that does not push rules remotely now **deletes**
+  the `MimirRule` that SLO owned, and likewise its `AlertManagerConfig` when the new backend
+  has no Alertmanager API. Previously the old object survived and kept publishing to the old
+  backend. If you have already worked around this by hand, expect the leftover objects to be
+  removed on the next reconcile.
 - Generated `PrometheusRule` objects now carry `app.kubernetes.io/managed-by: osko` and
   `osko.dev/slo` labels, and `MimirRule` objects inherit them. Existing objects of both kinds
   are updated once on upgrade. The rule payload pushed to Mimir is unchanged.

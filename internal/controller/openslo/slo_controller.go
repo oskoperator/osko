@@ -283,6 +283,14 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 
 		log.V(1).Info("MimirRule found", "Name", mimirRule.Name, "Namespace", mimirRule.Namespace)
+	} else if err := r.deleteUnjustifiedResource(ctx, slo, &oskov1alpha1.MimirRule{}, types.NamespacedName{
+		Name:      slo.Name,
+		Namespace: slo.Namespace,
+	}, "MimirRuleDeleted", fmt.Sprintf(
+		"deleted MimirRule because %q datasources have no rule-write API", ds.Spec.Type),
+	); err != nil {
+		log.Error(err, "Failed to delete MimirRule the backend no longer justifies")
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	// Create AlertManagerConfig if magic alerting is enabled and the backend
@@ -293,8 +301,17 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				"type", ds.Spec.Type)
 			if r.Recorder != nil {
 				r.Recorder.Event(slo, "Warning", "MagicAlertingUnsupported", fmt.Sprintf(
-					"magicAlerting is not supported for %q datasources; configure Alertmanager through Thanos Ruler --alertmanagers.url",
+					"magicAlerting is not supported for %q datasources; route the generated burn-rate alerts at your ruler instead, see docs/labels-and-annotations.md",
 					ds.Spec.Type))
+			}
+			if err := r.deleteUnjustifiedResource(ctx, slo, &oskov1alpha1.AlertManagerConfig{}, types.NamespacedName{
+				Name:      fmt.Sprintf("%s-alerting", slo.Name),
+				Namespace: slo.Namespace,
+			}, "AlertManagerConfigDeleted", fmt.Sprintf(
+				"deleted AlertManagerConfig because %q datasources have no Alertmanager configuration API", ds.Spec.Type),
+			); err != nil {
+				log.Error(err, "Failed to delete AlertManagerConfig the backend no longer justifies")
+				return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 			}
 		} else {
 			alertManagerConfig := &oskov1alpha1.AlertManagerConfig{}
@@ -353,6 +370,59 @@ func (r *SLOReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	log.V(1).Info("Reconciliation completed")
 
 	return ctrl.Result{}, nil
+}
+
+// deleteUnjustifiedResource removes an owned object whose backend capability has
+// gone away. Owner references do not cover this: they fire on SLO deletion, and
+// here the SLO is still alive, just repointed. IsNotFound is success, since most
+// SLOs never had one. An object not owned by this SLO is left alone.
+func (r *SLOReconciler) deleteUnjustifiedResource(
+	ctx context.Context,
+	slo *openslov1.SLO,
+	obj client.Object,
+	key types.NamespacedName,
+	eventReason string,
+	eventMessage string,
+) error {
+	log := ctrllog.FromContext(ctx)
+
+	if err := r.Get(ctx, key, obj); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	if !isOwnedBySLO(obj, slo) {
+		log.V(1).Info("Not deleting resource this SLO does not own",
+			"name", key.Name, "namespace", key.Namespace)
+		return nil
+	}
+
+	if err := r.Delete(ctx, obj); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	log.V(1).Info("Deleted resource the backend no longer justifies",
+		"name", key.Name, "namespace", key.Namespace, "reason", eventReason)
+	if r.Recorder != nil {
+		r.Recorder.Event(slo, "Normal", eventReason, eventMessage)
+	}
+	return nil
+}
+
+// isOwnedBySLO matches on kind and name rather than UID because the SLO
+// controller uses SetOwnerReference, which does not mark a controller.
+func isOwnedBySLO(obj client.Object, slo *openslov1.SLO) bool {
+	for _, ref := range obj.GetOwnerReferences() {
+		if ref.Kind == "SLO" && ref.Name == slo.Name {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *SLOReconciler) createIndices(mgr ctrl.Manager) error {

@@ -763,79 +763,29 @@ Thanos equivalent."
 
 **Files:**
 - Modify: `internal/controller/openslo/slo_controller.go:211-270` (MimirRule block), `:272-319` (magic alerting block)
-- Test: `internal/controller/openslo/slo_controller_test.go` (append)
 
 **Interfaces:**
 - Consumes: `backend.NeedsRemoteRulePush`, `backend.SupportsMagicAlerting` from Task 1.
 - Produces: no new exported symbols.
 
-- [ ] **Step 1: Write the failing test**
+**No new test in this task, deliberately.** The behaviour being added is two `if` wrappers around existing blocks in the SLO reconciler. Asserting that the reconciler takes those branches requires a running manager, which this repository does not have (see the deviation note at the top of this plan). The predicates themselves are already covered exhaustively by Task 1's `TestNeedsRemoteRulePush` and `TestSupportsMagicAlerting`.
 
-Append to `internal/controller/openslo/slo_controller_test.go`:
+A test in this file that re-asserted those predicates would pass before the change, pass after a *wrong* change, and give false confidence. It was considered and rejected. Verification for this task is: the existing suite stays green, and the reviewer inspects the diff for correct branch placement. The coverage gap is recorded in ADR 0008 (Task 6).
 
-```go
-// TestBackendGating documents which owned resources each datasource type
-// should produce. The reconciler cannot be exercised without envtest wiring
-// that does not exist yet, so this asserts the decision predicates the
-// reconciler branches on.
-func TestBackendGating(t *testing.T) {
-	tests := []struct {
-		name                string
-		datasourceType      string
-		wantMimirRule       bool
-		wantMagicAlerting   bool
-	}{
-		{
-			name:              "mimir gets a MimirRule and magic alerting",
-			datasourceType:    "mimir",
-			wantMimirRule:     true,
-			wantMagicAlerting: true,
-		},
-		{
-			name:              "cortex gets a MimirRule and magic alerting",
-			datasourceType:    "cortex",
-			wantMimirRule:     true,
-			wantMagicAlerting: true,
-		},
-		{
-			name:              "thanos gets neither",
-			datasourceType:    "thanos",
-			wantMimirRule:     false,
-			wantMagicAlerting: false,
-		},
-		{
-			name:              "prometheus gets neither",
-			datasourceType:    "prometheus",
-			wantMimirRule:     false,
-			wantMagicAlerting: false,
-		},
-	}
+- [ ] **Step 1: Confirm the baseline is green before changing anything**
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.wantMimirRule, backend.NeedsRemoteRulePush(tt.datasourceType))
-			assert.Equal(t, tt.wantMagicAlerting, backend.SupportsMagicAlerting(tt.datasourceType))
-		})
-	}
-}
-```
+Run: `make test`
+Expected: PASS. Note the result — if anything is already failing, stop and report, because this task's only automated signal is that the suite does not change state.
 
-Add the import `"github.com/oskoperator/osko/internal/backend"` to that file.
+- [ ] **Step 2: Write the implementation**
 
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `go test ./internal/controller/openslo/... -run TestBackendGating -v`
-Expected: FAIL to compile until the import is added; then PASS immediately, because it tests Task 1's predicates. Its purpose is to pin the intended reconciler behaviour next to the reconciler. Proceed to Step 3 regardless.
-
-- [ ] **Step 3: Write minimal implementation**
-
-3a. Add the import to `internal/controller/openslo/slo_controller.go`:
+2a. Add the import to `internal/controller/openslo/slo_controller.go`:
 
 ```go
 	"github.com/oskoperator/osko/internal/backend"
 ```
 
-3b. Wrap the MimirRule block. Find line 211 `mimirRule := &oskov1alpha1.MimirRule{}` and the `log.V(1).Info("MimirRule found", ...)` line that closes the block at line 270. Wrap the whole span:
+2b. Wrap the MimirRule block. Find line 211 `mimirRule := &oskov1alpha1.MimirRule{}` and the `log.V(1).Info("MimirRule found", ...)` line that closes the block at line 270. Wrap the whole span:
 
 ```go
 	if backend.NeedsRemoteRulePush(ds.Spec.Type) {
@@ -853,7 +803,7 @@ Expected: FAIL to compile until the import is added; then PASS immediately, beca
 
 Do not change any logic inside the block. The `return ctrl.Result{}, nil` statements inside it stay as they are.
 
-3c. Gate magic alerting. Replace the opening of the block at line 273:
+2c. Gate magic alerting. Replace the opening of the block at line 273:
 
 ```go
 	// Create AlertManagerConfig if magic alerting is enabled and the backend
@@ -876,16 +826,15 @@ Do not change any logic inside the block. The `return ctrl.Result{}, nil` statem
 
 The SLO is deliberately left Ready: the burn-rate alerting rules live in the PrometheusRule and do fire. Only the routing configuration is out of scope.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 3: Run tests to verify nothing regressed**
 
 Run: `make test`
 Expected: PASS. Confirm nothing else regressed, particularly `TestSLOOwnershipLogic` and `TestMagicAlertingDetection`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add internal/controller/openslo/slo_controller.go \
-        internal/controller/openslo/slo_controller_test.go
+git add internal/controller/openslo/slo_controller.go
 git commit -s -m "feat(slo): create MimirRule and AlertManagerConfig only when supported
 
 The SLO reconciler created a MimirRule for every SLO regardless of

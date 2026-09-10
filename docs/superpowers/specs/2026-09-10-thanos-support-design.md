@@ -369,29 +369,43 @@ spec:
 
 Unit:
 
-- `internal/backend` table tests covering all four backend types against all four functions,
-  plus mixed-case input and unknown or empty values.
+- `internal/backend` table tests covering all five backend types against `Parse` and each of
+  the four capability methods, plus mixed-case, whitespace-padded, unknown and empty input.
+- Generated `PrometheusRule` objects carry `app.kubernetes.io/managed-by: osko` and
+  `osko.dev/slo: <name>`, still carry any labels inherited from the SLO, and the marker wins
+  when the SLO sets a conflicting value.
 
-Integration (envtest):
+Reconciler tests, driving `Reconcile` against `controller-runtime/pkg/client/fake`. These run
+no API server, so nothing here exercises CRD defaulting, admission or validation:
 
-- A `thanos` Datasource is connected against its address as given, with no `/prometheus`
-  suffix appended, and with a `THANOS-TENANT` header only when `targetTenant` is set.
-- A `prometheus` Datasource follows the same path and is not reported as unsupported.
 - SLO with a `thanos` datasource creates a `PrometheusRule` and does **not** create a `MimirRule`.
 - Regression: SLO with a `mimir` datasource still creates both.
 - SLO with a `thanos` datasource and `magicAlerting: "true"` creates no `AlertManagerConfig`,
   emits the warning event, and leaves the SLO Ready.
-- Generated `PrometheusRule` objects carry `app.kubernetes.io/managed-by: osko` and
-  `osko.dev/slo: <name>`, and still carry any labels inherited from the SLO.
-- Ownership and cascade-delete behaviour is unchanged on the Thanos path.
-- An SLO whose datasource has **no** `spec.type` behaves exactly as a `mimir` one, proving
-  the CRD default (D5) holds and that upgrades do not go dark.
 - Repointing an SLO from `mimir` to `thanos` deletes the previously-created `MimirRule` (D7).
+- An SLO whose datasource carries an empty `spec.type` is rejected at `backend.Parse` above
+  rule generation: no `PrometheusRule` is created and the SLO reports `Ready=False`. This row
+  characterises the **un-defaulted** controller and is deliberately invariant to D5 — the fake
+  client does no defaulting, so it is not evidence that the CRD default works. D5 is proven by
+  the API-server test below.
 
-CRD validation:
+Transport tests, driving `connectDatasource` against an `httptest` server:
 
-- Applying a `Datasource` with `type: bogus` is rejected by the API server.
-- A `Datasource` created with `spec.type` omitted reads back as `mimir`.
+- A `thanos` Datasource is connected against its address as given, with no `/prometheus`
+  suffix appended, and with a `THANOS-TENANT` header only when `targetTenant` is set.
+- A `prometheus` Datasource follows the same path and is not reported as unsupported.
+
+API-server tests (envtest, against the generated CRDs in `config/crd/bases`):
+
+- Applying a `Datasource` with `type: bogus` is rejected, naming the supported values.
+- Each of the five enum values is accepted.
+- A `Datasource` created with `spec.type` omitted reads back as `mimir`, proving the D5
+  default holds and that upgrades do not go dark.
+- Both shipped samples decode strictly and are accepted by the API server.
+
+Not covered: SLO reconciliation under a real API server. That requires manager-level envtest
+wiring — a started manager, prometheus-operator CRDs in `CRDDirectoryPaths`, and `monitoringv1`
+in the scheme — which does not exist yet. The gap is recorded in ADR 0008.
 
 ## Release notes
 

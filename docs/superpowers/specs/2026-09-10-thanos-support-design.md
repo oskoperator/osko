@@ -184,8 +184,18 @@ This gives users a selector that is knowable in advance instead of a convention 
 invent and keep in sync. `mergeLabels` already exists at `prometheus_helper.go:101`.
 
 *Blast radius:* existing Mimir users' `PrometheusRule` objects gain two labels on the next
-reconcile. Mimir rule push is unaffected. The visible effect is one update per PrometheusRule
-after upgrade.
+reconcile, and those labels propagate one step further than is immediately obvious:
+
+- The payload pushed to Mimir is unchanged. `NewMimirRuleGroups` builds rule groups from
+  `rule.Spec.Groups` and `connectionDetails.SourceTenants` only; it never reads object
+  metadata.
+- `NewMimirRule` does copy `rule.Labels` and `rule.Annotations` onto the `MimirRule` object,
+  so `MimirRule` objects inherit the same two markers.
+
+Both are inert: the codebase contains no label selectors at all, and every `MimirRule` access
+is a name/namespace `Get` or an owner-based `Owns` watch. The visible effect of the change is
+therefore one update per `PrometheusRule` and per `MimirRule` at upgrade time, and nothing
+else.
 
 *Rejected:* documentation only, telling Thanos users to label their SLOs. Zero blast radius,
 but the silent-no-op failure mode stays live and undetectable.
@@ -339,8 +349,8 @@ CRD validation:
 - `Datasource.spec.type` is now validated against `prometheus|mimir|cortex|thanos`. Existing
   Datasources with any other value must be corrected before they can be updated.
 - Generated `PrometheusRule` objects now carry `app.kubernetes.io/managed-by: osko` and
-  `osko.dev/slo` labels. Existing objects are updated once on upgrade. Mimir behaviour is
-  unaffected.
+  `osko.dev/slo` labels, and `MimirRule` objects inherit them. Existing objects of both kinds
+  are updated once on upgrade. The rule payload pushed to Mimir is unchanged.
 - `osko.dev/magicAlerting` is not supported on `thanos` datasources; configure Alertmanager
   through Thanos Ruler's `--alertmanagers.url`.
 

@@ -1438,7 +1438,7 @@ Set `spec.type` on a `Datasource` to one of:
 | Type | Rule delivery | Tenancy header | Magic alerting |
 | --- | --- | --- | --- |
 | `mimir` | Pushed to the Mimir ruler API | `X-Scope-OrgID` | Supported |
-| `cortex` | Not implemented yet | `X-Scope-OrgID` | Not implemented yet |
+| `cortex` | Pushed to the ruler API via `MimirRule` (untested against Cortex) | `X-Scope-OrgID` | Supported (untested against Cortex) |
 | `thanos` | `PrometheusRule` consumed by `ThanosRuler` | `THANOS-TENANT` | Not supported |
 | `prometheus` | `PrometheusRule` consumed by `Prometheus` | none | Not supported |
 | `victoriametrics` | `PrometheusRule` consumed by your ruler | none | Not supported |
@@ -1479,10 +1479,11 @@ Add to the annotations section:
 ```markdown
 ### `osko.dev/magicAlerting`
 
-Not supported on `thanos` or `prometheus` datasources. Setting it there emits a
-`MagicAlertingUnsupported` warning event and the SLO remains Ready, because the
-burn-rate alerting rules are generated regardless. Only the Alertmanager routing
-configuration is skipped.
+Supported only on `mimir` and `cortex` datasources — the two backends that expose an
+Alertmanager configuration API. On `thanos`, `prometheus` and `victoriametrics` it emits a
+`MagicAlertingUnsupported` warning event and the SLO remains Ready, because the burn-rate
+alerting rules are generated regardless. Only the Alertmanager routing configuration is
+skipped.
 ```
 
 Add a labels section:
@@ -1667,17 +1668,19 @@ import (
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 )
 
-// The Thanos samples are what users copy to adopt the backend. Applying them
-// against the real generated CRDs catches a misspelled field or an out-of-enum
-// value that no other test would see.
+// The Thanos samples are what users copy to adopt the backend. Decoding them
+// strictly catches a misspelled field, and applying them against the real
+// generated CRDs catches an out-of-enum value. Strictness is load-bearing:
+// a non-strict decoder drops an unknown field client-side, so the API server
+// never sees it and the spec would stay green while `kubectl apply` — which
+// has validated fields strictly since 1.25 — rejects the sample.
 var _ = Describe("Thanos sample manifests", func() {
 	decodeSample := func(name string, obj client.Object) {
-		f, err := os.Open(filepath.Join("..", "..", "..", "config", "samples", name))
+		data, err := os.ReadFile(filepath.Join("..", "..", "..", "config", "samples", name))
 		Expect(err).NotTo(HaveOccurred(), "sample file must exist")
-		defer f.Close()
 
-		Expect(yaml.NewYAMLOrJSONDecoder(f, 4096).Decode(obj)).To(Succeed(),
-			"sample must decode into its typed object")
+		Expect(yaml.UnmarshalStrict(data, obj)).To(Succeed(),
+			"sample must decode into its typed object with no unknown fields")
 		obj.SetNamespace("default")
 	}
 

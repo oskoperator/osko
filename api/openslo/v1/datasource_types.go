@@ -18,7 +18,10 @@ type DatasourceSpec struct {
 	Description Description `json:"description,omitempty"`
 
 	// Type selects the metrics backend this Datasource points at.
+	// Defaulted so that a Datasource written before this field existed keeps
+	// resolving to a backend instead of failing to parse.
 	// +kubebuilder:validation:Enum=prometheus;mimir;cortex;thanos;victoriametrics
+	// +kubebuilder:default=mimir
 	Type string `json:"type,omitempty"`
 
 	ConnectionDetails osko.ConnectionDetails `json:"connectionDetails,omitempty"`

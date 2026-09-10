@@ -65,8 +65,11 @@ spec:
                 maxLength: 1050
                 type: string
               type:
-                description: Type selects the metrics backend this Datasource points
-                  at.
+                default: mimir
+                description: |-
+                  Type selects the metrics backend this Datasource points at.
+                  Defaulted so that a Datasource written before this field existed keeps
+                  resolving to a backend instead of failing to parse.
                 enum:
                 - prometheus
                 - mimir

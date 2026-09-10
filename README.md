@@ -53,6 +53,46 @@ overrides:
 
 Divide `ruler_max_rule_groups_per_tenant` by two to get the number of SLOs a tenant can hold. Check what is actually in effect with `curl -H "X-Scope-OrgID: <tenant>" http://<mimir>/config | grep ruler_max`.
 
+## Supported backends
+
+Set `spec.type` on a `Datasource` to one of:
+
+| Type | Rule delivery | Tenancy header | Magic alerting |
+| --- | --- | --- | --- |
+| `mimir` | Pushed to the Mimir ruler API | `X-Scope-OrgID` | Supported |
+| `cortex` | Not implemented yet — the Datasource reports `Ready: False` | `X-Scope-OrgID` | Not implemented yet |
+| `thanos` | `PrometheusRule` consumed by `ThanosRuler` | `THANOS-TENANT` | Not supported |
+| `prometheus` | `PrometheusRule` consumed by `Prometheus` | none | Not supported |
+| `victoriametrics` | `PrometheusRule` consumed by your ruler | none | Not supported |
+
+### Thanos
+
+Thanos Ruler has no rule-write API, so OSKO does not push rules to it. Instead it relies on
+the `PrometheusRule` it already generates, which prometheus-operator renders into files for
+Thanos Ruler. Every generated `PrometheusRule` carries
+`app.kubernetes.io/managed-by: osko`, so point your ruler at it:
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ThanosRuler
+metadata:
+  name: thanos-ruler
+spec:
+  ruleSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: osko
+  # Without this, rule discovery is limited to the ThanosRuler's own namespace.
+  ruleNamespaceSelector: {}
+  queryConfig:
+    name: thanos-ruler
+    key: query.yaml
+```
+
+A **null** `ruleSelector` matches no objects, so it must be set.
+
+`osko.dev/magicAlerting` is not supported on Thanos. The burn-rate alerting rules are still
+generated and still fire; route them by configuring Thanos Ruler's `--alertmanagers.url`.
+
 ## Test It Out
 
 1. You’ll need a Kubernetes cluster to run `osko`. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.

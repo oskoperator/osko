@@ -45,3 +45,20 @@ Accepts the string "true" as the only valid input.
 ```yaml
 osko.dev/magicAlerting: "true"
 ```
+
+Not supported on `thanos` or `prometheus` datasources. Setting it there emits a
+`MagicAlertingUnsupported` warning event and the SLO remains Ready, because the
+burn-rate alerting rules are generated regardless. Only the Alertmanager routing
+configuration is skipped.
+
+## Labels applied by OSKO
+
+Generated `PrometheusRule` objects, and the `MimirRule` objects derived from them, carry:
+
+| Label | Value | Purpose |
+| --- | --- | --- |
+| `app.kubernetes.io/managed-by` | `osko` | Stable selector for `ThanosRuler.ruleSelector` and `Prometheus.ruleSelector` |
+| `osko.dev/slo` | The SLO's name | Traceability back to the owning SLO |
+
+Labels on the SLO are inherited by the generated `PrometheusRule`. The two labels above are
+applied on top and win on conflict.

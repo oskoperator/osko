@@ -1590,17 +1590,26 @@ work: no new CRD, no new controller, no new HTTP client.
   causing one update per object at upgrade time. The rule payload pushed to Mimir is
   unchanged.
 
-### Known gap: reconciler integration tests
+### Testing approach, and the gap that remains
 
-Reconciler-level integration tests are not possible in this repository yet. No `suite_test.go`
-starts a manager or registers a reconciler, `CRDDirectoryPaths` covers only
-`config/crd/bases` so prometheus-operator CRDs are absent, and `monitoringv1` is not in the
-test scheme.
+Three layers cover this change:
 
-Backend decisions are therefore unit-tested as pure functions in `internal/backend`, and
-envtest is used only for CRD schema validation, which existing infrastructure supports.
-Closing this gap means wiring a manager, vendoring prometheus-operator CRDs and registering
-`monitoringv1` — standalone work that would complete Layer 3 of ADR 0005.
+* **Pure unit tests** for the capability decisions in `internal/backend` (100% statement
+  coverage), and for the generated `PrometheusRule` labels in `internal/helpers`.
+* **Reconciler tests** in `internal/controller/openslo/slo_gating_test.go`, which call
+  `Reconcile` directly against `sigs.k8s.io/controller-runtime/pkg/client/fake` and assert
+  which owned resources each of the five backends produces. `monitoringv1` and
+  `oskov1alpha1` register into a scheme as Go types, so no prometheus-operator CRD YAML is
+  needed — only a *manager* would require that. `internal/controller/openslo` coverage went
+  from 1.0% to 33.6% as a result.
+* **API-server tests** under envtest for the `spec.type` enum and for the shipped sample
+  manifests, using the real generated CRDs from `config/crd/bases`.
+
+The gap that remains is manager-level: no suite calls `mgr.Start`, so the watch
+configuration, owner-reference garbage collection and requeue behaviour declared in
+`SetupWithManager` are exercised by no test. Closing it means starting a manager and adding
+prometheus-operator CRDs to `CRDDirectoryPaths` so a real `PrometheusRule` can be created
+through the API server. That is standalone work which would complete Layer 3 of ADR 0005.
 
 ## Pros and Cons of the Options
 
@@ -1631,50 +1640,102 @@ Closing this gap means wiring a manager, vendoring prometheus-operator CRDs and 
 * [ADR 0005: Test Coverage Strategy](0005_test_coverage_strategy.md)
 ````
 
-- [ ] **Step 6: Verify the samples apply**
+- [ ] **Step 6: Verify the samples apply against a real API server**
 
-Run:
+Do **not** run `make install` against a live cluster. Validate the sample files under
+envtest instead, which loads the same generated CRDs from `config/crd/bases`.
 
-```bash
-make install
-kubectl apply -f config/samples/openslo_v1_datasource_thanos.yaml
-kubectl get datasource thanos-ds -o jsonpath='{.spec.type}{"\n"}'
+The samples are the copy-paste starting point for anyone adopting Thanos, so a sample the
+API server rejects is a broken onboarding path. Nothing currently reads these files in a
+test, which means a typo in a field name ships silently.
+
+Create `internal/controller/openslo/samples_test.go`:
+
+```go
+package controller
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/util/yaml"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
+)
+
+// The Thanos samples are what users copy to adopt the backend. Applying them
+// against the real generated CRDs catches a misspelled field or an out-of-enum
+// value that no other test would see.
+var _ = Describe("Thanos sample manifests", func() {
+	decodeSample := func(name string, obj client.Object) {
+		f, err := os.Open(filepath.Join("..", "..", "..", "config", "samples", name))
+		Expect(err).NotTo(HaveOccurred(), "sample file must exist")
+		defer f.Close()
+
+		Expect(yaml.NewYAMLOrJSONDecoder(f, 4096).Decode(obj)).To(Succeed(),
+			"sample must decode into its typed object")
+		obj.SetNamespace("default")
+	}
+
+	It("applies the Thanos datasource sample", func() {
+		ds := &openslov1.Datasource{}
+		decodeSample("openslo_v1_datasource_thanos.yaml", ds)
+
+		Expect(ds.Spec.Type).To(Equal("thanos"),
+			"the sample must actually exercise the thanos path")
+
+		Expect(k8sClient.Create(context.Background(), ds)).To(Succeed())
+		Expect(k8sClient.Delete(context.Background(), ds)).To(Succeed())
+	})
+
+	It("applies the Thanos SLO sample", func() {
+		slo := &openslov1.SLO{}
+		decodeSample("openslo_v1_slo_thanos.yaml", slo)
+
+		Expect(slo.ObjectMeta.Annotations).To(HaveKeyWithValue("osko.dev/datasourceRef", "thanos-ds"),
+			"the SLO sample must point at the datasource sample")
+
+		Expect(k8sClient.Create(context.Background(), slo)).To(Succeed())
+		Expect(k8sClient.Delete(context.Background(), slo)).To(Succeed())
+	})
+})
 ```
 
-Expected: `thanos`
+Use `k8s.io/apimachinery/pkg/util/yaml`, not `gopkg.in/yaml.v3`. Kubernetes types carry
+`json:` tags, and `yaml.v3` ignores those, so it would silently produce a zero-valued
+object. `apimachinery` is already a direct dependency, so `go.mod` must not change.
 
-Then confirm the enum rejects a typo:
+Run: `make test`
+Expected: both new specs pass, joining the existing 6 in the `TestControllers` suite.
 
-```bash
-kubectl apply --dry-run=server -f - <<'EOF'
-apiVersion: openslo.com/v1
-kind: Datasource
-metadata:
-  name: bad-type
-spec:
-  type: thanso
-  connectionDetails:
-    address: http://example:9090
-EOF
-```
-
-Expected: rejected with a message naming `spec.type` and listing the supported values.
-
-Clean up: `kubectl delete -f config/samples/openslo_v1_datasource_thanos.yaml`
+To prove the specs have teeth, temporarily change `type: thanos` to `type: thanso` in the
+datasource sample and re-run — the create must be rejected by the enum. Revert afterwards
+and confirm `git diff` on `config/samples/` is empty.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add config/samples/openslo_v1_datasource_thanos.yaml \
         config/samples/openslo_v1_slo_thanos.yaml \
+        internal/controller/openslo/samples_test.go \
         adr/0008_thanos_backend_support.md \
         README.md docs/labels-and-annotations.md
 git commit -s -m "docs(thanos): document Thanos backend support
 
 Add Thanos datasource and SLO samples, a supported-backends table with
 the ThanosRuler wiring, the magicAlerting caveat, and ADR 0008 recording
-the decision and the integration-test gap."
+the decision and the remaining manager-level test gap.
+
+Cover both samples with envtest specs so a misspelled field or an
+out-of-enum type in the copy-paste starting point fails the suite."
 ```
+
+If `config/samples/kustomization.yaml` enumerates its resources, add the two new files to it
+and include it in the `git add` above.
 
 ---
 

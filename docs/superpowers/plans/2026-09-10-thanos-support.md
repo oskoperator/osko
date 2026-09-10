@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Backend type values are exactly `prometheus`, `mimir`, `cortex`, `thanos` (lowercase).
+- Backend type values are exactly `prometheus`, `mimir`, `cortex`, `thanos`, `victoriametrics` (lowercase).
 - Thanos tenant header is exactly `THANOS-TENANT`; Mimir/Cortex is exactly `X-Scope-OrgID`.
 - Mimir and Cortex serve the Prometheus API under `/prometheus`; Thanos and Prometheus serve it at the root.
 - Marker labels are exactly `app.kubernetes.io/managed-by: osko` and `osko.dev/slo: <slo name>`.
@@ -51,14 +51,18 @@ Pure functions, no Kubernetes dependencies. Everything downstream consumes this.
 **Interfaces:**
 - Consumes: nothing.
 - Produces:
-  - `type Type string` with constants `Prometheus`, `Mimir`, `Cortex`, `Thanos` (values `"prometheus"`, `"mimir"`, `"cortex"`, `"thanos"`)
+  - `type Type string` with constants `Prometheus`, `Mimir`, `Cortex`, `Thanos`, `VictoriaMetrics` (values `"prometheus"`, `"mimir"`, `"cortex"`, `"thanos"`, `"victoriametrics"`)
   - `const TenantHeaderMimir = "X-Scope-OrgID"`
   - `const TenantHeaderThanos = "THANOS-TENANT"`
   - `func Parse(t string) (Type, error)`
-  - `func NeedsRemoteRulePush(t string) bool`
-  - `func SupportsMagicAlerting(t string) bool`
-  - `func QueryURL(t, address string) (string, error)`
-  - `func TenantHeader(t string) string`
+  - `func (t Type) NeedsRemoteRulePush() bool`
+  - `func (t Type) SupportsMagicAlerting() bool`
+  - `func (t Type) QueryURL(address string) string`
+  - `func (t Type) TenantHeader() string`
+
+**Why the capabilities are methods on `Type` and not functions taking `string`:** `Parse` is the single validation boundary. Once a caller holds a `Type`, it has already dealt with the unknown-backend error. Had the capabilities taken a raw `string`, each would have had to swallow a parse error and return a zero value — turning a typo like `mimr` into a silently skipped MimirRule and a green reconcile. As methods, they are unreachable without handling the error first, so silent degradation is unrepresentable rather than merely discouraged.
+
+`QueryURL` and `TenantHeader` return no error for the same reason: by the time you hold a `Type`, there is no error left to report.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -85,6 +89,7 @@ func TestParse(t *testing.T) {
 		{name: "cortex", input: "cortex", want: Cortex},
 		{name: "thanos", input: "thanos", want: Thanos},
 		{name: "prometheus", input: "prometheus", want: Prometheus},
+		{name: "victoriametrics", input: "victoriametrics", want: VictoriaMetrics},
 		{name: "mixed case is accepted", input: "Thanos", want: Thanos},
 		{name: "upper case is accepted", input: "MIMIR", want: Mimir},
 		{name: "surrounding whitespace is trimmed", input: "  thanos  ", want: Thanos},
@@ -98,6 +103,7 @@ func TestParse(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), "unsupported datasource type")
+				assert.Empty(t, got, "no Type may be returned alongside an error")
 				return
 			}
 			require.NoError(t, err)
@@ -106,128 +112,134 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func TestNeedsRemoteRulePush(t *testing.T) {
+// TestParseErrorPreservesRawInput pins the diagnostic value of the error: the
+// operator sees exactly what they typed, whitespace and casing included.
+func TestParseErrorPreservesRawInput(t *testing.T) {
+	_, err := Parse("  Thanso  ")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"  Thanso  "`)
+}
+
+func TestTypeNeedsRemoteRulePush(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
-		want  bool
+		name string
+		typ  Type
+		want bool
 	}{
-		{name: "mimir pushes to a ruler API", input: "mimir", want: true},
-		{name: "cortex pushes to a ruler API", input: "cortex", want: true},
-		{name: "thanos reads PrometheusRule objects", input: "thanos", want: false},
-		{name: "prometheus reads PrometheusRule objects", input: "prometheus", want: false},
-		{name: "unknown types never push", input: "thanso", want: false},
-		{name: "empty type never pushes", input: "", want: false},
+		{name: "mimir pushes to a ruler API", typ: Mimir, want: true},
+		{name: "cortex pushes to a ruler API", typ: Cortex, want: true},
+		{name: "thanos reads PrometheusRule objects", typ: Thanos, want: false},
+		{name: "prometheus reads PrometheusRule objects", typ: Prometheus, want: false},
+		{name: "victoriametrics reads PrometheusRule objects", typ: VictoriaMetrics, want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, NeedsRemoteRulePush(tt.input))
+			assert.Equal(t, tt.want, tt.typ.NeedsRemoteRulePush())
 		})
 	}
 }
 
-func TestSupportsMagicAlerting(t *testing.T) {
+func TestTypeSupportsMagicAlerting(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
-		want  bool
+		name string
+		typ  Type
+		want bool
 	}{
-		{name: "mimir has an Alertmanager API", input: "mimir", want: true},
-		{name: "cortex has an Alertmanager API", input: "cortex", want: true},
-		{name: "thanos has no Alertmanager API", input: "thanos", want: false},
-		{name: "prometheus has no Alertmanager API", input: "prometheus", want: false},
-		{name: "unknown types do not", input: "thanso", want: false},
+		{name: "mimir has an Alertmanager API", typ: Mimir, want: true},
+		{name: "cortex has an Alertmanager API", typ: Cortex, want: true},
+		{name: "thanos has no Alertmanager API", typ: Thanos, want: false},
+		{name: "prometheus has no Alertmanager API", typ: Prometheus, want: false},
+		{name: "victoriametrics has no Alertmanager API", typ: VictoriaMetrics, want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, SupportsMagicAlerting(tt.input))
+			assert.Equal(t, tt.want, tt.typ.SupportsMagicAlerting())
 		})
 	}
 }
 
-func TestQueryURL(t *testing.T) {
+func TestTypeQueryURL(t *testing.T) {
 	tests := []struct {
 		name    string
-		typ     string
+		typ     Type
 		address string
 		want    string
-		wantErr bool
 	}{
 		{
 			name:    "mimir gets the prometheus sub-path",
-			typ:     "mimir",
+			typ:     Mimir,
 			address: "http://mimir:9009",
 			want:    "http://mimir:9009/prometheus",
 		},
 		{
 			name:    "a trailing slash does not produce a double slash",
-			typ:     "mimir",
+			typ:     Mimir,
 			address: "http://mimir:9009/",
 			want:    "http://mimir:9009/prometheus",
 		},
 		{
+			name:    "repeated trailing slashes are all trimmed",
+			typ:     Mimir,
+			address: "http://mimir:9009///",
+			want:    "http://mimir:9009/prometheus",
+		},
+		{
 			name:    "cortex gets the prometheus sub-path",
-			typ:     "cortex",
+			typ:     Cortex,
 			address: "http://cortex:9009",
 			want:    "http://cortex:9009/prometheus",
 		},
 		{
 			name:    "thanos serves at the root",
-			typ:     "thanos",
+			typ:     Thanos,
 			address: "http://thanos-query:9090",
 			want:    "http://thanos-query:9090",
 		},
 		{
 			name:    "thanos trailing slash is trimmed",
-			typ:     "thanos",
+			typ:     Thanos,
 			address: "http://thanos-query:9090/",
 			want:    "http://thanos-query:9090",
 		},
 		{
 			name:    "prometheus serves at the root",
-			typ:     "prometheus",
+			typ:     Prometheus,
 			address: "http://prometheus:9090",
 			want:    "http://prometheus:9090",
 		},
 		{
-			name:    "unknown type is an error",
-			typ:     "thanso",
-			address: "http://whatever:9090",
-			wantErr: true,
+			name:    "victoriametrics serves at the root",
+			typ:     VictoriaMetrics,
+			address: "http://victoria:8428",
+			want:    "http://victoria:8428",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := QueryURL(tt.typ, tt.address)
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
+			assert.Equal(t, tt.want, tt.typ.QueryURL(tt.address))
 		})
 	}
 }
 
-func TestTenantHeader(t *testing.T) {
+func TestTypeTenantHeader(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
-		want  string
+		name string
+		typ  Type
+		want string
 	}{
-		{name: "mimir uses the Cortex-style header", input: "mimir", want: "X-Scope-OrgID"},
-		{name: "cortex uses the Cortex-style header", input: "cortex", want: "X-Scope-OrgID"},
-		{name: "thanos uses its own header", input: "thanos", want: "THANOS-TENANT"},
-		{name: "prometheus has no tenancy header", input: "prometheus", want: ""},
-		{name: "unknown types have no tenancy header", input: "thanso", want: ""},
+		{name: "mimir uses the Cortex-style header", typ: Mimir, want: "X-Scope-OrgID"},
+		{name: "cortex uses the Cortex-style header", typ: Cortex, want: "X-Scope-OrgID"},
+		{name: "thanos uses its own header", typ: Thanos, want: "THANOS-TENANT"},
+		{name: "prometheus has no tenancy header", typ: Prometheus, want: ""},
+		{name: "victoriametrics has no tenancy header", typ: VictoriaMetrics, want: ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, TenantHeader(tt.input))
+			assert.Equal(t, tt.want, tt.typ.TenantHeader())
 		})
 	}
 }
@@ -236,7 +248,8 @@ func TestTenantHeader(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./internal/backend/... -v`
-Expected: FAIL — the package `internal/backend` does not exist yet, so the build fails with "no Go files" or "undefined: Parse".
+
+Expected: FAIL. If the package does not exist yet you will see `matched no packages`, which is not a test failure — create `backend.go` with only the `package backend` line first, then re-run so the failure is a real compile error naming the undefined symbols (`undefined: Parse`, `undefined: Mimir`, ...). Record that output; it is your RED evidence.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -245,8 +258,11 @@ Create `internal/backend/backend.go`:
 ```go
 // Package backend describes the metrics backends OSKO can target and the
 // capabilities each one provides. Controllers ask this package what a backend
-// can do rather than comparing type strings, so adding a new backend means
-// changing one file.
+// can do rather than comparing type strings.
+//
+// Note that this is not the only place backend names appear:
+// internal/helpers.isPrometheusSource keeps a separate list for the SLI
+// metric-source dialect, which is a different field with different values.
 package backend
 
 import (
@@ -256,13 +272,19 @@ import (
 
 // Type identifies a metrics backend. The values match the enum accepted by
 // Datasource.spec.type.
+//
+// Obtain a Type through Parse. The capability methods below are deliberately
+// methods rather than functions over a raw string: Parse is the single
+// validation boundary, so holding a Type means the unknown-backend error has
+// already been handled and cannot be silently swallowed.
 type Type string
 
 const (
-	Prometheus Type = "prometheus"
-	Mimir      Type = "mimir"
-	Cortex     Type = "cortex"
-	Thanos     Type = "thanos"
+	Prometheus      Type = "prometheus"
+	Mimir           Type = "mimir"
+	Cortex          Type = "cortex"
+	Thanos          Type = "thanos"
+	VictoriaMetrics Type = "victoriametrics"
 )
 
 const (
@@ -274,11 +296,12 @@ const (
 	TenantHeaderThanos = "THANOS-TENANT"
 
 	// prometheusAPISubPath is where Mimir and Cortex expose the Prometheus
-	// HTTP API. Thanos and Prometheus expose it at the root.
+	// HTTP API. The others expose it at the root.
 	prometheusAPISubPath = "/prometheus"
 )
 
-// Parse normalises a Datasource type string.
+// Parse normalises a Datasource type string and is the only way to obtain a
+// Type from user input.
 //
 // Matching is case-insensitive on purpose: the CRD enum only validates on
 // write, so a Datasource stored before the enum was introduced can still be
@@ -293,7 +316,11 @@ func Parse(t string) (Type, error) {
 		return Cortex, nil
 	case Thanos:
 		return Thanos, nil
+	case VictoriaMetrics:
+		return VictoriaMetrics, nil
 	default:
+		// Report the raw input, not the normalised form, so the operator sees
+		// exactly what they typed.
 		return "", fmt.Errorf("unsupported datasource type: %q", t)
 	}
 }
@@ -303,13 +330,14 @@ func Parse(t string) (Type, error) {
 //
 // Mimir and Cortex expose one. Thanos Ruler has no rule-write API and instead
 // reads files rendered by prometheus-operator from PrometheusRule objects;
-// Prometheus works the same way. Neither needs a push.
-func NeedsRemoteRulePush(t string) bool {
-	parsed, err := Parse(t)
-	if err != nil {
+// Prometheus and VictoriaMetrics work the same way. Neither needs a push.
+func (t Type) NeedsRemoteRulePush() bool {
+	switch t {
+	case Mimir, Cortex:
+		return true
+	default:
 		return false
 	}
-	return parsed == Mimir || parsed == Cortex
 }
 
 // SupportsMagicAlerting reports whether the backend exposes an Alertmanager
@@ -317,38 +345,35 @@ func NeedsRemoteRulePush(t string) bool {
 //
 // Thanos Ruler sends alerts to an Alertmanager configured statically through
 // --alertmanagers.url, which is outside OSKO's control.
-func SupportsMagicAlerting(t string) bool {
-	parsed, err := Parse(t)
-	if err != nil {
+func (t Type) SupportsMagicAlerting() bool {
+	switch t {
+	case Mimir, Cortex:
+		return true
+	default:
 		return false
 	}
-	return parsed == Mimir || parsed == Cortex
 }
 
-// QueryURL returns the base URL of the Prometheus-compatible query API for the
+// QueryURL returns the base URL of the Prometheus-compatible query API for a
 // backend reachable at address.
-func QueryURL(t, address string) (string, error) {
-	parsed, err := Parse(t)
-	if err != nil {
-		return "", err
+//
+// This is kept separate from NeedsRemoteRulePush even though the two agree on
+// today's backend set: serving the query API under a sub-path and exposing a
+// ruler write API are unrelated properties that coincide by accident.
+func (t Type) QueryURL(address string) string {
+	trimmed := strings.TrimRight(address, "/")
+	switch t {
+	case Mimir, Cortex:
+		return trimmed + prometheusAPISubPath
+	default:
+		return trimmed
 	}
-
-	trimmed := strings.TrimSuffix(address, "/")
-	if parsed == Mimir || parsed == Cortex {
-		return trimmed + prometheusAPISubPath, nil
-	}
-	return trimmed, nil
 }
 
 // TenantHeader returns the HTTP header carrying the tenant identifier for the
 // backend, or an empty string when the backend has no tenancy header.
-func TenantHeader(t string) string {
-	parsed, err := Parse(t)
-	if err != nil {
-		return ""
-	}
-
-	switch parsed {
+func (t Type) TenantHeader() string {
+	switch t {
 	case Mimir, Cortex:
 		return TenantHeaderMimir
 	case Thanos:
@@ -359,12 +384,15 @@ func TenantHeader(t string) string {
 }
 ```
 
-Note: `QueryURL` trims a trailing slash before appending. The current code does not, so a Datasource with `address: http://localhost:9009/` (as in `config/samples/openslo_v1_datasource.yaml`) produces `http://localhost:9009//prometheus`. This is a drive-by fix in code being modified anyway.
+`QueryURL` uses `TrimRight`, not `TrimSuffix`, so repeated trailing slashes are all removed. The current code appends `/prometheus` without trimming at all, so the shipped sample address `http://localhost:9009/` produces `http://localhost:9009//prometheus`. This is a drive-by fix in code being rewritten anyway.
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `go test ./internal/backend/... -v`
-Expected: PASS, all subtests green.
+Expected: PASS, all subtests green, output pristine with no warnings.
+
+Then run the full suite once: `make test`
+Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -372,9 +400,10 @@ Expected: PASS, all subtests green.
 git add internal/backend/backend.go internal/backend/backend_test.go
 git commit -s -m "feat(backend): add metrics backend capability package
 
-Introduce typed backend constants and capability predicates so controllers
-ask what a backend can do instead of comparing type strings. Adding a
-backend now means changing one file."
+Introduce a Type with capability methods so controllers ask what a backend
+can do instead of comparing type strings. Parse is the single validation
+boundary; capabilities are methods on Type so a caller cannot reach them
+without first handling the unknown-backend error."
 ```
 
 ---
@@ -392,7 +421,7 @@ The status fields are a **prerequisite discovered during planning**, not decorat
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `DatasourceStatus{Conditions []metav1.Condition, Ready string}`, and a `spec.type` enum restricted to `prometheus;mimir;cortex;thanos`.
+- Produces: `DatasourceStatus{Conditions []metav1.Condition, Ready string}`, and a `spec.type` enum restricted to `prometheus;mimir;cortex;thanos;victoriametrics`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -451,6 +480,12 @@ var _ = Describe("Datasource spec.type validation", func() {
 		Expect(k8sClient.Create(context.Background(), ds)).To(Succeed())
 		Expect(k8sClient.Delete(context.Background(), ds)).To(Succeed())
 	})
+
+	It("accepts victoriametrics", func() {
+		ds := newDatasource("good-vm", "victoriametrics")
+		Expect(k8sClient.Create(context.Background(), ds)).To(Succeed())
+		Expect(k8sClient.Delete(context.Background(), ds)).To(Succeed())
+	})
 })
 ```
 
@@ -469,7 +504,7 @@ type DatasourceSpec struct {
 	Description Description `json:"description,omitempty"`
 
 	// Type selects the metrics backend this Datasource points at.
-	// +kubebuilder:validation:Enum=prometheus;mimir;cortex;thanos
+	// +kubebuilder:validation:Enum=prometheus;mimir;cortex;thanos;victoriametrics
 	Type string `json:"type,omitempty"`
 
 	ConnectionDetails osko.ConnectionDetails `json:"connectionDetails,omitempty"`
@@ -517,7 +552,7 @@ git add api/openslo/v1/datasource_types.go api/openslo/v1/zz_generated.deepcopy.
         internal/controller/openslo/datasource_validation_test.go
 git commit -s -m "feat(api)!: validate Datasource type and add status conditions
 
-Restrict spec.type to prometheus, mimir, cortex and thanos so a typo fails
+Restrict spec.type to the backends OSKO understands so a typo fails
 at apply time instead of silently producing no rules.
 
 Add Conditions and Ready to DatasourceStatus. utils.UpdateStatus finds
@@ -537,8 +572,8 @@ becomes invalid and cannot be updated until corrected."
 - Test: `internal/controller/openslo/datasource_controller_test.go` (create)
 
 **Interfaces:**
-- Consumes: `backend.Parse`, `backend.QueryURL`, `backend.TenantHeader`, `backend.Thanos`, `backend.Mimir`, `backend.Cortex`, `backend.Prometheus` from Task 1. `utils.UpdateStatus` and the status fields from Task 2.
-- Produces: `CustomRoundTripper{Transport http.RoundTripper, TenantHeader string, TenantID string}`.
+- Consumes: `backend.Parse` and the `Type` methods `QueryURL` / `TenantHeader`, plus the constants `backend.Thanos`, `backend.Mimir`, `backend.Cortex`, `backend.Prometheus`, `backend.VictoriaMetrics` from Task 1. `utils.UpdateStatus` and the status fields from Task 2.
+- Produces: `CustomRoundTripper{Transport http.RoundTripper, TenantHeader string, TenantID string}`, and `connectDatasource(ctx, ds, backendType)` which now takes the parsed type.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -668,9 +703,9 @@ type CustomRoundTripper struct {
 	}
 
 	switch backendType {
-	case backend.Mimir, backend.Thanos, backend.Prometheus:
+	case backend.Mimir, backend.Thanos, backend.Prometheus, backend.VictoriaMetrics:
 		log.Info("Connecting Datasource", "type", string(backendType), "address", ds.Spec.ConnectionDetails.Address)
-		if err := r.connectDatasource(ctx, ds); err != nil {
+		if err := r.connectDatasource(ctx, ds, backendType); err != nil {
 			log.Error(err, errConnectDS)
 			if statusErr := utils.UpdateStatus(ctx, ds, r.Client, "Ready", metav1.ConditionFalse, errConnectDS); statusErr != nil {
 				log.Error(statusErr, "Failed to update Datasource status")
@@ -698,13 +733,18 @@ type CustomRoundTripper struct {
 	return ctrl.Result{}, nil
 ```
 
-3d. Replace the address-resolution block at the top of `connectDatasource` (lines 79-85) with:
+3d. Change the `connectDatasource` signature so it receives the already-parsed type instead of re-deriving it, and replace the address-resolution block at the top of the function (lines 78-85).
+
+The signature becomes:
 
 ```go
-	datasourceAddress, err := backend.QueryURL(ds.Spec.Type, ds.Spec.ConnectionDetails.Address)
-	if err != nil {
-		return err
-	}
+func (r *DatasourceReconciler) connectDatasource(ctx context.Context, ds *openslov1.Datasource, backendType backend.Type) error {
+```
+
+and the first statements become:
+
+```go
+	datasourceAddress := backendType.QueryURL(ds.Spec.ConnectionDetails.Address)
 ```
 
 3e. Update the round tripper construction in `connectDatasource` (lines 87-90):
@@ -712,7 +752,7 @@ type CustomRoundTripper struct {
 ```go
 	customRoundtripper := &CustomRoundTripper{
 		Transport:    api.DefaultRoundTripper,
-		TenantHeader: backend.TenantHeader(ds.Spec.Type),
+		TenantHeader: backendType.TenantHeader(),
 		TenantID:     ds.Spec.ConnectionDetails.TargetTenant,
 	}
 ```
@@ -765,10 +805,10 @@ Thanos equivalent."
 - Modify: `internal/controller/openslo/slo_controller.go:211-270` (MimirRule block), `:272-319` (magic alerting block)
 
 **Interfaces:**
-- Consumes: `backend.NeedsRemoteRulePush`, `backend.SupportsMagicAlerting` from Task 1.
+- Consumes: `backend.Parse` and the `Type` methods `NeedsRemoteRulePush` / `SupportsMagicAlerting` from Task 1.
 - Produces: no new exported symbols.
 
-**No new test in this task, deliberately.** The behaviour being added is two `if` wrappers around existing blocks in the SLO reconciler. Asserting that the reconciler takes those branches requires a running manager, which this repository does not have (see the deviation note at the top of this plan). The predicates themselves are already covered exhaustively by Task 1's `TestNeedsRemoteRulePush` and `TestSupportsMagicAlerting`.
+**No new test in this task, deliberately.** The behaviour being added is two `if` wrappers around existing blocks in the SLO reconciler. Asserting that the reconciler takes those branches requires a running manager, which this repository does not have (see the deviation note at the top of this plan). The predicates themselves are already covered exhaustively by Task 1's `TestTypeNeedsRemoteRulePush` and `TestTypeSupportsMagicAlerting`.
 
 A test in this file that re-asserted those predicates would pass before the change, pass after a *wrong* change, and give false confidence. It was considered and rejected. Verification for this task is: the existing suite stays green, and the reviewer inspects the diff for correct branch placement. The coverage gap is recorded in ADR 0008 (Task 6).
 
@@ -785,10 +825,29 @@ Expected: PASS. Note the result — if anything is already failing, stop and rep
 	"github.com/oskoperator/osko/internal/backend"
 ```
 
+2a-bis. Parse the datasource type once, immediately after the Datasource `ds` has been fetched and before the PrometheusRule block. An unparseable type is a permanent error: the SLO cannot be reconciled correctly against a backend OSKO does not understand, and failing here is what stops the gates below from degrading silently.
+
+```go
+	backendType, err := backend.Parse(ds.Spec.Type)
+	if err != nil {
+		log.Error(err, "unsupported datasource type", "type", ds.Spec.Type)
+		if r.Recorder != nil {
+			r.Recorder.Event(slo, "Warning", "UnsupportedDatasourceType", err.Error())
+		}
+		if statusErr := utils.UpdateStatus(ctx, slo, r.Client, "Ready", metav1.ConditionFalse, err.Error()); statusErr != nil {
+			log.Error(statusErr, "Failed to update SLO status")
+			return ctrl.Result{}, errors.Transient(statusErr, 5*time.Second)
+		}
+		return ctrl.Result{}, errors.Permanent(err)
+	}
+```
+
+`utils`, `metav1`, `errors` and `time` are already imported in this file.
+
 2b. Wrap the MimirRule block. Find line 211 `mimirRule := &oskov1alpha1.MimirRule{}` and the `log.V(1).Info("MimirRule found", ...)` line that closes the block at line 270. Wrap the whole span:
 
 ```go
-	if backend.NeedsRemoteRulePush(ds.Spec.Type) {
+	if backendType.NeedsRemoteRulePush() {
 		mimirRule := &oskov1alpha1.MimirRule{}
 		err = r.Get(ctx, types.NamespacedName{
 			Name:      slo.Name,
@@ -809,7 +868,7 @@ Do not change any logic inside the block. The `return ctrl.Result{}, nil` statem
 	// Create AlertManagerConfig if magic alerting is enabled and the backend
 	// exposes an Alertmanager configuration API to write it to.
 	if slo.ObjectMeta.Annotations["osko.dev/magicAlerting"] == "true" {
-		if !backend.SupportsMagicAlerting(ds.Spec.Type) {
+		if !backendType.SupportsMagicAlerting() {
 			log.V(1).Info("magicAlerting is not supported for this datasource type",
 				"type", ds.Spec.Type)
 			if r.Recorder != nil {
@@ -1092,6 +1151,7 @@ Set `spec.type` on a `Datasource` to one of:
 | `cortex` | Not implemented yet | `X-Scope-OrgID` | Not implemented yet |
 | `thanos` | `PrometheusRule` consumed by `ThanosRuler` | `THANOS-TENANT` | Not supported |
 | `prometheus` | `PrometheusRule` consumed by `Prometheus` | none | Not supported |
+| `victoriametrics` | `PrometheusRule` consumed by your ruler | none | Not supported |
 
 ### Thanos
 
@@ -1199,7 +1259,12 @@ work: no new CRD, no new controller, no new HTTP client.
 * Backend capabilities live in `internal/backend`. Controllers ask `NeedsRemoteRulePush` and
   `SupportsMagicAlerting` rather than comparing type strings, so the next backend is a
   one-file change.
-* `Datasource.spec.type` is validated by a CRD enum of `prometheus;mimir;cortex;thanos`.
+* `Datasource.spec.type` is validated by a CRD enum of
+  `prometheus;mimir;cortex;thanos;victoriametrics`.
+* Backend capabilities are methods on a `backend.Type` obtained only through `backend.Parse`,
+  so a caller cannot consult a capability without first handling the unknown-backend error.
+  Raw-string predicates were rejected because they force each call site to swallow a parse
+  error and return a zero value, turning a typo into a silently skipped MimirRule.
 * `targetTenant` maps to the `THANOS-TENANT` header for Thanos, matching the default of
   Thanos' `--query.tenant-header`. `sourceTenants` has no Thanos equivalent and is ignored
   with a warning.
@@ -1221,6 +1286,10 @@ work: no new CRD, no new controller, no new HTTP client.
 
 ### Negative Consequences
 
+* `victoriametrics` is accepted by the enum and handled on the same path as Thanos and
+  Prometheus. It was already named in `internal/helpers.isPrometheusSource` for the SLI
+  metric-source dialect, so excluding it from the Datasource enum would have hard-rejected a
+  value the codebase already acknowledged.
 * `osko.dev/magicAlerting` is unsupported on Thanos. Thanos Ruler sends alerts to an
   Alertmanager configured through `--alertmanagers.url`, outside OSKO's control. The SLO
   stays Ready because its burn-rate alerting rules still fire; only routing is skipped.

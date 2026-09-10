@@ -139,10 +139,17 @@ configuration API. It therefore shares the `thanos` branch, and rule delivery is
 
 Supporting it costs one extra `case` label and keeps the enum honest.
 
-### D4. Backend types become typed constants with capability predicates
+### D4. Backend types become typed constants with capability methods
 
 A new `internal/backend` package owns the knowledge of what each backend can do. Call sites
 express intent (`NeedsRemoteRulePush`) rather than identity (`type == "mimir"`).
+
+The capabilities are **methods on a `Type` obtained only through `Parse`**, not functions
+taking a raw `string`. Raw-string predicates were reviewed and rejected during
+implementation: each would have to swallow the parse error and return a zero value, so a
+typo like `mimr` would make `NeedsRemoteRulePush` return `false` and silently skip the
+MimirRule, producing a green reconcile with no rules. Requiring a parsed `Type` makes that
+state unrepresentable rather than merely discouraged.
 
 *Rejected:* adding `thanos` cases to the existing switches inline. Adding Thanos introduces
 two new branch sites on top of the two that exist; four scattered string comparisons across
@@ -150,7 +157,12 @@ three files is what the next backend turns into five.
 
 ### D5. `Datasource.Spec.Type` gets a CRD enum
 
-`+kubebuilder:validation:Enum=prometheus;mimir;cortex;thanos`. A typo such as `thanso` is
+`+kubebuilder:validation:Enum=prometheus;mimir;cortex;thanos;victoriametrics`.
+
+`victoriametrics` is included because `internal/helpers.isPrometheusSource` already accepts
+it for the SLI metric-source dialect. Excluding it would have hard-rejected a value the
+codebase already acknowledges. It is handled exactly like Thanos and Prometheus: query API at
+the root, no tenancy header, no remote rule push, no magic alerting. A typo such as `thanso` is
 rejected at `kubectl apply` with a clear message instead of silently producing no rules.
 
 The field stays `omitempty`; it does not become newly required. An empty type is handled by
@@ -238,33 +250,33 @@ package backend
 type Type string
 
 const (
-    Prometheus Type = "prometheus"
-    Mimir      Type = "mimir"
-    Cortex     Type = "cortex"
-    Thanos     Type = "thanos"
+    Prometheus      Type = "prometheus"
+    Mimir           Type = "mimir"
+    Cortex          Type = "cortex"
+    Thanos          Type = "thanos"
+    VictoriaMetrics Type = "victoriametrics"
 )
 
 // NeedsRemoteRulePush reports whether rule groups must be pushed to a remote ruler
-// configuration API. Backends that read rules from Kubernetes or from disk return false.
-// Mimir and Cortex return true.
-func NeedsRemoteRulePush(t string) bool
+// configuration API. Mimir and Cortex return true; backends that read rules from
+// PrometheusRule objects return false.
+func (t Type) NeedsRemoteRulePush() bool
 
 // SupportsMagicAlerting reports whether the backend exposes an Alertmanager configuration
 // API that OSKO can write routing configuration to. Mimir and Cortex return true.
-func SupportsMagicAlerting(t string) bool
+func (t Type) SupportsMagicAlerting() bool
 
 // QueryURL returns the base URL of the Prometheus-compatible query API for the backend.
-// Mimir and Cortex serve it under /prometheus; Thanos and Prometheus serve it at the root.
-// Returns an error for unknown or empty types.
-func QueryURL(t, address string) (string, error)
+// Mimir and Cortex serve it under /prometheus; the others serve it at the root.
+func (t Type) QueryURL(address string) string
 
 // TenantHeader returns the HTTP header carrying the tenant identifier, or "" when the
 // backend has no tenancy header. Mimir and Cortex return X-Scope-OrgID; Thanos returns
 // THANOS-TENANT.
-func TenantHeader(t string) string
+func (t Type) TenantHeader() string
 ```
 
-All functions lowercase their input before matching. This is defensive rather than
+`Parse` lowercases and trims its input before matching. This is defensive rather than
 decorative: the CRD enum only validates on write, so a `Datasource` stored before the upgrade
 can still be read back with `Mimir`.
 
@@ -272,10 +284,10 @@ can still be read back with `Mimir`.
 
 | File | Change |
 | --- | --- |
-| `api/openslo/v1/datasource_types.go` | Add `+kubebuilder:validation:Enum=prometheus;mimir;cortex;thanos` to `DatasourceSpec.Type`. |
+| `api/openslo/v1/datasource_types.go` | Add `+kubebuilder:validation:Enum=prometheus;mimir;cortex;thanos;victoriametrics` to `DatasourceSpec.Type`, and add `Conditions`/`Ready` to `DatasourceStatus` (required: `utils.UpdateStatus` locates them by reflection and is otherwise a no-op). |
 | `internal/backend/backend.go` | New package as specified above. |
 | `internal/backend/backend_test.go` | New table tests. |
-| `internal/controller/openslo/datasource_controller.go:59` | Add `thanos` and `prometheus` cases that connect, sharing one branch. Add a `default` branch that emits a Warning and sets Datasource status not-ready for unknown or empty types. |
+| `internal/controller/openslo/datasource_controller.go:59` | Parse the type once, then add `thanos`, `prometheus` and `victoriametrics` cases that connect, sharing one branch. An unparseable type emits a Warning and sets Datasource status not-ready. |
 | `internal/controller/openslo/datasource_controller.go:81` | Replace the `!= "mimir"` rejection and hardcoded `/prometheus` suffix with `backend.QueryURL`. Set the tenant header from `backend.TenantHeader` when `TargetTenant` is non-empty. Emit a Warning when `SourceTenants` is set on a Thanos datasource. |
 | `internal/controller/openslo/slo_controller.go:211` | Wrap the MimirRule get-and-create block in `if backend.NeedsRemoteRulePush(ds.Spec.Type)`. |
 | `internal/controller/openslo/slo_controller.go:273` | Gate magic alerting on `backend.SupportsMagicAlerting(ds.Spec.Type)`; emit a Warning event and record the status reason otherwise. |
@@ -344,9 +356,9 @@ CRD validation:
 
 ## Release notes
 
-- New supported datasource type: `thanos`. Rules are delivered as `PrometheusRule` objects;
+- New supported datasource types: `thanos` and `victoriametrics`. Rules are delivered as `PrometheusRule` objects;
   point your `ThanosRuler.ruleSelector` at `app.kubernetes.io/managed-by: osko`.
-- `Datasource.spec.type` is now validated against `prometheus|mimir|cortex|thanos`. Existing
+- `Datasource.spec.type` is now validated against `prometheus|mimir|cortex|thanos|victoriametrics`. Existing
   Datasources with any other value must be corrected before they can be updated.
 - Generated `PrometheusRule` objects now carry `app.kubernetes.io/managed-by: osko` and
   `osko.dev/slo` labels, and `MimirRule` objects inherit them. Existing objects of both kinds

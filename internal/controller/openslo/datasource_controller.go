@@ -92,6 +92,18 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
 		return ctrl.Result{}, nil
+	default:
+		// Reachable only if a backend.Type is added to Parse without being
+		// given an arm here. Falling through would report Ready=True on a
+		// Datasource that was never contacted.
+		err := fmt.Errorf("datasource type %q is not handled by the Datasource controller", string(backendType))
+		log.Error(err, "Unhandled datasource type")
+		r.Recorder.Event(ds, "Warning", "UnhandledDatasourceType", err.Error())
+		if statusErr := utils.UpdateStatus(ctx, ds, r.Client, "Ready", metav1.ConditionFalse, err.Error()); statusErr != nil {
+			log.Error(statusErr, "Failed to update Datasource status")
+			return ctrl.Result{}, errors.Transient(statusErr, 5*time.Second)
+		}
+		return ctrl.Result{}, errors.Permanent(err)
 	}
 
 	if backendType == backend.Thanos && len(ds.Spec.ConnectionDetails.SourceTenants) > 0 {

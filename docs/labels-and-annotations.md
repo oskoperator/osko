@@ -46,8 +46,9 @@ Accepts the string "true" as the only valid input.
 osko.dev/magicAlerting: "true"
 ```
 
-Not supported on `thanos` or `prometheus` datasources. Setting it there emits a
-`MagicAlertingUnsupported` warning event and the SLO remains Ready, because the
+Supported only on `mimir` and `cortex` datasources — the two backends that expose an
+Alertmanager configuration API. On `thanos`, `prometheus` and `victoriametrics` it emits
+a `MagicAlertingUnsupported` warning event and the SLO remains Ready, because the
 burn-rate alerting rules are generated regardless. Only the Alertmanager routing
 configuration is skipped.
 

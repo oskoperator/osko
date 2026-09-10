@@ -13,17 +13,19 @@ import (
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
 )
 
-// The Thanos samples are what users copy to adopt the backend. Applying them
-// against the real generated CRDs catches a misspelled field or an out-of-enum
-// value that no other test would see.
+// The Thanos samples are what users copy to adopt the backend. Decoding them
+// strictly catches a misspelled field, and applying them against the real
+// generated CRDs catches an out-of-enum value. Strictness is load-bearing:
+// a non-strict decoder drops an unknown field client-side, so the API server
+// never sees it and the spec would stay green while `kubectl apply` — which
+// has validated fields strictly since 1.25 — rejects the sample.
 var _ = Describe("Thanos sample manifests", func() {
 	decodeSample := func(name string, obj client.Object) {
-		f, err := os.Open(filepath.Join("..", "..", "..", "config", "samples", name))
+		data, err := os.ReadFile(filepath.Join("..", "..", "..", "config", "samples", name))
 		Expect(err).NotTo(HaveOccurred(), "sample file must exist")
-		defer f.Close()
 
-		Expect(yaml.NewYAMLOrJSONDecoder(f, 4096).Decode(obj)).To(Succeed(),
-			"sample must decode into its typed object")
+		Expect(yaml.UnmarshalStrict(data, obj)).To(Succeed(),
+			"sample must decode into its typed object with no unknown fields")
 		obj.SetNamespace("default")
 	}
 

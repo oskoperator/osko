@@ -60,10 +60,15 @@ Set `spec.type` on a `Datasource` to one of:
 | Type | Rule delivery | Tenancy header | Magic alerting |
 | --- | --- | --- | --- |
 | `mimir` | Pushed to the Mimir ruler API | `X-Scope-OrgID` | Supported |
-| `cortex` | Not implemented yet — the Datasource reports `Ready: False` | `X-Scope-OrgID` | Not implemented yet |
+| `cortex` | Pushed to the ruler API via `MimirRule` (untested against Cortex) | `X-Scope-OrgID` | Supported (untested against Cortex) |
 | `thanos` | `PrometheusRule` consumed by `ThanosRuler` | `THANOS-TENANT` | Not supported |
 | `prometheus` | `PrometheusRule` consumed by `Prometheus` | none | Not supported |
 | `victoriametrics` | `PrometheusRule` consumed by your ruler | none | Not supported |
+
+A `cortex` Datasource's connectivity is never verified, so it reports `Ready=False` with
+`Cortex support is not implemented yet`. That status does not gate rule or alert delivery:
+the SLO controller never reads it, and a `cortex` SLO still gets a `MimirRule` and,
+with magic alerting, an `AlertManagerConfig`, both pushed down the Mimir path.
 
 ### Thanos
 

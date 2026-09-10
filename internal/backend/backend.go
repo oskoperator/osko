@@ -1,7 +1,10 @@
 // Package backend describes the metrics backends OSKO can target and the
 // capabilities each one provides. Controllers ask this package what a backend
-// can do rather than comparing type strings, so adding a new backend means
-// changing one file.
+// can do rather than comparing type strings.
+//
+// Note that this is not the only place backend names appear:
+// internal/helpers.isPrometheusSource keeps a separate list for the SLI
+// metric-source dialect, which is a different field with different values.
 package backend
 
 import (
@@ -11,13 +14,19 @@ import (
 
 // Type identifies a metrics backend. The values match the enum accepted by
 // Datasource.spec.type.
+//
+// Obtain a Type through Parse. The capability methods below are deliberately
+// methods rather than functions over a raw string: Parse is the single
+// validation boundary, so holding a Type means the unknown-backend error has
+// already been handled and cannot be silently swallowed.
 type Type string
 
 const (
-	Prometheus Type = "prometheus"
-	Mimir      Type = "mimir"
-	Cortex     Type = "cortex"
-	Thanos     Type = "thanos"
+	Prometheus      Type = "prometheus"
+	Mimir           Type = "mimir"
+	Cortex          Type = "cortex"
+	Thanos          Type = "thanos"
+	VictoriaMetrics Type = "victoriametrics"
 )
 
 const (
@@ -29,11 +38,12 @@ const (
 	TenantHeaderThanos = "THANOS-TENANT"
 
 	// prometheusAPISubPath is where Mimir and Cortex expose the Prometheus
-	// HTTP API. Thanos and Prometheus expose it at the root.
+	// HTTP API. The others expose it at the root.
 	prometheusAPISubPath = "/prometheus"
 )
 
-// Parse normalises a Datasource type string.
+// Parse normalises a Datasource type string and is the only way to obtain a
+// Type from user input.
 //
 // Matching is case-insensitive on purpose: the CRD enum only validates on
 // write, so a Datasource stored before the enum was introduced can still be
@@ -48,7 +58,11 @@ func Parse(t string) (Type, error) {
 		return Cortex, nil
 	case Thanos:
 		return Thanos, nil
+	case VictoriaMetrics:
+		return VictoriaMetrics, nil
 	default:
+		// Report the raw input, not the normalised form, so the operator sees
+		// exactly what they typed.
 		return "", fmt.Errorf("unsupported datasource type: %q", t)
 	}
 }
@@ -58,13 +72,14 @@ func Parse(t string) (Type, error) {
 //
 // Mimir and Cortex expose one. Thanos Ruler has no rule-write API and instead
 // reads files rendered by prometheus-operator from PrometheusRule objects;
-// Prometheus works the same way. Neither needs a push.
-func NeedsRemoteRulePush(t string) bool {
-	parsed, err := Parse(t)
-	if err != nil {
+// Prometheus and VictoriaMetrics work the same way. Neither needs a push.
+func (t Type) NeedsRemoteRulePush() bool {
+	switch t {
+	case Mimir, Cortex:
+		return true
+	default:
 		return false
 	}
-	return parsed == Mimir || parsed == Cortex
 }
 
 // SupportsMagicAlerting reports whether the backend exposes an Alertmanager
@@ -72,38 +87,35 @@ func NeedsRemoteRulePush(t string) bool {
 //
 // Thanos Ruler sends alerts to an Alertmanager configured statically through
 // --alertmanagers.url, which is outside OSKO's control.
-func SupportsMagicAlerting(t string) bool {
-	parsed, err := Parse(t)
-	if err != nil {
+func (t Type) SupportsMagicAlerting() bool {
+	switch t {
+	case Mimir, Cortex:
+		return true
+	default:
 		return false
 	}
-	return parsed == Mimir || parsed == Cortex
 }
 
-// QueryURL returns the base URL of the Prometheus-compatible query API for the
+// QueryURL returns the base URL of the Prometheus-compatible query API for a
 // backend reachable at address.
-func QueryURL(t, address string) (string, error) {
-	parsed, err := Parse(t)
-	if err != nil {
-		return "", err
+//
+// This is kept separate from NeedsRemoteRulePush even though the two agree on
+// today's backend set: serving the query API under a sub-path and exposing a
+// ruler write API are unrelated properties that coincide by accident.
+func (t Type) QueryURL(address string) string {
+	trimmed := strings.TrimRight(address, "/")
+	switch t {
+	case Mimir, Cortex:
+		return trimmed + prometheusAPISubPath
+	default:
+		return trimmed
 	}
-
-	trimmed := strings.TrimSuffix(address, "/")
-	if parsed == Mimir || parsed == Cortex {
-		return trimmed + prometheusAPISubPath, nil
-	}
-	return trimmed, nil
 }
 
 // TenantHeader returns the HTTP header carrying the tenant identifier for the
 // backend, or an empty string when the backend has no tenancy header.
-func TenantHeader(t string) string {
-	parsed, err := Parse(t)
-	if err != nil {
-		return ""
-	}
-
-	switch parsed {
+func (t Type) TenantHeader() string {
+	switch t {
 	case Mimir, Cortex:
 		return TenantHeaderMimir
 	case Thanos:

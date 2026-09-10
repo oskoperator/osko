@@ -86,6 +86,12 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	case backend.Cortex:
 		log.Info("Datasource Type is Cortex", "address", ds.Spec.ConnectionDetails.Address)
 		r.Recorder.Event(ds, "Warning", "NotImplemented", "Cortex support is not implemented yet")
+		if err := utils.UpdateStatus(ctx, ds, r.Client, "Ready", metav1.ConditionFalse,
+			"Cortex support is not implemented yet"); err != nil {
+			log.Error(err, "Failed to update Datasource status")
+			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
+		}
+		return ctrl.Result{}, nil
 	}
 
 	if backendType == backend.Thanos && len(ds.Spec.ConnectionDetails.SourceTenants) > 0 {

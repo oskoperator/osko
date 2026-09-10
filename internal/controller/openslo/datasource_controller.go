@@ -7,10 +7,13 @@ import (
 	"time"
 
 	openslov1 "github.com/oskoperator/osko/api/openslo/v1"
+	"github.com/oskoperator/osko/internal/backend"
 	"github.com/oskoperator/osko/internal/errors"
+	"github.com/oskoperator/osko/internal/utils"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,7 +36,10 @@ type DatasourceReconciler struct {
 
 type CustomRoundTripper struct {
 	Transport http.RoundTripper
-	TenantID  string
+	// TenantHeader is the HTTP header carrying the tenant identifier for the
+	// backend, or empty when the backend has no tenancy header.
+	TenantHeader string
+	TenantID     string
 }
 
 //+kubebuilder:rbac:groups=openslo.com,resources=datasources,verbs=get;list;watch;create;update;patch;delete
@@ -56,17 +62,40 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Error(err, errGetDS)
 		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
-	switch ds.Spec.Type {
-	case "mimir":
-		log.Info("Datasource Type is Mimir", "address", ds.Spec.ConnectionDetails.Address)
-		err = r.connectDatasource(ctx, ds)
-		if err != nil {
+	backendType, err := backend.Parse(ds.Spec.Type)
+	if err != nil {
+		log.Error(err, "unsupported datasource type", "type", ds.Spec.Type)
+		r.Recorder.Event(ds, "Warning", "UnsupportedDatasourceType", err.Error())
+		if statusErr := utils.UpdateStatus(ctx, ds, r.Client, "Ready", metav1.ConditionFalse, err.Error()); statusErr != nil {
+			log.Error(statusErr, "Failed to update Datasource status")
+			return ctrl.Result{}, errors.Transient(statusErr, 5*time.Second)
+		}
+		return ctrl.Result{}, errors.Permanent(err)
+	}
+
+	switch backendType {
+	case backend.Mimir, backend.Thanos, backend.Prometheus, backend.VictoriaMetrics:
+		log.Info("Connecting Datasource", "type", string(backendType), "address", ds.Spec.ConnectionDetails.Address)
+		if err := r.connectDatasource(ctx, ds, backendType); err != nil {
 			log.Error(err, errConnectDS)
+			if statusErr := utils.UpdateStatus(ctx, ds, r.Client, "Ready", metav1.ConditionFalse, errConnectDS); statusErr != nil {
+				log.Error(statusErr, "Failed to update Datasource status")
+			}
 			return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 		}
-	case "cortex":
+	case backend.Cortex:
 		log.Info("Datasource Type is Cortex", "address", ds.Spec.ConnectionDetails.Address)
 		r.Recorder.Event(ds, "Warning", "NotImplemented", "Cortex support is not implemented yet")
+	}
+
+	if backendType == backend.Thanos && len(ds.Spec.ConnectionDetails.SourceTenants) > 0 {
+		r.Recorder.Event(ds, "Warning", "SourceTenantsIgnored",
+			"sourceTenants has no Thanos equivalent and is ignored")
+	}
+
+	if err := utils.UpdateStatus(ctx, ds, r.Client, "Ready", metav1.ConditionTrue, "Datasource reconciled"); err != nil {
+		log.Error(err, "Failed to update Datasource status")
+		return ctrl.Result{}, errors.Transient(err, 5*time.Second)
 	}
 
 	log.V(1).Info("Datasource reconciled")
@@ -75,18 +104,13 @@ func (r *DatasourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
-func (r *DatasourceReconciler) connectDatasource(ctx context.Context, ds *openslov1.Datasource) error {
-	datasourceAddress := ""
-
-	if ds.Spec.Type != "mimir" {
-		return fmt.Errorf("unsupported datasource type: %s", ds.Spec.Type)
-	} else {
-		datasourceAddress = ds.Spec.ConnectionDetails.Address + "/prometheus"
-	}
+func (r *DatasourceReconciler) connectDatasource(ctx context.Context, ds *openslov1.Datasource, backendType backend.Type) error {
+	datasourceAddress := backendType.QueryURL(ds.Spec.ConnectionDetails.Address)
 
 	customRoundtripper := &CustomRoundTripper{
-		Transport: api.DefaultRoundTripper,
-		TenantID:  ds.Spec.ConnectionDetails.TargetTenant,
+		Transport:    api.DefaultRoundTripper,
+		TenantHeader: backendType.TenantHeader(),
+		TenantID:     ds.Spec.ConnectionDetails.TargetTenant,
 	}
 
 	newDsClient, err := api.NewClient(api.Config{
@@ -109,7 +133,9 @@ func (r *DatasourceReconciler) connectDatasource(ctx context.Context, ds *opensl
 }
 
 func (c *CustomRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Add("X-Scope-OrgId", c.TenantID)
+	if c.TenantHeader != "" && c.TenantID != "" {
+		req.Header.Set(c.TenantHeader, c.TenantID)
+	}
 	return c.Transport.RoundTrip(req)
 }
 

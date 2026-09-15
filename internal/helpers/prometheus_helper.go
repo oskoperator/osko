@@ -651,10 +651,6 @@ func (mrs *MonitoringRuleSet) createMultiBurnRateAlert(
 	}
 }
 
-func CreateAlertingRule() (*monitoringv1.PrometheusRule, error) {
-	return nil, nil
-}
-
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {
 	baseWindow := model.Duration(config.Cfg.DefaultBaseWindow).String()
 	if slo.ObjectMeta.Annotations[annotationBaseWindow] != "" {

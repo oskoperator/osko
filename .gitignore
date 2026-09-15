@@ -33,3 +33,6 @@ repomix-output.xml
 # Local development environment
 .envrc
 .omo/
+
+# git worktrees for isolated feature work
+.worktrees/

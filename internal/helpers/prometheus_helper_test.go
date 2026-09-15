@@ -1340,3 +1340,111 @@ func TestAlertTiers_ExpressionMatchesTable(t *testing.T) {
 		})
 	}
 }
+
+func TestCreatePrometheusRuleMarkerLabels(t *testing.T) {
+	slo := &openslov1.SLO{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "checkout-availability",
+			Namespace: "default",
+			Labels: map[string]string{
+				"team": "payments",
+			},
+		},
+		Spec: openslov1.SLOSpec{
+			Service:         "checkout",
+			BudgetingMethod: "Occurrences",
+			Objectives:      []openslov1.ObjectivesSpec{{Target: "0.99"}},
+			TimeWindow:      []openslov1.TimeWindowSpec{{Duration: "28d", IsRolling: true}},
+		},
+	}
+
+	sli := &openslov1.SLI{
+		ObjectMeta: metav1.ObjectMeta{Name: "checkout-sli", Namespace: "default"},
+		Spec: openslov1.SLISpec{
+			RatioMetric: openslov1.RatioMetricSpec{
+				Counter: true,
+				Good: openslov1.MetricSpec{
+					MetricSource: openslov1.MetricSource{
+						MetricSourceRef: "thanos-ds",
+						Type:            "Thanos",
+						Spec:            openslov1.MetricSourceSpec{Query: "sum(rate(good_total[5m]))"},
+					},
+				},
+				Total: openslov1.MetricSpec{
+					MetricSource: openslov1.MetricSource{
+						MetricSourceRef: "thanos-ds",
+						Type:            "Thanos",
+						Spec:            openslov1.MetricSourceSpec{Query: "sum(rate(requests_total[5m]))"},
+					},
+				},
+			},
+		},
+	}
+
+	rule, err := CreatePrometheusRule(slo, sli)
+	if err != nil {
+		t.Fatalf("CreatePrometheusRule() error = %v", err)
+	}
+
+	if got := rule.Labels[LabelManagedBy]; got != LabelManagedByValue {
+		t.Errorf("rule.Labels[%q] = %q, want %q; ThanosRuler.ruleSelector needs a stable marker to select on",
+			LabelManagedBy, got, LabelManagedByValue)
+	}
+	if got := rule.Labels[LabelSLOName]; got != "checkout-availability" {
+		t.Errorf("rule.Labels[%q] = %q, want %q", LabelSLOName, got, "checkout-availability")
+	}
+	if got := rule.Labels["team"]; got != "payments" {
+		t.Errorf("rule.Labels[\"team\"] = %q, want %q; labels inherited from the SLO must be preserved", got, "payments")
+	}
+}
+
+func TestCreatePrometheusRuleMarkerLabelsOverrideConflictingSLOLabel(t *testing.T) {
+	slo := &openslov1.SLO{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "checkout-availability",
+			Namespace: "default",
+			Labels: map[string]string{
+				LabelManagedBy: "someone-else",
+			},
+		},
+		Spec: openslov1.SLOSpec{
+			Service:         "checkout",
+			BudgetingMethod: "Occurrences",
+			Objectives:      []openslov1.ObjectivesSpec{{Target: "0.99"}},
+			TimeWindow:      []openslov1.TimeWindowSpec{{Duration: "28d", IsRolling: true}},
+		},
+	}
+
+	sli := &openslov1.SLI{
+		ObjectMeta: metav1.ObjectMeta{Name: "checkout-sli", Namespace: "default"},
+		Spec: openslov1.SLISpec{
+			RatioMetric: openslov1.RatioMetricSpec{
+				Counter: true,
+				Good: openslov1.MetricSpec{
+					MetricSource: openslov1.MetricSource{
+						MetricSourceRef: "thanos-ds",
+						Type:            "Thanos",
+						Spec:            openslov1.MetricSourceSpec{Query: "sum(rate(good_total[5m]))"},
+					},
+				},
+				Total: openslov1.MetricSpec{
+					MetricSource: openslov1.MetricSource{
+						MetricSourceRef: "thanos-ds",
+						Type:            "Thanos",
+						Spec:            openslov1.MetricSourceSpec{Query: "sum(rate(requests_total[5m]))"},
+					},
+				},
+			},
+		},
+	}
+
+	rule, err := CreatePrometheusRule(slo, sli)
+	if err != nil {
+		t.Fatalf("CreatePrometheusRule() error = %v", err)
+	}
+
+	if got := rule.Labels[LabelManagedBy]; got != LabelManagedByValue {
+		t.Errorf("rule.Labels[%q] = %q, want %q; the OSKO marker must win over a conflicting SLO label, "+
+			"since mergeLabels resolves conflicts by later-map-wins ordering", LabelManagedBy, got, LabelManagedByValue)
+	}
+}

@@ -2,6 +2,8 @@
 resources:
   - openslo_v1_datasource.yaml
   - openslo_v1_slo.yaml
+  - openslo_v1_datasource_thanos.yaml
+  - openslo_v1_slo_thanos.yaml
   - config_secret.yaml
   - osko_v1alpha1_alertmanagerconfig.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

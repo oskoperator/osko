@@ -1,0 +1,18 @@
+apiVersion: openslo.com/v1
+kind: Datasource
+metadata:
+  labels:
+    app.kubernetes.io/name: thanos-ds
+  name: thanos-ds
+spec:
+  description: Thanos Query datasource
+  type: thanos
+  # Thanos Query serves the Prometheus HTTP API at the root, so no
+  # /prometheus sub-path is appended.
+  connectionDetails:
+    address: http://thanos-query.monitoring.svc:9090
+    # targetTenant is sent as the THANOS-TENANT header and is only meaningful
+    # when Thanos runs with --query.enforce-tenancy. Omit it otherwise.
+    # targetTenant: monitoring
+    #
+    # sourceTenants has no Thanos equivalent and is ignored with a warning.

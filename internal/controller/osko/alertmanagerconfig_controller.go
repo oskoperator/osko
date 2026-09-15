@@ -188,31 +188,37 @@ func (r *AlertManagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 	return ctrl.Result{}, nil
 }
 
+// findObjectsForSecret searches by secretRef, not by name: the SLO controller
+// names the Secret "<slo>-alerting-config" but the AlertManagerConfig
+// "<slo>-alerting", so a name-keyed lookup matches nothing.
 func (r *AlertManagerConfigReconciler) findObjectsForSecret() func(ctx context.Context, a client.Object) []reconcile.Request {
 	return func(ctx context.Context, a client.Object) []reconcile.Request {
 		log := ctrllog.FromContext(ctx)
-		amc := &oskov1alpha1.AlertManagerConfig{}
-		namespacedName := types.NamespacedName{
-			Name:      a.GetName(),
-			Namespace: a.GetNamespace(),
-		}
-		err := r.Get(ctx, namespacedName, amc)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return []reconcile.Request{}
-			}
+
+		amcList := &oskov1alpha1.AlertManagerConfigList{}
+		if err := r.List(ctx, amcList); err != nil {
 			log.Error(err, errGetAMC)
-			return []reconcile.Request{}
-		}
-		if amc.Spec.SecretRef.Namespace == "" {
-			amc.Spec.SecretRef.Namespace = a.GetNamespace()
-		}
-		secretNamespacedName := types.NamespacedName{
-			Name:      amc.Spec.SecretRef.Name,
-			Namespace: amc.Spec.SecretRef.Namespace,
+			return nil
 		}
 
-		return []reconcile.Request{{NamespacedName: secretNamespacedName}}
+		var requests []reconcile.Request
+		for _, amc := range amcList.Items {
+			secretNamespace := amc.Spec.SecretRef.Namespace
+			if secretNamespace == "" {
+				secretNamespace = amc.Namespace
+			}
+			if amc.Spec.SecretRef.Name != a.GetName() || secretNamespace != a.GetNamespace() {
+				continue
+			}
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      amc.Name,
+					Namespace: amc.Namespace,
+				},
+			})
+		}
+
+		return requests
 	}
 }
 

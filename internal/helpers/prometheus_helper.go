@@ -531,42 +531,45 @@ func (mrs *MonitoringRuleSet) SetupRules() ([]monitoringv1.RuleGroup, error) {
 	}, nil
 }
 
+// alertTier is one row of the SRE Workbook's multiwindow, multi-burn-rate table.
+// https://sre.google/workbook/alerting-on-slos/#6-multiwindow-multi-burn-rate-alerts
+//
+// Both windows in a tier compare against the same burnRate: the rate belongs to
+// the tier, not to a window. wait is the alert's `for`, kept short on the page
+// tiers because the 1h/5m tier targets a ~2 minute detection time.
+type alertTier struct {
+	short    string
+	long     string
+	severity config.SREAlertSeverity
+	burnRate float64
+	wait     monitoringv1.Duration
+}
+
+// alertTiers is a function rather than a package-level var because the burn rates
+// come from config.Cfg, which NewConfig() populates after package initialisation.
+// A var would capture zeroes, and every alert would compare against `> 0.0`.
+func alertTiers() []alertTier {
+	rates := config.Cfg.AlertingBurnRates
+	return []alertTier{
+		{short: "5m", long: "1h", severity: config.PageCritical, burnRate: rates.PageCriticalBurnRate, wait: "2m"},
+		{short: "30m", long: "6h", severity: config.PageHigh, burnRate: rates.PageHighBurnRate, wait: "2m"},
+		{short: "2h", long: "24h", severity: config.TicketHigh, burnRate: rates.TicketHighBurnRate, wait: "15m"},
+		{short: "6h", long: "3d", severity: config.TicketMedium, burnRate: rates.TicketMediumBurnRate, wait: "15m"},
+	}
+}
+
 func (mrs *MonitoringRuleSet) buildAlertRules(alertingBurnRates []monitoringv1.Rule) []monitoringv1.Rule {
 	burnRateWindows := mrs.getBurnRateWindows(alertingBurnRates)
 
-	tiers := []struct {
-		short    string
-		long     string
-		severity config.SREAlertSeverity
-	}{
-		{"5m", "1h", config.PageCritical},
-		{"30m", "6h", config.PageHigh},
-		{"2h", "24h", config.TicketHigh},
-		{"6h", "3d", config.TicketMedium},
-	}
-
 	var alertRules []monitoringv1.Rule
-	for _, tier := range tiers {
+	for _, tier := range alertTiers() {
 		if !burnRateWindows.hasWindows(tier.short, tier.long) {
 			continue
 		}
-		duration := alertDurationFor(tier.severity)
-		alertRules = append(alertRules, mrs.createMultiBurnRateAlert(burnRateWindows, &duration, tier.severity))
+		alertRules = append(alertRules, mrs.createMultiBurnRateAlert(burnRateWindows, tier))
 	}
 
 	return alertRules
-}
-
-// alertDurationFor keeps the fast-burn tiers responsive. The SRE Workbook's
-// 1h/5m tier targets a ~2 minute detection time, which a uniform 5m `for` more
-// than doubles.
-func alertDurationFor(sreSeverity config.SREAlertSeverity) monitoringv1.Duration {
-	switch sreSeverity {
-	case config.PageCritical, config.PageHigh:
-		return monitoringv1.Duration("2m")
-	default:
-		return monitoringv1.Duration("15m")
-	}
 }
 
 type burnRateWindows struct {
@@ -602,40 +605,16 @@ func isValidRule(rule monitoringv1.Rule) bool {
 
 func (mrs *MonitoringRuleSet) createMultiBurnRateAlert(
 	brw *burnRateWindows,
-	duration *monitoringv1.Duration,
-	sreSeverity config.SREAlertSeverity,
+	tier alertTier,
 ) monitoringv1.Rule {
 	log := ctrllog.FromContext(context.Background())
 
-	var shortWindow, longWindow monitoringv1.Rule
-	var shortThreshold, longThreshold float64
-
-	switch sreSeverity {
-	case config.PageCritical:
-		shortWindow = brw.get("5m")
-		longWindow = brw.get("1h")
-		shortThreshold = config.Cfg.AlertingBurnRates.PageShortWindow
-		longThreshold = config.Cfg.AlertingBurnRates.PageShortWindow
-	case config.PageHigh:
-		shortWindow = brw.get("30m")
-		longWindow = brw.get("6h")
-		shortThreshold = config.Cfg.AlertingBurnRates.PageLongWindow
-		longThreshold = config.Cfg.AlertingBurnRates.PageLongWindow
-	case config.TicketHigh:
-		shortWindow = brw.get("2h")
-		longWindow = brw.get("24h")
-		shortThreshold = config.Cfg.AlertingBurnRates.TicketShortWindow
-		longThreshold = config.Cfg.AlertingBurnRates.TicketShortWindow
-	case config.TicketMedium:
-		shortWindow = brw.get("6h")
-		longWindow = brw.get("3d")
-		shortThreshold = config.Cfg.AlertingBurnRates.TicketLongWindow
-		longThreshold = config.Cfg.AlertingBurnRates.TicketLongWindow
-	}
+	shortWindow := brw.get(tier.short)
+	longWindow := brw.get(tier.long)
 
 	if !isValidRule(shortWindow) || !isValidRule(longWindow) {
 		log.V(1).Info("Missing or invalid burn rate windows for alert",
-			"severity", sreSeverity,
+			"severity", tier.severity,
 			"shortWindowValid", isValidRule(shortWindow),
 			"longWindowValid", isValidRule(longWindow))
 		return monitoringv1.Rule{}
@@ -649,8 +628,8 @@ func (mrs *MonitoringRuleSet) createMultiBurnRateAlert(
 	// and the alert can never fire.
 	alertExpression := fmt.Sprintf(
 		"(%s{%s} > %.1f and ignoring(window) %s{%s} > %.1f)",
-		shortWindow.Record, shortLabels, shortThreshold,
-		longWindow.Record, longLabels, longThreshold,
+		shortWindow.Record, shortLabels, tier.burnRate,
+		longWindow.Record, longLabels, tier.burnRate,
 	)
 
 	alertingTool := mrs.Slo.ObjectMeta.Annotations[annotationAlertingTool]
@@ -659,14 +638,16 @@ func (mrs *MonitoringRuleSet) createMultiBurnRateAlert(
 	}
 
 	severities := config.AlertSeveritiesByTool(alertingTool)
-	toolSeverity := severities.GetSeverity(sreSeverity)
+	toolSeverity := severities.GetSeverity(tier.severity)
 
-	log.V(1).Info("Alerting rule", "sreSeverity", sreSeverity, "toolSeverity", toolSeverity)
+	log.V(1).Info("Alerting rule", "sreSeverity", tier.severity, "toolSeverity", toolSeverity)
+
+	wait := tier.wait
 
 	return monitoringv1.Rule{
-		Alert: fmt.Sprintf("%s_alert_%s", mrs.Slo.Name, sreSeverity),
+		Alert: fmt.Sprintf("%s_alert_%s", mrs.Slo.Name, tier.severity),
 		Expr:  intstr.FromString(alertExpression),
-		For:   duration,
+		For:   &wait,
 		Labels: map[string]string{
 			"severity":     toolSeverity,
 			"slo_name":     mrs.Slo.Name,
@@ -679,10 +660,6 @@ func (mrs *MonitoringRuleSet) createMultiBurnRateAlert(
 			"description": fmt.Sprintf("The burn rate of SLO %s is consuming error budget faster than acceptable. Short window: %s, Long window: %s", mrs.Slo.Name, shortWindow.Labels["window"], longWindow.Labels["window"]),
 		},
 	}
-}
-
-func CreateAlertingRule() (*monitoringv1.PrometheusRule, error) {
-	return nil, nil
 }
 
 func CreatePrometheusRule(slo *openslov1.SLO, sli *openslov1.SLI) (*monitoringv1.PrometheusRule, error) {

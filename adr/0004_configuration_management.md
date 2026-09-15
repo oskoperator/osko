@@ -57,10 +57,10 @@ type Config struct {
 }
 
 type AlertingBurnRates struct {
-    PageShortWindow   float64
-    PageLongWindow    float64
-    TicketShortWindow float64
-    TicketLongWindow  float64
+    PageCriticalBurnRate float64
+    PageHighBurnRate     float64
+    TicketHighBurnRate   float64
+    TicketMediumBurnRate float64
 }
 
 // Load creates and validates configuration - returns error if invalid
@@ -70,10 +70,10 @@ func Load() (*Config, error) {
         DefaultBaseWindow:      getEnvAsDuration("DEFAULT_BASE_WINDOW", 5*time.Minute),
         AlertingTool:           getEnv("OSKO_ALERTING_TOOL", "opsgenie"),
         AlertingBurnRates: AlertingBurnRates{
-            PageShortWindow:   getEnvAsFloat64("ABR_PAGE_SHORT_WINDOW", 14.4),
-            PageLongWindow:    getEnvAsFloat64("ABR_PAGE_LONG_WINDOW", 6),
-            TicketShortWindow: getEnvAsFloat64("ABR_TICKET_SHORT_WINDOW", 3),
-            TicketLongWindow:  getEnvAsFloat64("ABR_TICKET_LONG_WINDOW", 1),
+            PageCriticalBurnRate: getEnvAsFloat64("ABR_PAGE_CRITICAL_BURN_RATE", 14.4),
+            PageHighBurnRate:     getEnvAsFloat64("ABR_PAGE_HIGH_BURN_RATE", 6),
+            TicketHighBurnRate:   getEnvAsFloat64("ABR_TICKET_HIGH_BURN_RATE", 3),
+            TicketMediumBurnRate: getEnvAsFloat64("ABR_TICKET_MEDIUM_BURN_RATE", 1),
         },
     }
 
@@ -94,8 +94,8 @@ func (c *Config) Validate() error {
     if c.AlertingTool == "" {
         return fmt.Errorf("OSKO_ALERTING_TOOL cannot be empty")
     }
-    if c.AlertingBurnRates.PageShortWindow <= 0 {
-        return fmt.Errorf("ABR_PAGE_SHORT_WINDOW must be positive")
+    if c.AlertingBurnRates.PageCriticalBurnRate <= 0 {
+        return fmt.Errorf("ABR_PAGE_CRITICAL_BURN_RATE must be positive")
     }
     return nil
 }

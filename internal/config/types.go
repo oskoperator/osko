@@ -12,11 +12,13 @@ type Config struct {
 	AlertSeverities        AlertSeverities
 }
 
+// AlertingBurnRates holds one error-budget burn rate per alert tier. Both windows
+// in a tier compare against the same rate, per the SRE Workbook.
 type AlertingBurnRates struct {
-	PageShortWindow   float64
-	PageLongWindow    float64
-	TicketShortWindow float64
-	TicketLongWindow  float64
+	PageCriticalBurnRate float64
+	PageHighBurnRate     float64
+	TicketHighBurnRate   float64
+	TicketMediumBurnRate float64
 }
 
 type AlertToolConfig struct {

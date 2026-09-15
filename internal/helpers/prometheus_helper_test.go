@@ -3,6 +3,7 @@ package helpers
 import (
 	"context"
 	stderrors "errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1261,6 +1262,80 @@ func TestSetupRules_GroupsStayUnderMimirRuleLimit(t *testing.T) {
 				if len(g.Rules) > mimirMaxRulesPerGroup {
 					t.Errorf("group %q has %d rules, exceeds Mimir's limit of %d", g.Name, len(g.Rules), mimirMaxRulesPerGroup)
 				}
+			}
+		})
+	}
+}
+
+// TestAlertTiers_ExpressionMatchesTable pins the generated alerts to the SRE
+// Workbook's table twice over: that alertTiers() carries the Workbook's own
+// numbers, and that each alert uses its own row. Asserting only the second would
+// be self-referential, since a row wired to the wrong config field still agrees
+// with the expression built from that row.
+func TestAlertTiers_ExpressionMatchesTable(t *testing.T) {
+	// https://sre.google/workbook/alerting-on-slos/#6-multiwindow-multi-burn-rate-alerts
+	want := map[config.SREAlertSeverity]struct {
+		short    string
+		long     string
+		burnRate float64
+		wait     monitoringv1.Duration
+	}{
+		config.PageCritical: {"5m", "1h", 14.4, "2m"},
+		config.PageHigh:     {"30m", "6h", 6, "2m"},
+		config.TicketHigh:   {"2h", "24h", 3, "15m"},
+		config.TicketMedium: {"6h", "3d", 1, "15m"},
+	}
+
+	tiers := alertTiers()
+	if len(tiers) != len(want) {
+		t.Fatalf("alertTiers() returned %d tiers, want %d", len(tiers), len(want))
+	}
+
+	groups := setupRules(t, createTestSLOWithAlerting("0.999"), createTestSLI(), "5m")
+	byAlert := map[string]monitoringv1.Rule{}
+	for _, r := range alertRules(groupByName(t, groups, alertGroupName)) {
+		byAlert[r.Alert] = r
+	}
+
+	for _, tier := range tiers {
+		t.Run(string(tier.severity), func(t *testing.T) {
+			w, ok := want[tier.severity]
+			if !ok {
+				t.Fatalf("unexpected tier %s", tier.severity)
+			}
+
+			if tier.short != w.short || tier.long != w.long {
+				t.Errorf("windows = %s/%s, want %s/%s", tier.short, tier.long, w.short, w.long)
+			}
+			if tier.burnRate != w.burnRate {
+				t.Errorf("burnRate = %v, want %v; is this tier wired to the wrong config field?", tier.burnRate, w.burnRate)
+			}
+			if tier.wait != w.wait {
+				t.Errorf("wait = %s, want %s", tier.wait, w.wait)
+			}
+
+			rule, ok := byAlert[fmt.Sprintf("test-slo_alert_%s", tier.severity)]
+			if !ok {
+				t.Fatalf("no alert generated for tier %s", tier.severity)
+			}
+
+			if got := rule.Labels["short_window"]; got != w.short {
+				t.Errorf("short_window = %q, want %q", got, w.short)
+			}
+			if got := rule.Labels["long_window"]; got != w.long {
+				t.Errorf("long_window = %q, want %q", got, w.long)
+			}
+
+			threshold := fmt.Sprintf("> %.1f", w.burnRate)
+			if n := strings.Count(rule.Expr.String(), threshold); n != 2 {
+				t.Errorf("expr %q compares against %q %d times, want 2", rule.Expr.String(), threshold, n)
+			}
+
+			if rule.For == nil {
+				t.Fatalf("alert for tier %s has no `for` duration", tier.severity)
+			}
+			if *rule.For != w.wait {
+				t.Errorf("for = %s, want %s", *rule.For, w.wait)
 			}
 		})
 	}

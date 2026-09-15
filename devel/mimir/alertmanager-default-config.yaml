@@ -3,10 +3,104 @@ kind: ConfigMap
 metadata:
   name: mimir-alertmanager-config
 data:
+  # Fallback config: Mimir serves this to any tenant that has not pushed its
+  # own. OSKO's AlertManagerConfig replaces it wholesale for that tenant.
+  #
+  # NTFY_TOPIC is a placeholder. An ntfy topic is effectively a password -
+  # anyone who knows it can read your alerts and publish to them.
+  # Setup: docs/alertmanager-configs.md
   alertmanager-fallback-config.yaml: |
     route:
-      group_wait: 0s
-      receiver: empty-receiver
+      group_by: ['slo_name', 'severity']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: ntfy-default
+      routes:
+        - matchers: ['severity="P1"']
+          receiver: ntfy-p1
+        - matchers: ['severity="P2"']
+          receiver: ntfy-p2
+        - matchers: ['severity="P3"']
+          receiver: ntfy-p3
+        - matchers: ['severity="P4"']
+          receiver: ntfy-p4
+
     receivers:
-      # In this example we're not going to send any notification out of Alertmanager.
-      - name: 'empty-receiver'
+      # Alertmanager's webhook payload is a fixed JSON document and is not
+      # templatable, so the rendering happens on ntfy's side. X-Template turns
+      # X-Title and X-Message into templates evaluated against that JSON, and
+      # \n in X-Message becomes a newline. Alertmanager sends http_headers
+      # values verbatim, so the {{ }} reaches ntfy untouched.
+      - name: ntfy-p1
+        webhook_configs:
+          - url: https://ntfy.sh/NTFY_TOPIC
+            send_resolved: true
+            http_config:
+              http_headers:
+                X-Template: &ntfyTemplate
+                  values: ['1']
+                X-Title: &ntfyTitle
+                  values: ['{{if eq .status "firing"}}🔥{{else}}✅{{end}} {{(first .alerts).labels.severity}} · {{(first .alerts).labels.slo_name}}']
+                X-Message: &ntfyMessage
+                  values: ['{{.status | upper}} · {{len .alerts}} alert(s)\n{{range .alerts}}\nSLO: {{.labels.slo_name}}\nSLI: {{.labels.sli_name}}\nService: {{.labels.service}} (team {{.labels.team}})\nSeverity: {{.labels.severity}}\nBurn rate sustained over {{.labels.short_window}} AND {{.labels.long_window}}\nSince: {{.startsAt}}\n{{end}}']
+                Priority:
+                  values: ['urgent']
+                Tags:
+                  values: ['rotating_light']
+
+      - name: ntfy-p2
+        webhook_configs:
+          - url: https://ntfy.sh/NTFY_TOPIC
+            send_resolved: true
+            http_config:
+              http_headers:
+                X-Template: *ntfyTemplate
+                X-Title: *ntfyTitle
+                X-Message: *ntfyMessage
+                Priority:
+                  values: ['high']
+                Tags:
+                  values: ['fire']
+
+      - name: ntfy-p3
+        webhook_configs:
+          - url: https://ntfy.sh/NTFY_TOPIC
+            send_resolved: true
+            http_config:
+              http_headers:
+                X-Template: *ntfyTemplate
+                X-Title: *ntfyTitle
+                X-Message: *ntfyMessage
+                Priority:
+                  values: ['default']
+                Tags:
+                  values: ['warning']
+
+      - name: ntfy-p4
+        webhook_configs:
+          - url: https://ntfy.sh/NTFY_TOPIC
+            send_resolved: true
+            http_config:
+              http_headers:
+                X-Template: *ntfyTemplate
+                X-Title: *ntfyTitle
+                X-Message: *ntfyMessage
+                Priority:
+                  values: ['low']
+                Tags:
+                  values: ['information_source']
+
+      - name: ntfy-default
+        webhook_configs:
+          - url: https://ntfy.sh/NTFY_TOPIC
+            send_resolved: true
+            http_config:
+              http_headers:
+                X-Template: *ntfyTemplate
+                X-Title: *ntfyTitle
+                X-Message: *ntfyMessage
+                Priority:
+                  values: ['default']
+                Tags:
+                  values: ['bell']

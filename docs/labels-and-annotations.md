@@ -52,6 +52,11 @@ a `MagicAlertingUnsupported` warning event and the SLO remains Ready, because th
 burn-rate alerting rules are generated regardless. Only the Alertmanager routing
 configuration is skipped.
 
+The `AlertManagerConfig` this creates holds no configuration itself — it points at a
+Secret named `<slo>-alerting-config` that you supply, and stays `Ready=False` until that
+Secret exists. Note also that each push replaces the **whole tenant's** Alertmanager
+configuration, not just this SLO's. See [Alertmanager configs](alertmanager-configs.md).
+
 ## Labels applied by OSKO
 
 Generated `PrometheusRule` objects, and the `MimirRule` objects derived from them, carry:

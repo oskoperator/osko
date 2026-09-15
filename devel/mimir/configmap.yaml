@@ -47,7 +47,7 @@ data:
         replication_factor: 1
 
     ruler:
-      alertmanager_url: http://mimir:9009/alertmanager
+      alertmanager_url: http://mimir-service:9009/alertmanager
       enable_api: true
       rule_path: /tmp/mimir/ruler
       tenant_federation:

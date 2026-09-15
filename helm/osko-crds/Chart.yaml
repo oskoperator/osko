@@ -1,12 +1,12 @@
 apiVersion: v2
 type: application
-version: 0.0.20
+version: 0.0.21
 name: osko-crds
 description: A Helm chart for osko CRDs
 keywords:
   - osko
   - crds
-appVersion: "0.0.20"
+appVersion: "0.0.21"
 sources:
   - https://github.com/oskoperator/osko
 maintainers:

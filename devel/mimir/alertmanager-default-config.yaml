@@ -104,3 +104,17 @@ data:
                   values: ['default']
                 Tags:
                   values: ['bell']
+
+    inhibit_rules:
+      # Multi-window multi-burn-rate trips several tiers at once by design, so one
+      # burning SLO would page four times. Notify on the most urgent tier only and
+      # suppress the quieter ones for the SAME slo_name until it clears.
+      - source_matchers: ['severity="P1"']
+        target_matchers: ['severity=~"P2|P3|P4"']
+        equal: ['slo_name']
+      - source_matchers: ['severity="P2"']
+        target_matchers: ['severity=~"P3|P4"']
+        equal: ['slo_name']
+      - source_matchers: ['severity="P3"']
+        target_matchers: ['severity="P4"']
+        equal: ['slo_name']

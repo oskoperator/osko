@@ -12,7 +12,8 @@ image:
   repository: ghcr.io/oskoperator/osko
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "latest"
+  # Leave empty to track appVersion; a non-empty value here wins over it.
+  tag: ""
 
 imagePullSecrets: []
 nameOverride: ""

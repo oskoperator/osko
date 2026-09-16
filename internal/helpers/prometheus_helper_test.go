@@ -1448,3 +1448,55 @@ func TestCreatePrometheusRuleMarkerLabelsOverrideConflictingSLOLabel(t *testing.
 			"since mergeLabels resolves conflicts by later-map-wins ordering", LabelManagedBy, got, LabelManagedByValue)
 	}
 }
+
+// TestAlertLabels_CarrySLOContext pins the labels a burn-rate alert delivers to a
+// receiver. Recording rules already carry the SLO's service, team and any
+// label.osko.dev/* the user set; alerts dropped all of them, so every page and
+// every PagerDuty incident arrived without ownership context.
+func TestAlertLabels_CarrySLOContext(t *testing.T) {
+	slo := createTestSLOWithAlerting("0.999")
+	slo.Spec.Service = "checkout"
+	slo.ObjectMeta.Labels = map[string]string{
+		"label.osko.dev/team":   "payments",
+		"label.osko.dev/domain": "commerce",
+		"unprefixed":            "ignored",
+	}
+
+	groups := setupRules(t, slo, createTestSLI(), "5m")
+	alerts := alertRules(groupByName(t, groups, alertGroupName))
+	if len(alerts) == 0 {
+		t.Fatal("no alert rules generated")
+	}
+
+	for _, rule := range alerts {
+		t.Run(rule.Alert, func(t *testing.T) {
+			// Context inherited from the SLO, previously dropped.
+			for key, want := range map[string]string{
+				"service": "checkout",
+				"team":    "payments",
+				"domain":  "commerce",
+			} {
+				if got := rule.Labels[key]; got != want {
+					t.Errorf("label %q = %q, want %q; a receiver cannot attribute this page", key, got, want)
+				}
+			}
+
+			// The five alert-specific keys must survive the merge unchanged.
+			if rule.Labels["slo_name"] == "" || rule.Labels["sli_name"] == "" {
+				t.Errorf("slo_name/sli_name must never be dropped; routing and inhibit_rules key on slo_name")
+			}
+			if rule.Labels["severity"] == "" || rule.Labels["short_window"] == "" || rule.Labels["long_window"] == "" {
+				t.Errorf("alert-specific labels missing: %v", rule.Labels)
+			}
+
+			// An alert spans two windows; a single `window` label would be a lie.
+			if got, ok := rule.Labels["window"]; ok {
+				t.Errorf("alert carries window=%q, but short_window/long_window describe its span", got)
+			}
+
+			if _, ok := rule.Labels["unprefixed"]; ok {
+				t.Errorf("only label.osko.dev/* labels should propagate")
+			}
+		})
+	}
+}

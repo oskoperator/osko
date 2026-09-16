@@ -24,6 +24,19 @@ const (
 	errGetSLI    = "could not get SLI Object"
 )
 
+// prometheusRuleNeedsUpdate reports whether the stored PrometheusRule differs
+// from what OSKO would generate, comparing only the three things OSKO writes.
+//
+// Comparing whole objects always reports a difference: the stored object carries
+// resourceVersion, uid and creationTimestamp that a freshly generated one cannot
+// have. That made every reconcile issue an Update, every Update bump
+// resourceVersion, and every bump wake the watch again.
+func prometheusRuleNeedsUpdate(stored, desired *monitoringv1.PrometheusRule) bool {
+	return !reflect.DeepEqual(stored.Spec, desired.Spec) ||
+		!reflect.DeepEqual(stored.Labels, desired.Labels) ||
+		!reflect.DeepEqual(stored.Annotations, desired.Annotations)
+}
+
 // PrometheusRuleReconciler reconciles a PrometheusRule object
 type PrometheusRuleReconciler struct {
 	client.Client
@@ -179,8 +192,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	compareResult := reflect.DeepEqual(prometheusRule, newPrometheusRule)
-	if compareResult {
+	if !prometheusRuleNeedsUpdate(prometheusRule, newPrometheusRule) {
 		log.V(1).Info("PrometheusRule is already up to date")
 		return ctrl.Result{}, nil
 	}

@@ -200,6 +200,26 @@ func (mrs *MonitoringRuleSet) ruleLabels(w string) map[string]string {
 	return labels
 }
 
+// alertLabels stamps the SLO's context onto a burn-rate alert, matching what
+// recording rules already carry, so a receiver can attribute the page.
+//
+// window is dropped because an alert spans two windows, which short_window and
+// long_window describe. The five alert-specific keys are applied last so an
+// osko.dev/groupBy naming one of them cannot drop it: routing and inhibit_rules
+// key on slo_name.
+func (mrs *MonitoringRuleSet) alertLabels(severity, shortWindow, longWindow string) map[string]string {
+	labels := mrs.ruleLabels(shortWindow)
+	delete(labels, "window")
+
+	return mergeLabels(labels, map[string]string{
+		"severity":     severity,
+		"slo_name":     mrs.Slo.Name,
+		"sli_name":     mrs.Sli.Name,
+		"short_window": shortWindow,
+		"long_window":  longWindow,
+	})
+}
+
 // selectorFor renders a PromQL label selector body pinned to a single window.
 func (mrs *MonitoringRuleSet) selectorFor(w string) string {
 	return mapToColonSeparatedString(mrs.ruleLabels(w))
@@ -645,16 +665,10 @@ func (mrs *MonitoringRuleSet) createMultiBurnRateAlert(
 	wait := tier.wait
 
 	return monitoringv1.Rule{
-		Alert: fmt.Sprintf("%s_alert_%s", mrs.Slo.Name, tier.severity),
-		Expr:  intstr.FromString(alertExpression),
-		For:   &wait,
-		Labels: map[string]string{
-			"severity":     toolSeverity,
-			"slo_name":     mrs.Slo.Name,
-			"sli_name":     mrs.Sli.Name,
-			"short_window": shortWindow.Labels["window"],
-			"long_window":  longWindow.Labels["window"],
-		},
+		Alert:  fmt.Sprintf("%s_alert_%s", mrs.Slo.Name, tier.severity),
+		Expr:   intstr.FromString(alertExpression),
+		For:    &wait,
+		Labels: mrs.alertLabels(toolSeverity, shortWindow.Labels["window"], longWindow.Labels["window"]),
 		Annotations: map[string]string{
 			"summary":     "SLO Burn Rate Alert",
 			"description": fmt.Sprintf("The burn rate of SLO %s is consuming error budget faster than acceptable. Short window: %s, Long window: %s", mrs.Slo.Name, shortWindow.Labels["window"], longWindow.Labels["window"]),

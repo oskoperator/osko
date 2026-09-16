@@ -57,6 +57,32 @@ Secret named `<slo>-alerting-config` that you supply, and stays `Ready=False` un
 Secret exists. Note also that each push replaces the **whole tenant's** Alertmanager
 configuration, not just this SLO's. See [Alertmanager configs](alertmanager-configs.md).
 
+### `osko.dev/alertingTool`
+
+Chooses the vocabulary of the `severity` label OSKO stamps on the generated burn-rate
+alerts. It changes nothing else — routing remains entirely yours to write.
+
+```yaml
+osko.dev/alertingTool: pagerduty
+```
+
+| Value | `severity` becomes |
+| --- | --- |
+| `opsgenie` (default) | `P1`, `P2`, `P3`, `P4` |
+| `pagerduty` | `SEV_1`, `SEV_2`, `SEV_3`, `SEV_4` |
+| `custom` | `OSKO_ALERTING_SEVERITY_CRITICAL` / `_HIGH` / `_MEDIUM` / `_LOW`, defaulting to `critical`, `high`, `medium`, `low` |
+
+An unrecognised value falls back to `custom` rather than failing, so a typo yields the
+custom defaults instead of an error.
+
+Set the default for every SLO with `OSKO_ALERTING_TOOL` on the operator; the annotation
+overrides it per SLO.
+
+These are Alertmanager **routing labels**, not the target tool's own severity values.
+`SEV_1` in particular is not a valid PagerDuty severity — PagerDuty accepts only
+`critical`, `error`, `warning` and `info`, so each receiver must state one itself. See
+[routing to PagerDuty](alertmanager-configs.md#example-routing-to-pagerduty).
+
 ## Labels applied by OSKO
 
 Generated `PrometheusRule` objects, and the `MimirRule` objects derived from them, carry:

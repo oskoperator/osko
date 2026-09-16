@@ -61,7 +61,7 @@ func AlertSeveritiesByTool(tool string) AlertToolSeverityMap {
 		"custom": {
 			PageCritical: GetEnv("OSKO_ALERTING_SEVERITY_CRITICAL", "critical"),
 			PageHigh:     GetEnv("OSKO_ALERTING_SEVERITY_HIGH", "high"),
-			TicketHigh:   GetEnv("OSKO_ALERTING_SEVERITY_HIGH", "medium"),
+			TicketHigh:   GetEnv("OSKO_ALERTING_SEVERITY_MEDIUM", "medium"),
 			TicketMedium: GetEnv("OSKO_ALERTING_SEVERITY_LOW", "low"),
 		},
 	}
